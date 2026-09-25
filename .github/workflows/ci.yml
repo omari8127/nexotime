@@ -17,6 +17,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
+      - run: npm test
       - run: npm run build
       # El service worker debe generarse con la lista de archivos.
       - run: test -f dist/sw.js && grep -q "CORE_FILES = \[\"/" dist/sw.js

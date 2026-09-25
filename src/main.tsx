@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { App } from '@/App'
+import { ErrorBoundary } from '@/components/shared/ErrorBoundary'
 import { applyTheme, useUIStore } from '@/store/uiStore'
 import '@/index.css'
 
@@ -9,9 +10,11 @@ applyTheme(useUIStore.getState().theme)
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </ErrorBoundary>
   </StrictMode>,
 )
 

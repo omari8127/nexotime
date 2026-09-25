@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import { serviceWorkerPlugin } from './vite-sw-plugin.ts'
 
 const dir = path.dirname(fileURLToPath(import.meta.url))
@@ -17,6 +17,10 @@ export default defineConfig({
     alias: {
       '@': path.resolve(dir, './src'),
     },
+  },
+  test: {
+    environment: 'node',
+    include: ['src/**/*.test.ts'],
   },
   server: {
     host: true,

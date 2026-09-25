@@ -20,6 +20,7 @@ import { EmployeeStatusBadge } from '@/components/shared/badges'
 import { EmployeeFormDialog } from '@/components/employees/EmployeeFormDialog'
 import { useScopedData, usePermissions } from '@/hooks/useScopedData'
 import { useDataStore } from '@/store/dataStore'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { toast } from '@/components/ui/toast'
 import { buildWorkbookPayload, downloadCSV } from '@/services/exportService'
 import { printCredentials } from '@/lib/credentialPrint'
@@ -41,6 +42,18 @@ export function EmployeesPage() {
   const { can } = usePermissions()
   const toggleStatus = useDataStore((s) => s.toggleEmployeeStatus)
   const currentUser = useDataStore((s) => s.currentUser)
+  const regenerate = useDataStore((s) => s.regenerateCredentials)
+  const isLive = useDataStore((s) => s.mode === 'live')
+  const [legacyOpen, setLegacyOpen] = useState(false)
+  // QR codes from before the random format are guessable ("NXT:EMP-001"): offer to replace them.
+  const legacy = useMemo(
+    () =>
+      employees.filter((e) => {
+        const qr = e.identifications.find((i) => i.method === 'qr')?.value
+        return !!qr && !qr.startsWith('NXT1-')
+      }),
+    [employees],
+  )
 
   const [query, setQuery] = useState('')
   const [branch, setBranch] = useState('all')
@@ -129,6 +142,18 @@ export function EmployeesPage() {
           </>
         }
       />
+
+      {isLive && can('employees.edit') && legacy.length > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3">
+          <p className="text-sm">
+            <b className="font-semibold">{legacy.length} {legacy.length === 1 ? 'empleado tiene' : 'empleados tienen'} un código QR antiguo</b>
+            , fácil de adivinar. Regénéralos por códigos aleatorios y vuelve a imprimir sus credenciales.
+          </p>
+          <Button variant="secondary" size="sm" onClick={() => setLegacyOpen(true)}>
+            Regenerar códigos
+          </Button>
+        </div>
+      ) : null}
 
       <Card className="p-4">
         <div className="flex flex-col gap-3">
@@ -287,6 +312,18 @@ export function EmployeesPage() {
         open={!!editing}
         onOpenChange={(o) => !o && setEditing(undefined)}
         employee={editing}
+      />
+      <ConfirmDialog
+        open={legacyOpen}
+        onOpenChange={setLegacyOpen}
+        title="Regenerar códigos antiguos"
+        description={`Se crearán códigos QR y de barras nuevos para ${legacy.length} ${legacy.length === 1 ? 'empleado' : 'empleados'}. Los gafetes impresos con los códigos anteriores dejarán de funcionar; imprime los nuevos desde «Credenciales».`}
+        confirmLabel="Regenerar"
+        onConfirm={() => {
+          for (const e of legacy) regenerate(e.id, currentUser)
+          toast.success('Códigos regenerados', 'Imprime las credenciales nuevas desde «Credenciales».')
+          setLegacyOpen(false)
+        }}
       />
     </div>
   )

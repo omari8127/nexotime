@@ -27,7 +27,7 @@ export function serviceWorkerPlugin(root: string): Plugin {
       }
       walk(outDir)
 
-      const usable = files.filter((f) => f !== '/sw.js')
+      const usable = files.filter((f) => !['/sw.js', '/_headers', '/_redirects'].includes(f))
       const models = usable.filter((f) => f.startsWith('/models/'))
       const core = usable.filter((f) => !f.startsWith('/models/'))
 

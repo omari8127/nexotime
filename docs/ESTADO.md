@@ -9,7 +9,10 @@
 - Licencias: activación, vínculo al dispositivo, firma, tolerancia sin Internet, suspensión, planes, panel del propietario, respaldos (`npm run backup`), 18 pruebas automáticas.
 - La app abre sin Internet (service worker) y conserva las checadas hasta poder enviarlas.
 - Seguridad de datos biométricos: solo administración, también a nivel de base de datos (migración 003).
-- Integración continua en GitHub (tipos, análisis, build y pruebas de licencias).
+- Integración continua en GitHub (análisis, pruebas, build y pruebas de licencias).
+- 41 pruebas automáticas del programa (reglas de asistencia, permisos por rol, credenciales, coincidencia facial, exportación) y 18 del servidor de licencias.
+- Pantalla de error amable si algo falla (nunca queda en blanco) y configuración de publicación lista (`public/_headers`, `_redirects`, `vercel.json`).
+- Aviso en Empleados para regenerar los QR antiguos en un clic.
 
 ## Pendiente — depende de ti (no se puede hacer desde el código)
 
@@ -21,13 +24,13 @@
 | 4 | **Desplegar el servidor de licencias** con HTTPS, volumen persistente y respaldo diario fuera del servidor | Hoy corre solo en tu equipo |
 | 5 | **Publicar la app** en un hosting con HTTPS (`sw.js` sin caché) con las variables `VITE_*` de producción | Instalación y cámara exigen HTTPS |
 | 6 | **Piloto de 2 a 4 semanas** con una empresa de confianza | Detecta problemas reales antes de cobrar |
-| 7 | Regenerar los QR de empleados creados antes de la versión actual ("Regenerar códigos") | Los QR viejos son fáciles de adivinar |
+| 7 | En Empleados, aceptar el aviso «Regenerar códigos» si hay QR antiguos, y reimprimir gafetes | Los QR viejos son fáciles de adivinar |
 
 ## Pendiente — siguiente ronda de desarrollo
 
 - Cobro y renovación automática (hoy se renueva a mano desde el panel de licencias).
 - Monitoreo de errores en los equipos de los clientes.
-- Pruebas automáticas del programa (hoy solo las tiene el servidor de licencias).
+- Pruebas de interfaz de extremo a extremo (hoy las pruebas cubren la lógica, no las pantallas).
 - Empaquetado como app: Windows (Electron) y Android (Capacitor); ver `license-server/README.md` sobre licencias en Android.
 - Endurecimiento extra de licencias: exigir licencia vigente también en las reglas de Supabase.
 

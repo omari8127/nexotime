@@ -59,8 +59,13 @@ Base de datos: ver [supabase/README.md](supabase/README.md) (orden de las migrac
 | `npm run dev` | Servidor de desarrollo |
 | `npm run build` | Comprueba tipos y genera `dist/` con el service worker |
 | `npm run preview` | Sirve `dist/` en el puerto 4173 (aquí sí actúa el service worker) |
+| `npm test` | Pruebas del programa (Vitest) |
 | `npm run lint` | Análisis estático |
 | `cd license-server && npm test` | Pruebas del servidor de licencias y del flujo completo |
+
+## Publicación
+
+`npm run build` genera `dist/`. Súbelo a un hosting estático con **HTTPS** (Netlify, Cloudflare Pages o Vercel): `public/_headers`, `public/_redirects` y `vercel.json` ya traen las reglas (la app de una sola página, `sw.js` sin caché, archivos con hash en caché permanente y cabeceras de seguridad). Define las variables `VITE_*` de producción en el hosting antes de construir.
 
 ## Documentación
 
