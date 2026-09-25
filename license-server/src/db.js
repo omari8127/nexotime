@@ -73,6 +73,20 @@ CREATE TABLE IF NOT EXISTS audit (
 );
 CREATE INDEX IF NOT EXISTS audit_ts ON audit (ts DESC);
 CREATE INDEX IF NOT EXISTS audit_license ON audit (license_id);
+CREATE TABLE IF NOT EXISTS payments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  license_id TEXT NOT NULL REFERENCES licenses(id),
+  amount REAL NOT NULL CHECK (amount >= 0),
+  currency TEXT NOT NULL DEFAULT 'MXN',
+  method TEXT NOT NULL,
+  reference TEXT,
+  months INTEGER,
+  note TEXT,
+  paid_at TEXT NOT NULL,
+  recorded_by TEXT NOT NULL,
+  recorded_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS payments_paid ON payments (paid_at DESC);
 CREATE TABLE IF NOT EXISTS error_reports (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   license_id TEXT NOT NULL REFERENCES licenses(id),

@@ -3,6 +3,7 @@ const $ = (s, r = document) => r.querySelector(s)
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString('es-MX') : '—')
 const fmtDT = (iso) => (iso ? new Date(iso).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : '—')
+const money = (n) => Number(n ?? 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
 const dateInput = (iso) => (iso ? iso.slice(0, 10) : '')
 
 const STATUS = { pending: 'PENDIENTE', active: 'ACTIVA', suspended: 'SUSPENDIDA', expired: 'VENCIDA', cancelled: 'CANCELADA' }
@@ -16,14 +17,14 @@ const ACTIONS = {
   'device.flag_cleared': 'Aceptó cambio de entorno', 'activation.attempt': 'Intento de activación fallido',
   'activation.unauthorized_device': 'Activación desde dispositivo no autorizado', 'validation.ok': 'Validación', 'validation.unauthorized_device': 'Validación de dispositivo no autorizado',
   'validation.blocked_env': 'Validación bloqueada por cambio de entorno', 'auth.login': 'Inicio de sesión', 'user.created': 'Creó usuario', 'user.updated': 'Modificó usuario',
-  'settings.updated': 'Cambió ajustes',
+  'settings.updated': 'Cambió ajustes', 'payment.recorded': 'Registró pago',
 }
 const NAV = {
-  owner: ['dashboard', 'licenses', 'companies', 'devices', 'errors', 'audit', 'users', 'settings'],
-  admin: ['dashboard', 'licenses', 'companies', 'devices', 'errors', 'audit'],
+  owner: ['dashboard', 'licenses', 'companies', 'devices', 'payments', 'errors', 'audit', 'users', 'settings'],
+  admin: ['dashboard', 'licenses', 'companies', 'devices', 'payments', 'errors', 'audit'],
   vendedor: ['licenses', 'companies'],
 }
-const TITLES = { dashboard: 'Panel', licenses: 'Licencias', companies: 'Empresas', devices: 'Dispositivos', errors: 'Errores', audit: 'Auditoría', users: 'Usuarios', settings: 'Ajustes' }
+const TITLES = { dashboard: 'Panel', licenses: 'Licencias', companies: 'Empresas', devices: 'Dispositivos', payments: 'Pagos', errors: 'Errores', audit: 'Auditoría', users: 'Usuarios', settings: 'Ajustes' }
 
 const state = { token: sessionStorage.getItem('nxt.t'), user: null, plans: [], view: 'dashboard', filter: '', q: '' }
 const badge = (st) => `<span class="badge b-${esc(st)}">${esc(STATUS[st] ?? st)}</span>`
@@ -150,6 +151,8 @@ const views = {
         ${stat('Vencidas', l.expired)}
         ${stat('Suspendidas', l.suspended)}
         ${stat('Pendientes de autorizar', d.pendingApproval)}
+        ${stat('Ingresos del mes', money(d.revenueThisMonth))}
+        ${stat('Ingresos últimos 12 meses', money(d.revenueLast12Months))}
         ${stat('Dispositivos activos', d.activeDevices)}
         ${stat('Equipos con cambio de entorno', d.flaggedDevices)}
         ${stat('Errores en equipos (24 h)', d.errors24h, d.errors24h ? 'warn-line' : '')}
@@ -191,6 +194,16 @@ const views = {
       ${table(['Empresa', 'Licencia', 'Device ID', 'Nombre', 'Activación', 'Última conexión', 'Última validación', 'Versión', 'Estado'],
         rows.map((d) => `<tr><td>${esc(d.company)}</td><td class="mono">${esc(d.licenseId)}</td><td class="mono">${esc(d.deviceId)}</td><td>${esc(d.name ?? '—')} <span class="muted">${esc(d.platform ?? '')}</span></td><td>${fmtDate(d.activatedAt)}</td><td>${fmtDT(d.lastSeenAt)}</td><td>${fmtDT(d.lastValidatedAt)}</td><td>${esc(d.appVersion ?? '—')}</td><td>${d.status === 'unlinked' ? '<span class="badge b-expired">DESVINCULADO</span>' : d.envFlag ? '<span class="badge b-warn">REVISAR ENTORNO</span>' : '<span class="badge b-ok">ACTIVO</span>'}</td></tr>`),
         'Todavía no hay dispositivos activados.')}`
+  },
+
+  async payments() {
+    const rows = await api('payments')
+    const total = rows.reduce((a, r) => a + r.amount, 0)
+    return `${head('Pagos')}
+      <p class="muted" style="margin:-8px 0 14px">Los pagos se registran desde cada licencia (botón «Registrar pago»). Total mostrado: <b>${money(total)}</b> en ${rows.length} pago(s).</p>
+      ${table(['Fecha', 'Empresa', 'Licencia', 'Monto', 'Método', 'Referencia', 'Renovó', 'Registró'],
+        rows.map((r) => `<tr><td>${fmtDate(r.paid_at)}</td><td>${esc(r.company)}</td><td class="mono">${esc(r.license_id)}</td><td><b>${money(r.amount)}</b></td><td>${esc(r.method)}</td><td>${esc(r.reference ?? '—')}</td><td>${r.months ? `${r.months} mes(es)` : '—'}</td><td>${esc(r.recorded_by)}</td></tr>`),
+        'Todavía no hay pagos registrados.')}`
   },
 
   async errors() {
@@ -294,6 +307,7 @@ const dialogs = {
         ${st === 'pending' ? btn('approve', 'Autorizar y generar código', 'primary') : ''}
         ${st === 'active' ? btn('suspend', 'Suspender') : ''}
         ${st === 'suspended' || st === 'cancelled' ? btn('reactivate', 'Reactivar') : ''}
+        ${st !== 'pending' ? btn('payment', 'Registrar pago', 'primary') : ''}
         ${st !== 'pending' ? btn('renew', 'Renovar') : ''}
         ${st !== 'pending' ? btn('code', 'Nuevo código') : ''}
         ${st !== 'cancelled' ? btn('cancel', 'Cancelar licencia', 'danger') : ''}
@@ -376,6 +390,30 @@ const dialogs = {
     })
   },
 
+  payment(id) {
+    openDlg(`<h3>Registrar pago · ${esc(id)}</h3>
+      <form id="f-pay">
+        <div class="two"><div class="field"><label>Monto (MXN)</label><input name="amount" type="number" min="0" step="0.01" required /></div>
+        <div class="field"><label>Fecha del pago</label><input name="paidAt" type="date" value="${new Date().toISOString().slice(0, 10)}" /></div></div>
+        <div class="two"><div class="field"><label>Método</label><select name="method"><option>transferencia</option><option>efectivo</option><option>tarjeta</option><option>cheque</option><option>otro</option></select></div>
+        <div class="field"><label>Referencia / folio</label><input name="reference" placeholder="SPEI, factura, recibo…" /></div></div>
+        <div class="field"><label>Meses que cubre este pago (renueva la licencia)</label><input name="months" type="number" min="0" max="120" value="12" />
+          <p class="muted" style="margin:6px 0 0">Déjalo en 0 si solo quieres anotar el pago sin cambiar el vencimiento.</p></div>
+        <div class="field"><label>Nota</label><input name="note" /></div>
+        <div class="actions"><button type="button" class="btn" data-act="close">Cancelar</button><button class="btn primary">Registrar</button></div>
+      </form>`)
+    $('#f-pay').addEventListener('submit', async (ev) => {
+      ev.preventDefault()
+      const d = dataOf(ev.target)
+      try {
+        const r = await api(`licenses/${id}/payments`, { method: 'POST', body: { ...d, amount: Number(d.amount), months: Number(d.months) || null } })
+        toast(r.expiresAt ? `Pago registrado. Nuevo vencimiento: ${fmtDate(r.expiresAt)}` : 'Pago registrado')
+        dialogs.license(id)
+        refresh()
+      } catch (e) { fail(e) }
+    })
+  },
+
   renew(id) {
     openDlg(`<h3>Renovar ${esc(id)}</h3>
       <form id="f-renew"><div class="field"><label>Meses a agregar</label><input name="months" type="number" min="1" max="120" value="12" /></div>
@@ -420,6 +458,7 @@ document.addEventListener('click', async (ev) => {
     if (act === 'lic-reactivate') return confirmAndRun('¿Reactivar esta licencia?', async () => { await api(`licenses/${id}/reactivate`, { method: 'POST' }); toast('Licencia reactivada'); dialogs.license(id); refresh() })
     if (act === 'lic-cancel') return confirmAndRun('Cancelar deja la licencia inutilizable. ¿Continuar?', async () => { await api(`licenses/${id}/cancel`, { method: 'POST', body: {} }); toast('Licencia cancelada'); dialogs.license(id); refresh() })
     if (act === 'lic-renew') return dialogs.renew(id)
+    if (act === 'lic-payment') return dialogs.payment(id)
     if (act === 'unlink') return confirmAndRun('El equipo dejará de estar autorizado y liberará un lugar. ¿Desvincular?', async () => { await api(`licenses/${id}/devices/${dev}/unlink`, { method: 'POST' }); toast('Dispositivo desvinculado'); dialogs.license(id); refresh() })
     if (act === 'clear-flag') { await api(`licenses/${id}/devices/${dev}/clear-flag`, { method: 'POST' }); toast('Cambio de entorno aceptado'); dialogs.license(id); return refresh() }
   } catch (e) { fail(e) }

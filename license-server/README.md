@@ -105,6 +105,7 @@ Necesitas Node 22.5+ (o Docker) y **HTTPS** (la app en HTTPS no puede llamar a u
 - **Licencias:** crear, autorizar, suspender, reactivar, cancelar, renovar, modificar vencimiento/plan/límite de dispositivos/tolerancia/notas, ver y desvincular dispositivos, generar código nuevo.
 - **Empresas:** nombre, contacto, teléfono, correo, dirección, notas, vendedor asignado y licencias.
 - **Dispositivos:** empresa, licencia, Device ID, activación, última conexión y validación, versión, estado.
+- **Pagos:** en cada licencia, «Registrar pago» anota monto, método (transferencia, efectivo, tarjeta…), referencia y fecha, y renueva la licencia los meses que cubre, todo junto y con auditoría. La sección Pagos lista todos y el panel principal suma los ingresos del mes y de los últimos 12 meses. Es independiente del proveedor: un webhook de Stripe o Mercado Pago llamaría a la misma función (`recordPayment`).
 - **Errores:** fallos técnicos que reportan los programas instalados, agrupados por equipo y con contador; sin datos de empleados (se enmascaran correos y números largos). El panel muestra cuántos hubo en las últimas 24 h.
 - **Auditoría** con búsqueda; **Usuarios** (owner/admin/vendedor) y **Ajustes** (días de tolerancia y bloqueo por entorno) solo para el propietario.
 
@@ -124,7 +125,7 @@ Pública (la usa el programa):
 | POST | `/v1/report` | `licenseId, deviceId, token, appVersion, errors[]` | errores técnicos del programa (sin datos de empleados), agrupados por equipo |
 | GET | `/v1/public-key` | | llave pública (informativa) |
 
-Administrativa (`Authorization: Bearer …`, tras `POST /admin/api/login`): `companies`, `licenses`, `licenses/:id`, `licenses/:id/{approve|regenerate-code|suspend|reactivate|cancel|renew}`, `licenses/:id/devices/:deviceId/{unlink|clear-flag}`, `devices`, `errors`, `audit`, `users`, `settings`, `dashboard`.
+Administrativa (`Authorization: Bearer …`, tras `POST /admin/api/login`): `companies`, `licenses`, `licenses/:id`, `licenses/:id/{approve|regenerate-code|suspend|reactivate|cancel|renew}`, `licenses/:id/payments`, `licenses/:id/devices/:deviceId/{unlink|clear-flag}`, `payments`, `devices`, `errors`, `audit`, `users`, `settings`, `dashboard`.
 
 ## 10. Archivos
 

@@ -51,6 +51,7 @@ describe('flujo completo de licencias', () => {
   let owner, admin, vendor, lic, code, token
   // Admin sessions last 12 h: after the simulated clock jumps, sign in again.
   const relog = async () => {
+    clockMs += 16 * 60_000 // also clears the sign-in rate limit window
     owner = await login('owner@x.com')
     admin = await login('admin@x.com')
     vendor = await login('vende@x.com')
@@ -170,6 +171,25 @@ describe('flujo completo de licencias', () => {
     assert.equal(rows[0].company, 'Empresa ABC')
     assert.equal((await call('/admin/api/errors', { method: 'GET', token: vendor })).status, 403)
     assert.ok((await call('/admin/api/dashboard', { method: 'GET', token: admin })).errors24h >= 2)
+  })
+
+  test('pagos: se registran, renuevan la licencia y quedan en auditoría', async () => {
+    await relog()
+    const before = (await call(`/admin/api/licenses/${lic}`, { method: 'GET', token: admin })).expiresAt
+    const r = await call(`/admin/api/licenses/${lic}/payments`, { token: admin, body: { amount: 3600, method: 'transferencia', reference: 'SPEI 123', months: 12 } })
+    assert.equal(r.status, 200)
+    assert.equal(Date.parse(r.expiresAt) - Date.parse(before) > 360 * DAY, true, 'renovó 12 meses')
+    assert.equal((await call(`/admin/api/licenses/${lic}/payments`, { token: admin, body: { amount: -5 } })).status, 400)
+    assert.equal((await call(`/admin/api/licenses/${lic}/payments`, { token: vendor, body: { amount: 1 } })).status, 403)
+    const list = await call(`/admin/api/payments?license=${lic}`, { method: 'GET', token: admin })
+    assert.equal(list.length, 1)
+    assert.equal(list[0].amount, 3600)
+    const dash = await call('/admin/api/dashboard', { method: 'GET', token: admin })
+    assert.equal(dash.revenueThisMonth, 3600)
+    const audit = await call(`/admin/api/audit?license=${lic}`, { method: 'GET', token: owner })
+    assert.ok(audit.some((a) => a.action === 'payment.recorded'))
+    // put the expiry back so the next steps keep their dates
+    await call(`/admin/api/licenses/${lic}`, { method: 'PUT', token: admin, body: { expiresAt: before } })
   })
 
   test('suspender → detectar → reactivar', async () => {

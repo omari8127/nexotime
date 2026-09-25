@@ -159,9 +159,12 @@ export function createHttpServer(service, { clock = () => Date.now() } = {}) {
             : action === 'reactivate' ? admin.reactivate(user, id)
             : action === 'cancel' ? admin.cancel(user, id, body.reason)
             : admin.renew(user, id, body.months)
+        } else if ((r = m(/^licenses\/([A-Z0-9-]+)\/payments$/)) && req.method === 'POST') {
+          r = admin.recordPayment(user, r[1], body)
         } else if ((r = m(/^licenses\/([A-Z0-9-]+)\/devices\/([A-Za-z0-9-]+)\/(unlink|clear-flag)$/)) && req.method === 'POST') {
           r = r[3] === 'unlink' ? admin.unlinkDevice(user, r[1], r[2]) : admin.clearFlag(user, r[1], r[2])
         } else if (route === 'devices') r = admin.listDevices(user)
+        else if (route === 'payments') r = admin.listPayments(user, url.searchParams.get('license'))
         else if (route === 'errors') r = admin.listErrors(user)
         else if (route === 'audit') r = admin.listAudit(user, { license: url.searchParams.get('license'), q: url.searchParams.get('q'), limit: url.searchParams.get('limit') })
         else if (route === 'users' && req.method === 'GET') r = admin.listUsers(user)

@@ -385,6 +385,8 @@ export function createService(db, { clock = () => new Date() } = {}) {
         expiringSoon: soon.sort((a, b) => a.days - b.days),
         activeDevices: get("SELECT COUNT(*) AS n FROM devices WHERE status = 'active'").n,
         flaggedDevices: get("SELECT COUNT(*) AS n FROM devices WHERE status = 'active' AND env_flag = 1").n,
+        revenueThisMonth: get("SELECT COALESCE(SUM(amount), 0) AS n FROM payments WHERE substr(paid_at, 1, 7) = ?", nowDate().toISOString().slice(0, 7)).n,
+        revenueLast12Months: get('SELECT COALESCE(SUM(amount), 0) AS n FROM payments WHERE paid_at > ?', new Date(nowDate().getTime() - 365 * DAY).toISOString()).n,
         errors24h: get('SELECT COUNT(*) AS n FROM error_reports WHERE last_at > ?', new Date(nowDate().getTime() - DAY).toISOString()).n,
         pendingApproval: rows.filter((l) => l.status === 'pending').length,
         lastValidations: all(
@@ -547,6 +549,45 @@ export function createService(db, { clock = () => new Date() } = {}) {
       run('UPDATE licenses SET plan=?, max_devices=?, expires_at=?, tolerance_days=?, notes=? WHERE id=?', plan, maxDevices, expires, tol, d.notes === undefined ? l.notes : str(d.notes, 1000), id)
       audit(actorOf(user), 'license.updated', { license: id, role: user.role, detail: changes.join(', ') || 'Notas' })
       return { ok: true }
+    },
+
+    /* ------------------------------ payments ----------------------------- */
+    /**
+     * Records a payment (transfer, cash, card…) and, when `months` is given, renews the
+     * license in the same step. Provider-agnostic on purpose: a Stripe / Mercado Pago
+     * webhook can call this same function later.
+     */
+    recordPayment(user, id, d) {
+      need(user, 'licenses.manage')
+      const l = ownLicense(user, id)
+      const amount = Number(d.amount)
+      if (!Number.isFinite(amount) || amount < 0 || amount > 10_000_000) throw new ApiError(400, 'bad_request', 'Escribe un monto válido.')
+      const method = ['transferencia', 'efectivo', 'tarjeta', 'cheque', 'otro'].includes(d.method) ? d.method : 'otro'
+      const months = d.months === undefined || d.months === '' || d.months === null ? null : int(d.months, 1, 120, 0)
+      if (months === 0) throw new ApiError(400, 'bad_request', 'Los meses a renovar deben ser de 1 a 120.')
+      if (months && l.status === 'pending') throw new ApiError(409, 'conflict', 'Autoriza la licencia antes de renovarla.')
+      const paidAt = d.paidAt && !Number.isNaN(Date.parse(d.paidAt)) ? new Date(d.paidAt).toISOString() : now()
+      db.exec('BEGIN')
+      try {
+        run(
+          'INSERT INTO payments (license_id, amount, method, reference, months, note, paid_at, recorded_by, recorded_at) VALUES (?,?,?,?,?,?,?,?,?)',
+          id, amount, method, str(d.reference, 80), months, str(d.note, 300), paidAt, actorOf(user), now(),
+        )
+        audit(actorOf(user), 'payment.recorded', { license: id, role: user.role, detail: `$${amount.toFixed(2)} MXN · ${method}${months ? ` · +${months} mes(es)` : ''}` })
+        db.exec('COMMIT')
+      } catch (e) {
+        db.exec('ROLLBACK')
+        throw e
+      }
+      return months ? admin.renew(user, id, months) : { ok: true }
+    },
+    listPayments(user, licenseId) {
+      need(user, 'licenses.manage')
+      return all(
+        `SELECT p.*, c.name AS company FROM payments p JOIN licenses l ON l.id = p.license_id JOIN companies c ON c.id = l.company_id
+         WHERE (?1 IS NULL OR p.license_id = ?1) ORDER BY p.paid_at DESC LIMIT 300`,
+        licenseId ?? null,
+      )
     },
 
     /* ------------------------------ devices ------------------------------ */

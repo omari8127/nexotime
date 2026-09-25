@@ -13,6 +13,7 @@
 - 41 pruebas automáticas del programa (reglas de asistencia, permisos por rol, credenciales, coincidencia facial, exportación) y 18 del servidor de licencias.
 - Pantalla de error amable si algo falla (nunca queda en blanco) y configuración de publicación lista (`public/_headers`, `_redirects`, `vercel.json`).
 - Monitoreo de errores en los equipos de los clientes, en tu propio servidor (panel de licencias → Errores), sin servicios de terceros.
+- Registro de pagos en el panel de licencias: cada pago renueva la licencia, queda en auditoría y suma a los ingresos.
 - Aviso en Empleados para regenerar los QR antiguos en un clic.
 
 ## Pendiente — depende de ti (no se puede hacer desde el código)
@@ -29,7 +30,7 @@
 
 ## Pendiente — siguiente ronda de desarrollo
 
-- Cobro y renovación automática (hoy se renueva a mano desde el panel de licencias).
+- Cobro automático con tarjeta (Stripe / Mercado Pago). Hoy los pagos se registran a mano en el panel de licencias, que ya renueva la licencia y suma ingresos; falta conectar un proveedor.
 - Pruebas de interfaz de extremo a extremo (hoy las pruebas cubren la lógica, no las pantallas).
 - Empaquetado como app: Windows (Electron) y Android (Capacitor); ver `license-server/README.md` sobre licencias en Android.
 - Endurecimiento extra de licencias: exigir licencia vigente también en las reglas de Supabase.
