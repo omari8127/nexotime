@@ -9,6 +9,7 @@
     "start": "node --disable-warning=ExperimentalWarning src/index.js",
     "keygen": "node --disable-warning=ExperimentalWarning src/cli.js keygen",
     "create-owner": "node --disable-warning=ExperimentalWarning src/cli.js create-owner",
+    "backup": "node --disable-warning=ExperimentalWarning src/backup.js",
     "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js"
   }
 }

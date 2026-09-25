@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  app:
+    name: Programa (tipos, análisis y build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      # El service worker debe generarse con la lista de archivos.
+      - run: test -f dist/sw.js && grep -q "CORE_FILES = \[\"/" dist/sw.js
+
+  licencias:
+    name: Servidor de licencias (pruebas)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # Las pruebas de extremo a extremo importan src/lib/license/token.ts del programa.
+      - run: npm test
+        working-directory: license-server

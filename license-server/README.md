@@ -95,7 +95,8 @@ Necesitas Node 22.5+ (o Docker) y **HTTPS** (la app en HTTPS no puede llamar a u
 3. Variables: `TRUST_PROXY=true`, opcionalmente `ALLOWED_ORIGINS=https://tu-app.com`. La llave: ejecuta una vez `node src/cli.js keygen` dentro del contenedor (guarda `/data/private.pem`) **o** pega el PEM en `LICENSE_PRIVATE_KEY`.
 4. Crea al propietario una vez: `node src/cli.js create-owner tu@correo.com "Tu nombre"`.
 5. En la app de producción define `VITE_LICENSE_API_URL=https://licencias.tudominio.com` y `VITE_LICENSE_PUBLIC_KEY`, y vuelve a construirla (`npm run build`).
-6. **Respalda `data/`** (base y llave). **Si pierdes o cambias la llave privada, todas las licencias emitidas dejan de ser válidas** y habría que reactivar cada equipo. Nunca la subas a git.
+6. **Respaldos:** programa `npm run backup` una vez al día (`node src/backup.js` dentro del contenedor). Crea una copia consistente de la base y de la llave en `data/backups/` y conserva las 14 más recientes; cópialas también fuera del servidor.
+   **Respalda `data/`** (base y llave). **Si pierdes o cambias la llave privada, todas las licencias emitidas dejan de ser válidas** y habría que reactivar cada equipo. Nunca la subas a git.
 7. Entra a `https://licencias.tudominio.com/admin/`.
 
 ## 7. Uso del panel (`/admin/`)
