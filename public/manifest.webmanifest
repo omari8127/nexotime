@@ -1,0 +1,14 @@
+{
+  "name": "NEXOTIME — Reloj Checador",
+  "short_name": "Nexotime",
+  "description": "Control de asistencia y reloj checador para empresas.",
+  "start_url": "/clock",
+  "scope": "/",
+  "display": "fullscreen",
+  "orientation": "portrait-primary",
+  "background_color": "#0b1220",
+  "theme_color": "#2554eb",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

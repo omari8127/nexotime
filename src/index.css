@@ -1,0 +1,119 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 20% 98%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 222 89% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 214 32% 96%;
+    --secondary-foreground: 222 40% 20%;
+
+    --muted: 214 32% 95%;
+    --muted-foreground: 215 16% 47%;
+
+    --accent: 214 95% 96%;
+    --accent-foreground: 222 83% 45%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 152 62% 40%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 30 92% 36%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 214 24% 90%;
+    --input: 214 24% 88%;
+    --ring: 222 89% 55%;
+
+    --radius: 0.625rem;
+
+    --sidebar: 223 47% 11%;
+    --sidebar-foreground: 215 20% 75%;
+    --sidebar-accent: 222 47% 16%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 222 33% 20%;
+  }
+
+  .dark {
+    color-scheme: dark; /* native date pickers, select popups and scrollbars follow the theme */
+    --background: 222 47% 8%;
+    --foreground: 210 20% 96%;
+    --card: 222 44% 11%;
+    --card-foreground: 210 20% 96%;
+    --popover: 222 44% 11%;
+    --popover-foreground: 210 20% 96%;
+    --primary: 222 89% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 222 33% 18%;
+    --secondary-foreground: 210 20% 90%;
+    --muted: 222 33% 16%;
+    --muted-foreground: 215 16% 60%;
+    --accent: 222 40% 20%;
+    --accent-foreground: 210 20% 96%;
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 152 55% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 33 85% 55%;
+    --warning-foreground: 0 0% 100%;
+    --border: 222 33% 20%;
+    --input: 222 33% 22%;
+    --ring: 222 89% 60%;
+    --sidebar: 223 47% 9%;
+    --sidebar-foreground: 215 20% 72%;
+    --sidebar-accent: 222 40% 16%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 222 33% 18%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+    font-variation-settings: 'opsz' 32;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 999px;
+    border: 2px solid hsl(var(--background));
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.4);
+  }
+}
+
+@layer utilities {
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
