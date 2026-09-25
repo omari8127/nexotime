@@ -73,6 +73,21 @@ CREATE TABLE IF NOT EXISTS audit (
 );
 CREATE INDEX IF NOT EXISTS audit_ts ON audit (ts DESC);
 CREATE INDEX IF NOT EXISTS audit_license ON audit (license_id);
+CREATE TABLE IF NOT EXISTS error_reports (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  license_id TEXT NOT NULL REFERENCES licenses(id),
+  device_id TEXT NOT NULL,
+  fingerprint TEXT NOT NULL,
+  message TEXT NOT NULL,
+  stack TEXT,
+  path TEXT,
+  app_version TEXT,
+  count INTEGER NOT NULL DEFAULT 1,
+  first_at TEXT NOT NULL,
+  last_at TEXT NOT NULL,
+  UNIQUE (license_id, device_id, fingerprint)
+);
+CREATE INDEX IF NOT EXISTS errors_last ON error_reports (last_at DESC);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 `
 

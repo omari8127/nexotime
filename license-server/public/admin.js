@@ -19,11 +19,11 @@ const ACTIONS = {
   'settings.updated': 'Cambió ajustes',
 }
 const NAV = {
-  owner: ['dashboard', 'licenses', 'companies', 'devices', 'audit', 'users', 'settings'],
-  admin: ['dashboard', 'licenses', 'companies', 'devices', 'audit'],
+  owner: ['dashboard', 'licenses', 'companies', 'devices', 'errors', 'audit', 'users', 'settings'],
+  admin: ['dashboard', 'licenses', 'companies', 'devices', 'errors', 'audit'],
   vendedor: ['licenses', 'companies'],
 }
-const TITLES = { dashboard: 'Panel', licenses: 'Licencias', companies: 'Empresas', devices: 'Dispositivos', audit: 'Auditoría', users: 'Usuarios', settings: 'Ajustes' }
+const TITLES = { dashboard: 'Panel', licenses: 'Licencias', companies: 'Empresas', devices: 'Dispositivos', errors: 'Errores', audit: 'Auditoría', users: 'Usuarios', settings: 'Ajustes' }
 
 const state = { token: sessionStorage.getItem('nxt.t'), user: null, plans: [], view: 'dashboard', filter: '', q: '' }
 const badge = (st) => `<span class="badge b-${esc(st)}">${esc(STATUS[st] ?? st)}</span>`
@@ -152,6 +152,7 @@ const views = {
         ${stat('Pendientes de autorizar', d.pendingApproval)}
         ${stat('Dispositivos activos', d.activeDevices)}
         ${stat('Equipos con cambio de entorno', d.flaggedDevices)}
+        ${stat('Errores en equipos (24 h)', d.errors24h, d.errors24h ? 'warn-line' : '')}
       </div>
       <h3 class="sub">Licencias por vencer</h3>
       ${table(['Licencia', 'Empresa', 'Vence', 'Días'], d.expiringSoon.map((x) => `<tr class="click" data-act="license" data-id="${esc(x.id)}"><td class="mono">${esc(x.id)}</td><td>${esc(x.company)}</td><td>${fmtDate(x.expiresAt)}</td><td>${x.days}</td></tr>`), 'Ninguna licencia vence en los próximos 30 días.')}
@@ -190,6 +191,15 @@ const views = {
       ${table(['Empresa', 'Licencia', 'Device ID', 'Nombre', 'Activación', 'Última conexión', 'Última validación', 'Versión', 'Estado'],
         rows.map((d) => `<tr><td>${esc(d.company)}</td><td class="mono">${esc(d.licenseId)}</td><td class="mono">${esc(d.deviceId)}</td><td>${esc(d.name ?? '—')} <span class="muted">${esc(d.platform ?? '')}</span></td><td>${fmtDate(d.activatedAt)}</td><td>${fmtDT(d.lastSeenAt)}</td><td>${fmtDT(d.lastValidatedAt)}</td><td>${esc(d.appVersion ?? '—')}</td><td>${d.status === 'unlinked' ? '<span class="badge b-expired">DESVINCULADO</span>' : d.envFlag ? '<span class="badge b-warn">REVISAR ENTORNO</span>' : '<span class="badge b-ok">ACTIVO</span>'}</td></tr>`),
         'Todavía no hay dispositivos activados.')}`
+  },
+
+  async errors() {
+    const rows = await api('errors')
+    return `${head('Errores en los equipos')}
+      <p class="muted" style="margin:-8px 0 14px">Fallos técnicos que reportan los programas instalados (sin datos de empleados). Cada fila agrupa el mismo error en el mismo equipo.</p>
+      ${table(['Última vez', 'Empresa', 'Licencia', 'Error', 'Pantalla', 'Veces', 'Versión'],
+        rows.map((e) => `<tr><td>${fmtDT(e.last_at)}</td><td>${esc(e.company)}</td><td class="mono">${esc(e.license_id)}</td><td><b>${esc(e.message)}</b>${e.stack ? `<details><summary class="muted">Detalle</summary><pre class="mono" style="white-space:pre-wrap;margin:6px 0 0">${esc(e.stack)}</pre></details>` : ''}</td><td class="mono">${esc(e.path ?? '—')}</td><td>${e.count}</td><td>${esc(e.app_version ?? '—')}</td></tr>`),
+        'Sin errores reportados. Buena señal.')}`
   },
 
   async audit() {

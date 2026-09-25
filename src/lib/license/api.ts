@@ -78,8 +78,24 @@ async function post<T>(path: string, body: unknown, timeoutMs = 12_000): Promise
   return data as T
 }
 
+export interface ErrorReportItem {
+  at: string
+  message: string
+  stack?: string
+  path?: string
+  count: number
+}
+export interface ReportRequest {
+  licenseId: string
+  deviceId: string
+  token: string
+  appVersion: string
+  errors: ErrorReportItem[]
+}
+
 /** Same contract for every platform (Windows PWA today, Android later). */
 export const licenseApi = {
   activate: (r: ActivateRequest) => post<LicenseResponse>('/v1/activate', r),
   validate: (r: ValidateRequest) => post<LicenseResponse>('/v1/validate', r),
+  report: (r: ReportRequest) => post<{ ok: true }>('/v1/report', r),
 }

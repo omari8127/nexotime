@@ -118,6 +118,10 @@ export function createHttpServer(service, { clock = () => Date.now() } = {}) {
           if (!hit(`sta:${ip}`, 240, 3600_000, clock())) throw new ApiError(429, 'rate_limited')
           return send(res, 200, service.status({ ...body, ip }), cors)
         }
+        if (path === '/v1/report') {
+          if (!hit(`rep:${ip}`, 60, 3600_000, clock())) throw new ApiError(429, 'rate_limited')
+          return send(res, 200, service.report({ ...body, ip }), cors)
+        }
         throw new ApiError(404, 'not_found')
       }
 
@@ -158,6 +162,7 @@ export function createHttpServer(service, { clock = () => Date.now() } = {}) {
         } else if ((r = m(/^licenses\/([A-Z0-9-]+)\/devices\/([A-Za-z0-9-]+)\/(unlink|clear-flag)$/)) && req.method === 'POST') {
           r = r[3] === 'unlink' ? admin.unlinkDevice(user, r[1], r[2]) : admin.clearFlag(user, r[1], r[2])
         } else if (route === 'devices') r = admin.listDevices(user)
+        else if (route === 'errors') r = admin.listErrors(user)
         else if (route === 'audit') r = admin.listAudit(user, { license: url.searchParams.get('license'), q: url.searchParams.get('q'), limit: url.searchParams.get('limit') })
         else if (route === 'users' && req.method === 'GET') r = admin.listUsers(user)
         else if (route === 'users') r = admin.createUser(user, body)

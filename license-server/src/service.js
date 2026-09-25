@@ -40,7 +40,7 @@ const CAN = {
   owner: new Set(['*']),
   admin: new Set([
     'dashboard', 'companies.read', 'companies.write', 'licenses.read', 'licenses.create', 'licenses.approve',
-    'licenses.manage', 'devices.read', 'devices.unlink', 'audit.read',
+    'licenses.manage', 'devices.read', 'devices.unlink', 'audit.read', 'errors.read',
   ]),
   vendedor: new Set(['companies.read', 'companies.write', 'licenses.read', 'licenses.request']),
 }
@@ -260,6 +260,40 @@ export function createService(db, { clock = () => new Date() } = {}) {
     return { ok: true, license: clientView(l), serverTime: now() }
   }
 
+
+  /**
+   * Error reports from the installed programs (technical only: message, stack, screen).
+   * Grouped per device by fingerprint so a loop of the same bug is one row with a counter.
+   */
+  function report(input) {
+    proof(input)
+    const l = licenseRow(input.licenseId)
+    const device = l && get('SELECT status FROM devices WHERE license_id = ? AND device_id = ?', l.id, input.deviceId)
+    if (!l || device?.status !== 'active') throw new ApiError(403, 'device_unauthorized')
+    const items = Array.isArray(input.errors) ? input.errors.slice(0, 20) : []
+    let saved = 0
+    for (const e of items) {
+      const message = str(e?.message, 300)
+      if (!message) continue
+      const fingerprint = sha256(`${message}|${str(e?.stack, 200) ?? ''}`).slice(0, 16)
+      const times = int(e?.count, 1, 1000, 1)
+      const at = Number.isNaN(Date.parse(e?.at)) ? now() : new Date(e.at).toISOString()
+      run(
+        `INSERT INTO error_reports (license_id, device_id, fingerprint, message, stack, path, app_version, count, first_at, last_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?)
+         ON CONFLICT (license_id, device_id, fingerprint) DO UPDATE SET count = count + excluded.count, last_at = excluded.last_at, app_version = excluded.app_version`,
+        l.id, input.deviceId, fingerprint, message, str(e?.stack, 1500), str(e?.path, 120), str(input.appVersion, 30), times, at, now(),
+      )
+      saved += 1
+    }
+    // Keep the table small: the 200 most recent per license.
+    run(
+      'DELETE FROM error_reports WHERE license_id = ?1 AND id NOT IN (SELECT id FROM error_reports WHERE license_id = ?1 ORDER BY last_at DESC LIMIT 200)',
+      l.id,
+    )
+    return { ok: true, saved }
+  }
+
   /* ====================================================================== */
   /*  Admin API                                                              */
   /* ====================================================================== */
@@ -351,6 +385,7 @@ export function createService(db, { clock = () => new Date() } = {}) {
         expiringSoon: soon.sort((a, b) => a.days - b.days),
         activeDevices: get("SELECT COUNT(*) AS n FROM devices WHERE status = 'active'").n,
         flaggedDevices: get("SELECT COUNT(*) AS n FROM devices WHERE status = 'active' AND env_flag = 1").n,
+        errors24h: get('SELECT COUNT(*) AS n FROM error_reports WHERE last_at > ?', new Date(nowDate().getTime() - DAY).toISOString()).n,
         pendingApproval: rows.filter((l) => l.status === 'pending').length,
         lastValidations: all(
           `SELECT d.device_id, d.last_validated_at, d.app_version, l.id AS license_id, c.name AS company
@@ -538,6 +573,14 @@ export function createService(db, { clock = () => new Date() } = {}) {
       return { ok: true }
     },
 
+    listErrors(user) {
+      need(user, 'errors.read')
+      return all(
+        `SELECT r.*, c.name AS company FROM error_reports r JOIN licenses l ON l.id = r.license_id JOIN companies c ON c.id = l.company_id
+         ORDER BY r.last_at DESC LIMIT 200`,
+      )
+    },
+
     /* ------------------------------- audit ------------------------------- */
     listAudit(user, { license, q, limit } = {}) {
       need(user, 'audit.read')
@@ -614,5 +657,5 @@ export function createService(db, { clock = () => new Date() } = {}) {
     }
   }
 
-  return { activate, validate, status, admin, audit, effectiveStatus, _db: db }
+  return { activate, validate, status, report, admin, audit, effectiveStatus, _db: db }
 }

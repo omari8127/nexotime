@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { NexotimeLogo } from '@/components/shared/Logo'
+import { flushErrorReports, reportError } from '@/lib/errorReport'
 
 interface State {
   failed: boolean
@@ -22,6 +23,8 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('[NEXOTIME]', error, info.componentStack)
+    reportError(error)
+    void flushErrorReports()
     try {
       localStorage.setItem(
         KEY,

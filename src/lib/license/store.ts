@@ -40,6 +40,9 @@ const save = (s: Stored | null) => {
   }
 }
 
+/** The signed token this device holds (proof of possession for the license API). */
+export const getStoredToken = (): string | null => load()?.token ?? null
+
 export type Phase = 'checking' | 'unconfigured' | 'unactivated' | 'ready' | 'blocked'
 
 interface LicenseState {

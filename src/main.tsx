@@ -4,9 +4,11 @@ import { BrowserRouter } from 'react-router-dom'
 import { App } from '@/App'
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary'
 import { applyTheme, useUIStore } from '@/store/uiStore'
+import { installErrorReporting } from '@/lib/errorReport'
 import '@/index.css'
 
 applyTheme(useUIStore.getState().theme)
+installErrorReporting()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

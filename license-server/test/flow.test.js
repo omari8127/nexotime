@@ -53,6 +53,7 @@ describe('flujo completo de licencias', () => {
   const relog = async () => {
     owner = await login('owner@x.com')
     admin = await login('admin@x.com')
+    vendor = await login('vende@x.com')
   }
 
   test('roles: el vendedor solo solicita, el propietario autoriza', async () => {
@@ -152,6 +153,23 @@ describe('flujo completo de licencias', () => {
     token = v2.token
     assert.equal(verifyToken(token).tol, 7)
     await call('/admin/api/settings', { token: owner, body: { default_tolerance_days: 30 } })
+  })
+
+  test('reportes de errores: agrupados, protegidos y visibles solo para administración', async () => {
+    await relog()
+    const err = { message: 'Cannot read properties of undefined', stack: 'at Foo (a.js:1)', path: '/clock', count: 1, at: clock().toISOString() }
+    const send = (errors, tok = token) => call('/v1/report', { body: { licenseId: lic, deviceId: DEV_A, token: tok, appVersion: '1.0.2', errors } })
+    assert.equal((await send([err, { ...err, message: 'Otro fallo' }])).saved, 2)
+    assert.equal((await send([{ ...err, count: 3 }])).saved, 1)
+    assert.equal((await send([err], 'x.y')).code, 'invalid_token')
+    assert.equal((await send([{ message: '' }])).saved, 0)
+
+    const rows = await call('/admin/api/errors', { method: 'GET', token: admin })
+    assert.equal(rows.length, 2)
+    assert.equal(rows.find((r) => r.message.startsWith('Cannot')).count, 4, 'el mismo error se agrupa y suma')
+    assert.equal(rows[0].company, 'Empresa ABC')
+    assert.equal((await call('/admin/api/errors', { method: 'GET', token: vendor })).status, 403)
+    assert.ok((await call('/admin/api/dashboard', { method: 'GET', token: admin })).errors24h >= 2)
   })
 
   test('suspender → detectar → reactivar', async () => {
