@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input, Label } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { LicensePanel } from '@/components/settings/LicensePanel'
 import { LICENSE_ENFORCED } from '@/lib/license/config'
@@ -12,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from '@/components/ui/toast'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { WeeklyHoursPicker } from '@/components/shared/WeeklyHoursPicker'
+import { MX_TIMEZONES } from '@/data/timezones'
 import { KioskSettingsPanel } from '@/components/settings/KioskSettingsPanel'
 import { useDataStore } from '@/store/dataStore'
 import { usePermissions } from '@/hooks/useScopedData'
@@ -29,6 +31,7 @@ export function SettingsPage() {
 
   const [name, setName] = useState(company.name)
   const [rfc, setRfc] = useState(company.rfc)
+  const [timezone, setTimezone] = useState(company.timezone)
   const [weekly, setWeekly] = useState(company.weeklyTargetHours)
   const s = company.attendanceSettings
   const [tolerance, setTolerance] = useState(s.entryToleranceMinutes)
@@ -42,7 +45,7 @@ export function SettingsPage() {
   const canManage = can('settings.manage')
 
   const saveCompany = () => {
-    updateCompany({ name, rfc, weeklyTargetHours: weekly }, currentUser)
+    updateCompany({ name, rfc, weeklyTargetHours: weekly, timezone }, currentUser)
     toast.success('Datos de empresa guardados')
   }
 
@@ -113,7 +116,7 @@ export function SettingsPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label>Zona horaria</Label>
-                  <Input value={company.timezone} disabled />
+                  <Select value={timezone} onValueChange={setTimezone} options={MX_TIMEZONES} disabled={!canManage} />
                 </div>
               </div>
               {canManage ? <Button onClick={saveCompany}>Guardar</Button> : <LockedNote />}

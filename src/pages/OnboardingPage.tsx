@@ -7,11 +7,12 @@ import { Input, Label } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { NexotimeLogo } from '@/components/shared/Logo'
 import { WeeklyHoursPicker } from '@/components/shared/WeeklyHoursPicker'
+import { MX_TIMEZONES } from '@/data/timezones'
 import { useDataStore } from '@/store/dataStore'
 import { useUIStore } from '@/store/uiStore'
 import { toast } from '@/components/ui/toast'
 
-const STEPS = ['Empresa', 'Jornada', 'Reloj checador', 'Listo']
+const STEPS = ['Empresa', 'Jornada', 'Zona horaria', 'Listo']
 
 export function OnboardingPage() {
   const navigate = useNavigate()
@@ -26,9 +27,10 @@ export function OnboardingPage() {
   const [industry, setIndustry] = useState(company.industry)
   const [weekly, setWeekly] = useState(company.weeklyTargetHours)
   const [tolerance, setTolerance] = useState(company.attendanceSettings.entryToleranceMinutes)
+  const [timezone, setTimezone] = useState(company.timezone)
 
   const finish = () => {
-    updateCompany({ name, industry, weeklyTargetHours: weekly }, currentUser)
+    updateCompany({ name, industry, weeklyTargetHours: weekly, timezone }, currentUser)
     updateSettings({ entryToleranceMinutes: tolerance }, currentUser)
     completeOnboarding()
     toast.success('Configuración guardada', 'Tu empresa está lista.')
@@ -127,17 +129,19 @@ export function OnboardingPage() {
           {step === 2 && (
             <div className="space-y-4">
               <div>
-                <h2 className="text-lg font-semibold">Conecta tu reloj checador</h2>
+                <h2 className="text-lg font-semibold">Zona horaria</h2>
                 <p className="text-sm text-muted-foreground">
-                  Abre el reloj en una tablet o PC en recepción e ingresa el código de emparejamiento.
+                  Se usa para calcular correctamente las horas de entrada, salida y tus reportes.
                 </p>
               </div>
-              <div className="rounded-xl border border-dashed border-border bg-secondary/40 p-6 text-center">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Código de emparejamiento</p>
-                <p className="mt-2 font-mono text-3xl font-semibold tracking-[0.3em]">418-207</p>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Válido por 10 minutos · o abre <span className="font-medium">/clock</span> directamente en la demo
-                </p>
+              <div className="space-y-1.5">
+                <Label>Zona horaria de tu empresa</Label>
+                <Select value={timezone} onValueChange={setTimezone} options={MX_TIMEZONES} />
+                <p className="text-xs text-muted-foreground">Por ahora solo ofrecemos zonas horarias de México.</p>
+              </div>
+              <div className="rounded-xl border border-dashed border-border bg-secondary/40 p-4 text-center text-sm text-muted-foreground">
+                Cuando termines, conecta el reloj checador abriendo <span className="font-medium text-foreground">/clock</span> en
+                la tablet o PC de recepción.
               </div>
             </div>
           )}
