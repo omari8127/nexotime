@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Download, MoreHorizontal, Printer, Search, UserPlus, Users } from 'lucide-react'
+import { Download, MoreHorizontal, Printer, Search, Upload, UserPlus, Users } from 'lucide-react'
 import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -21,6 +21,7 @@ import { EmployeeFormDialog } from '@/components/employees/EmployeeFormDialog'
 import { useScopedData, usePermissions } from '@/hooks/useScopedData'
 import { useDataStore } from '@/store/dataStore'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { ImportEmployeesDialog } from '@/components/employees/ImportEmployeesDialog'
 import { toast } from '@/components/ui/toast'
 import { buildWorkbookPayload, downloadCSV } from '@/services/exportService'
 import { printCredentials } from '@/lib/credentialPrint'
@@ -45,6 +46,7 @@ export function EmployeesPage() {
   const regenerate = useDataStore((s) => s.regenerateCredentials)
   const isLive = useDataStore((s) => s.mode === 'live')
   const [legacyOpen, setLegacyOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   // QR codes from before the random format are guessable ("NXT:EMP-001"): offer to replace them.
   const legacy = useMemo(
     () =>
@@ -133,6 +135,12 @@ export function EmployeesPage() {
               <Download className="h-4 w-4" />
               Exportar
             </Button>
+            {can('employees.create') ? (
+              <Button variant="secondary" onClick={() => setImportOpen(true)}>
+                <Upload className="h-4 w-4" />
+                Importar
+              </Button>
+            ) : null}
             {can('employees.create') ? (
               <Button onClick={() => setAddOpen(true)}>
                 <UserPlus className="h-4 w-4" />
@@ -325,6 +333,7 @@ export function EmployeesPage() {
           setLegacyOpen(false)
         }}
       />
+      <ImportEmployeesDialog open={importOpen} onOpenChange={setImportOpen} />
     </div>
   )
 }

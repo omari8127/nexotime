@@ -173,6 +173,8 @@ interface DataState {
   switchToDemo: () => void
 
   addEmployee: (input: NewEmployeeInput, actor: User) => Employee
+  /** Bulk alta from an imported spreadsheet. One summary audit entry for the whole batch. */
+  importEmployees: (inputs: NewEmployeeInput[], actor: User) => Employee[]
   updateEmployee: (id: string, patch: Partial<Employee>, actor: User) => void
   toggleEmployeeStatus: (id: string, actor: User) => void
   /** New QR + barcode values (lost badge). The previous codes stop working immediately. */
@@ -189,6 +191,11 @@ interface DataState {
   registerPunch: (input: PunchInput) => { record: AttendanceRecord; punch: Punch }
   /** Applies a correction directly (RH/admin). Returns an error message, or null when applied. */
   applyCorrection: (input: CorrectionInput) => string | null
+  /** Bulk corrections from an imported spreadsheet. Skips rows with an error, applies the rest. */
+  importAttendanceCorrections: (
+    changes: Array<{ employeeId: string; date: string; type: PunchType; time: string; reason: string }>,
+    actor: User,
+  ) => { applied: number; failed: Array<{ index: number; message: string }> }
   /** Employee/supervisor asks for a correction; nothing changes until it is approved. */
   submitCorrection: (input: CorrectionRequestInput, actor: User) => string | null
   reviewCorrection: (
@@ -371,6 +378,30 @@ export const useDataStore = create<DataState>((set, get) => {
     return { previous, recordId: updated.id }
   }
 
+  /** Shared by a single manual alta and a bulk import, so both produce identical records. */
+  const buildEmployeeFromInput = (input: NewEmployeeInput): Employee => ({
+    id: nextId(),
+    companyId: get().company.id,
+    branchId: input.branchId,
+    employeeNumber: input.employeeNumber,
+    firstName: input.firstName,
+    lastNamePaternal: input.lastNamePaternal,
+    lastNameMaternal: input.lastNameMaternal || undefined,
+    fullName: [input.firstName, input.lastNamePaternal, input.lastNameMaternal].filter(Boolean).join(' '),
+    position: input.position,
+    department: input.department,
+    email: input.email || undefined,
+    phone: input.phone || undefined,
+    status: input.status,
+    hireDate: input.hireDate,
+    scheduleId: input.scheduleId,
+    identifications: input.identifications,
+    pin: input.pin || undefined,
+    curp: input.curp || undefined,
+    address: input.address || undefined,
+    emergencyContact: input.emergencyContact,
+  })
+
   return {
     mode: 'demo',
     ...seed,
@@ -409,30 +440,7 @@ export const useDataStore = create<DataState>((set, get) => {
 
     addEmployee: (input, actor) => {
       requirePermission('employees.create')
-      const employee: Employee = {
-        id: nextId(),
-        companyId: get().company.id,
-        branchId: input.branchId,
-        employeeNumber: input.employeeNumber,
-        firstName: input.firstName,
-        lastNamePaternal: input.lastNamePaternal,
-        lastNameMaternal: input.lastNameMaternal || undefined,
-        fullName: [input.firstName, input.lastNamePaternal, input.lastNameMaternal]
-          .filter(Boolean)
-          .join(' '),
-        position: input.position,
-        department: input.department,
-        email: input.email || undefined,
-        phone: input.phone || undefined,
-        status: input.status,
-        hireDate: input.hireDate,
-        scheduleId: input.scheduleId,
-        identifications: input.identifications,
-        pin: input.pin || undefined,
-        curp: input.curp || undefined,
-        address: input.address || undefined,
-        emergencyContact: input.emergencyContact,
-      }
+      const employee = buildEmployeeFromInput(input)
       set((s) => ({ employees: [employee, ...s.employees] }))
       persist(get().mode, () => liveInsertEmployee(employee))
       writeAudit(
@@ -448,6 +456,25 @@ export const useDataStore = create<DataState>((set, get) => {
         actor,
       )
       return employee
+    },
+
+    importEmployees: (inputs, actor) => {
+      requirePermission('employees.create')
+      if (inputs.length === 0) return []
+      const created = inputs.map(buildEmployeeFromInput)
+      set((s) => ({ employees: [...created, ...s.employees] }))
+      for (const employee of created) persist(get().mode, () => liveInsertEmployee(employee))
+      writeAudit(
+        {
+          action: 'employee.create',
+          entityType: 'Employee',
+          entityId: 'bulk',
+          entityLabel: `Importación de ${created.length} ${created.length === 1 ? 'empleado' : 'empleados'}`,
+          changes: [{ field: 'Empleados', before: null, after: created.map((e) => e.employeeNumber).join(', ') }],
+        },
+        actor,
+      )
+      return created
     },
 
     updateEmployee: (id, patch, actor) => {
@@ -759,6 +786,43 @@ export const useDataStore = create<DataState>((set, get) => {
         get().currentUser,
       )
       return null
+    },
+
+    importAttendanceCorrections: (changes, actor) => {
+      requirePermission('attendance.edit')
+      const failed: Array<{ index: number; message: string }> = []
+      const summaries: string[] = []
+      let applied = 0
+      changes.forEach((c, index) => {
+        const employee = get().employees.find((e) => e.id === c.employeeId)
+        if (!employee || !canAccessEmployee(get().currentUser, employee)) {
+          failed.push({ index, message: 'Sin permiso sobre este empleado.' })
+          return
+        }
+        const result = editPunch(c.employeeId, c.date, c.type, c.time, c.reason)
+        if ('error' in result) {
+          failed.push({ index, message: result.error })
+          return
+        }
+        applied += 1
+        summaries.push(
+          `${employee.fullName} · ${c.date} · ${PUNCH_TYPE_LABEL[c.type]}: ${result.previous ? formatTime12(result.previous) : 'Sin registro'} → ${formatTime12(c.time)}`,
+        )
+      })
+      if (applied > 0) {
+        writeAudit(
+          {
+            action: 'attendance.edit',
+            entityType: 'AttendanceRecord',
+            entityId: 'bulk',
+            entityLabel: `Importación de correcciones (${applied})`,
+            reason: 'Corrección por importación',
+            changes: summaries.slice(0, 50).map((s) => ({ field: 'Corrección', before: null, after: s })),
+          },
+          actor,
+        )
+      }
+      return { applied, failed }
     },
 
     submitCorrection: (input, actor) => {

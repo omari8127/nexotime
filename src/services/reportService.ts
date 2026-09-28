@@ -60,6 +60,9 @@ export interface ReportContext {
   incidencias?: Incidencia[]
   /** The date treated as "today": today and later days are never faltas. */
   todayISO?: string
+  /** For the cover sheet of the full report. */
+  companyName?: string
+  generatedBy?: string
 }
 
 export interface ReportResult {
@@ -393,6 +396,46 @@ export function buildReport(type: ReportType, ctx: ReportContext): ReportResult 
       }
     }),
   }
+}
+
+/**
+ * One workbook, several sheets, everything a company (or an STPS inspector) would
+ * ask for a period: entradas/salidas, comida, faltas, retardos, horas trabajadas y
+ * extra, incidencias y el desglose legal de horas extra. Built from the same
+ * per-type reports the screen already shows, so the numbers always match.
+ */
+export function buildFullAttendanceReport(ctx: ReportContext): ReportResult[] {
+  const empById = new Map(ctx.employees.map((e) => [e.id, e]))
+  const inRange = ctx.records.filter((r) => r.date >= ctx.from && r.date <= ctx.to && empById.has(r.employeeId))
+  const present = new Set(inRange.filter((r) => r.punches.some((p) => p.type === 'entry')).map((r) => `${r.employeeId}_${r.date}`))
+  const late = inRange.filter((r) => r.status === 'late').length
+  const overtimeMinutes = inRange.reduce((a, r) => a + r.overtimeMinutes, 0)
+  const absences = ctx.employees.reduce((a, e) => {
+    const schedule = ctx.schedules.find((s) => s.id === e.scheduleId)
+    return a + missingDays(e, schedule, inRange.filter((r) => r.employeeId === e.id), ctx).length
+  }, 0)
+
+  const cover: ReportResult = {
+    title: 'Resumen',
+    columns: [
+      { key: 'campo', header: 'Campo', width: 26 },
+      { key: 'valor', header: 'Valor', width: 40 },
+    ],
+    rows: [
+      { campo: 'Empresa', valor: ctx.companyName ?? '—' },
+      { campo: 'Periodo', valor: `${ctx.from} a ${ctx.to}` },
+      { campo: 'Generado', valor: new Date().toLocaleString('es-MX') },
+      { campo: 'Generado por', valor: ctx.generatedBy ?? '—' },
+      { campo: 'Empleados incluidos', valor: ctx.employees.length },
+      { campo: 'Días con asistencia registrada', valor: present.size },
+      { campo: 'Faltas en el periodo', valor: absences },
+      { campo: 'Retardos en el periodo', valor: late },
+      { campo: 'Horas extra en el periodo', valor: formatDuration(overtimeMinutes) },
+    ],
+  }
+
+  const sheets: ReportType[] = ['attendance_general', 'employee_summary', 'absences', 'late_arrivals', 'overtime', 'incidencias', 'legal_evidence']
+  return [cover, ...sheets.map((t) => buildReport(t, ctx))]
 }
 
 export { STATUS_LABEL }

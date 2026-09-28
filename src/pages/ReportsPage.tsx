@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { FileSpreadsheet, FileText, Printer } from 'lucide-react'
+import { FileSpreadsheet, FileText, Printer, Upload } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -15,22 +15,29 @@ import {
 } from '@/components/ui/table'
 import { toast } from '@/components/ui/toast'
 import { useScopedData } from '@/hooks/useScopedData'
-import { REPORT_TYPES, buildReport } from '@/services/reportService'
+import { REPORT_TYPES, buildFullAttendanceReport, buildReport } from '@/services/reportService'
 import {
   buildWorkbookPayload,
   downloadCSV,
   downloadExcel,
+  downloadWorkbook,
 } from '@/services/exportService'
+import { ImportCorrectionsDialog } from '@/components/attendance/ImportCorrectionsDialog'
 import { INCIDENCIA_META, INCIDENCIA_TYPES } from '@/data/incidencias'
 import { STATUS_LABEL } from '@/services/reportService'
 import { useToday } from '@/hooks/useToday'
 import { useDataStore } from '@/store/dataStore'
+import { usePermissions } from '@/hooks/useScopedData'
 import type { ReportType } from '@/types'
 
 export function ReportsPage() {
   const { employees, attendance, schedules, allBranches, incidencias } = useScopedData()
-  const settings = useDataStore((s) => s.company.attendanceSettings)
+  const company = useDataStore((s) => s.company)
+  const settings = company.attendanceSettings
+  const currentUser = useDataStore((s) => s.currentUser)
+  const { can } = usePermissions()
   const today = useToday()
+  const [importOpen, setImportOpen] = useState(false)
 
   const [type, setType] = useState<ReportType>('attendance_general')
   // Default period: from the 1st of the current month up to today.
@@ -88,9 +95,55 @@ export function ReportsPage() {
 
   const fileName = `nexotime-${type}-${from}_${to}`
 
+  const downloadFullReport = () => {
+    const sheets = buildFullAttendanceReport({
+      records: attendance,
+      employees: scopedEmployees,
+      schedules,
+      branches: allBranches,
+      from,
+      to,
+      settings,
+      incidencias,
+      todayISO: today,
+      companyName: company.name,
+      generatedBy: currentUser.name,
+    })
+    downloadWorkbook(
+      sheets.map((s) => buildWorkbookPayload(s.title, s.columns, s.rows, { periodo: `${from} a ${to}` })),
+      `nexotime-reporte-completo-${from}_${to}`,
+    )
+    toast.success('Reporte completo exportado', `${sheets.length - 1} secciones en un solo Excel.`)
+  }
+
   return (
     <div className="space-y-6">
-      <PageHeader title="Reportes" description="Analiza y exporta la asistencia de tu empresa." />
+      <PageHeader
+        title="Reportes"
+        description="Analiza y exporta la asistencia de tu empresa."
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={downloadFullReport}>
+              <FileSpreadsheet className="h-4 w-4" />
+              Reporte completo (Excel)
+            </Button>
+            {can('attendance.edit') ? (
+              <Button variant="secondary" onClick={() => setImportOpen(true)}>
+                <Upload className="h-4 w-4" />
+                Importar correcciones
+              </Button>
+            ) : null}
+          </div>
+        }
+      />
+      <ImportCorrectionsDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        employees={scopedEmployees}
+        attendance={attendance}
+        from={from}
+        to={to}
+      />
 
       <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
         <div className="min-w-0 space-y-4">

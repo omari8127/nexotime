@@ -5,7 +5,9 @@
  *    that start with = + - @ are neutralised so a malicious employee name can't
  *    run as a spreadsheet formula.
  *  - Excel: a real `.xlsx` workbook (Office Open XML in a zip container),
- *    generated in the browser with no external dependency.
+ *    generated in the browser with no external dependency. Supports several
+ *    sheets in one file, a bold header row with auto-filter and a frozen pane,
+ *    and light zebra striping on the data rows for readability.
  */
 
 import { toast } from '@/components/ui/toast'
@@ -87,7 +89,7 @@ function crc32(data: Uint8Array): number {
   return (crc ^ 0xffffffff) >>> 0
 }
 
-/** Minimal zip (STORE method — no compression) is all an .xlsx needs. */
+/** Minimal zip (STORE method — no compression) is all an .xlsx needs to write. */
 function zip(files: Array<{ name: string; content: string }>): Uint8Array {
   const chunks: Uint8Array[] = []
   const central: Uint8Array[] = []
@@ -163,12 +165,21 @@ function columnRef(index: number): string {
   return ref
 }
 
-function sheetName(name: string): string {
-  return name.replace(/[\\/?*[\]:]/g, ' ').slice(0, 31) || 'Reporte'
+function sheetName(name: string, used: Set<string>): string {
+  const base = name.replace(/[\\/?*[\]:]/g, ' ').slice(0, 31) || 'Hoja'
+  let candidate = base
+  let n = 2
+  while (used.has(candidate.toLowerCase())) candidate = `${base.slice(0, 28)} ${n++}`
+  used.add(candidate.toLowerCase())
+  return candidate
 }
 
-export function buildXlsx(payload: WorkbookPayload): Uint8Array {
-  const cell = (ref: string, value: string | number | undefined, style = 0) => {
+// Style indices into cellXfs below — kept in one place so the sheet builder and
+// styles.xml stay in sync.
+const STYLE = { header: 1, zebra: 2 } as const
+
+function buildSheetXml(payload: WorkbookPayload): string {
+  const cell = (ref: string, value: string | number | undefined, style: number) => {
     if (typeof value === 'number' && Number.isFinite(value)) {
       return `<c r="${ref}"${style ? ` s="${style}"` : ''}><v>${value}</v></c>`
     }
@@ -177,31 +188,54 @@ export function buildXlsx(payload: WorkbookPayload): Uint8Array {
   }
 
   const headerRow = `<row r="1">${payload.columns
-    .map((c, i) => cell(`${columnRef(i)}1`, c.header, 1))
+    .map((c, i) => cell(`${columnRef(i)}1`, c.header, STYLE.header))
     .join('')}</row>`
   const bodyRows = payload.rows
-    .map(
-      (row, r) =>
-        `<row r="${r + 2}">${payload.columns
-          .map((c, i) => cell(`${columnRef(i)}${r + 2}`, row[c.key]))
-          .join('')}</row>`,
-    )
+    .map((row, r) => {
+      const style = r % 2 === 1 ? STYLE.zebra : 0
+      return `<row r="${r + 2}">${payload.columns
+        .map((c, i) => cell(`${columnRef(i)}${r + 2}`, row[c.key], style))
+        .join('')}</row>`
+    })
     .join('')
   const cols = payload.columns
     .map((c, i) => `<col min="${i + 1}" max="${i + 1}" width="${c.width ?? 16}" customWidth="1"/>`)
     .join('')
+  const lastCol = columnRef(Math.max(0, payload.columns.length - 1))
+  const lastRow = payload.rows.length + 1
+  const dim = `${columnRef(0)}1:${lastCol}${lastRow}`
 
-  const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>${cols}</cols><sheetData>${headerRow}${bodyRows}</sheetData></worksheet>`
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="${dim}"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>${cols}</cols><sheetData>${headerRow}${bodyRows}</sheetData><autoFilter ref="${dim}"/></worksheet>`
+}
 
-  const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF2554EB"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs></styleSheet>`
+const STYLES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF2554EB"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF3F4F6"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="0" fontId="0" fillId="3" borderId="0" xfId="0" applyFill="1"/></cellXfs></styleSheet>`
+
+/** One sheet, for a single report — kept for the existing call sites. */
+export function buildXlsx(payload: WorkbookPayload): Uint8Array {
+  return buildWorkbook([payload])
+}
+
+/** Several sheets in one .xlsx file — used for the full, multi-tab attendance report. */
+export function buildWorkbook(sheets: WorkbookPayload[]): Uint8Array {
+  const used = new Set<string>()
+  const names = sheets.map((s) => sheetName(s.sheetName, used))
+
+  const sheetTags = names.map((n, i) => `<sheet name="${xmlEscape(n)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')
+  const sheetRels = names
+    .map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`)
+    .join('')
+  const stylesRelId = `rId${names.length + 1}`
+  const overrides = names
+    .map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`)
+    .join('')
 
   return zip([
     {
       name: '[Content_Types].xml',
       content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`,
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${overrides}<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`,
     },
     {
       name: '_rels/.rels',
@@ -211,15 +245,15 @@ export function buildXlsx(payload: WorkbookPayload): Uint8Array {
     {
       name: 'xl/workbook.xml',
       content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${xmlEscape(sheetName(payload.sheetName))}" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheetTags}</sheets></workbook>`,
     },
     {
       name: 'xl/_rels/workbook.xml.rels',
       content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheetRels}<Relationship Id="${stylesRelId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
     },
-    { name: 'xl/styles.xml', content: styles },
-    { name: 'xl/worksheets/sheet1.xml', content: sheet },
+    { name: 'xl/styles.xml', content: STYLES_XML },
+    ...sheets.map((s, i) => ({ name: `xl/worksheets/sheet${i + 1}.xml`, content: buildSheetXml(s) })),
   ])
 }
 
@@ -227,6 +261,16 @@ export function downloadExcel(payload: WorkbookPayload, filename: string) {
   if (!hasFeatureNow('export')) return notAllowed()
   triggerDownload(
     buildXlsx(payload) as unknown as BlobPart,
+    `${filename}.xlsx`,
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  )
+}
+
+/** Several sheets in one downloaded .xlsx — the "reporte completo" and import templates use this. */
+export function downloadWorkbook(sheets: WorkbookPayload[], filename: string) {
+  if (!hasFeatureNow('export')) return notAllowed()
+  triggerDownload(
+    buildWorkbook(sheets) as unknown as BlobPart,
     `${filename}.xlsx`,
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   )

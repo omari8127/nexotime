@@ -1,6 +1,6 @@
 # Estado del producto y pendientes antes de vender
 
-Última revisión: 25/09/2026.
+Última revisión: 28/09/2026.
 
 ## Listo
 
@@ -15,6 +15,10 @@
 - Monitoreo de errores en los equipos de los clientes, en tu propio servidor (panel de licencias → Errores), sin servicios de terceros.
 - Registro de pagos en el panel de licencias: cada pago renueva la licencia, queda en auditoría y suma a los ingresos.
 - Aviso en Empleados para regenerar los QR antiguos en un clic.
+- Reporte completo en un solo Excel (8 hojas: resumen, asistencia diaria, resumen por empleado, faltas, retardos, horas extra, incidencias y evidencia LFT), con franjas y filtro automático.
+- Importar empleados desde Excel o CSV, con plantilla descargable (usa las sucursales y horarios reales de la empresa) y vista previa fila por fila antes de crear a nadie.
+- Importar correcciones de asistencia desde Excel o CSV: se descarga el periodo ya con las horas registradas, se corrige solo lo necesario y se vuelve a subir; una celda vacía nunca borra un dato.
+- Lector propio de `.xlsx` en el navegador (sin dependencias): entiende archivos reales guardados por Excel, Google Sheets o LibreOffice.
 
 ## Pendiente — depende de ti (no se puede hacer desde el código)
 
