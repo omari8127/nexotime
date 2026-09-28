@@ -52,9 +52,10 @@ export interface Tuning {
 }
 
 export const TUNING: Record<FaceStrictness, Tuning> = {
-  strict: { threshold: 0.46, margin: 0.08, streak: 3 },
-  balanced: { threshold: 0.54, margin: 0.05, streak: 2 },
-  relaxed: { threshold: 0.6, margin: 0.04, streak: 2 },
+  strict: { threshold: 0.5, margin: 0.07, streak: 3 },
+  // Default level: ≈28% de coincidencia mínima (antes ≈40%) — reconoce más rápido, con más margen de tolerancia.
+  balanced: { threshold: 0.65, margin: 0.04, streak: 2 },
+  relaxed: { threshold: 0.72, margin: 0.03, streak: 2 },
 }
 
 /** Strictness level, optionally with an explicit distance limit set by the administrator. */

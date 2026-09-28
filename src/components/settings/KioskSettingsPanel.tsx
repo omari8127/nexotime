@@ -13,7 +13,7 @@ import { useDataStore } from '@/store/dataStore'
 import { usePermissions } from '@/hooks/useScopedData'
 import { resolveKiosk } from '@/lib/kiosk'
 import { useFeature } from '@/lib/license/features'
-import { TUNING } from '@/lib/face'
+import { TUNING, matchPercent } from '@/lib/face'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import type { Employee, FaceStrictness } from '@/types'
 
@@ -174,18 +174,18 @@ export function KioskSettingsPanel() {
               <div>
                 <Label>Umbral de coincidencia</Label>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Distancia máxima para aceptar un rostro: menor = más estricto. Si no lo fijas, se usa el nivel de
-                  exigencia ({TUNING[strictness].threshold.toFixed(2)}).
+                  Porcentaje mínimo de parecido para aceptar un rostro: menos exige más rapidez, más exige más
+                  seguridad. Si no lo fijas, se usa el del nivel de exigencia ({matchPercent(TUNING[strictness].threshold)}%).
                 </p>
               </div>
-              <span className="w-12 text-right font-mono text-sm tabular-nums">
-                {(threshold ?? TUNING[strictness].threshold).toFixed(2)}
+              <span className="w-14 text-right font-mono text-sm tabular-nums">
+                {matchPercent(threshold ?? TUNING[strictness].threshold)}%
               </span>
             </div>
             <input
               type="range"
               min={0.35}
-              max={0.65}
+              max={0.75}
               step={0.01}
               value={threshold ?? TUNING[strictness].threshold}
               onChange={(e) => setThreshold(Number(e.target.value))}
