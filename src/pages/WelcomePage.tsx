@@ -6,6 +6,7 @@ import { NexotimeLogo } from '@/components/shared/Logo'
 import { AnalogClock } from '@/components/clock/AnalogClock'
 import { useUIStore } from '@/store/uiStore'
 import { isSupabaseConfigured } from '@/lib/supabaseClient'
+import { copyrightLine } from '@/data/legal'
 
 const FIXED_NOW = new Date('2026-09-10T11:45:32')
 
@@ -101,6 +102,7 @@ export function WelcomePage() {
             </div>
           )}
         </motion.div>
+        <p className="mt-10 text-xs text-muted-foreground">{copyrightLine()}</p>
       </div>
 
       <div className="relative hidden overflow-hidden bg-sidebar lg:block">

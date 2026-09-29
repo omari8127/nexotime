@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft } from 'lucide-react'
 import { NexotimeLogo } from '@/components/shared/Logo'
+import { copyrightLine } from '@/data/legal'
 
 export function AuthShell({
   title,
@@ -41,6 +42,7 @@ export function AuthShell({
         </div>
 
         {footer ? <div className="mt-5 text-center text-sm text-muted-foreground">{footer}</div> : null}
+        <p className="mt-6 text-center text-xs text-muted-foreground">{copyrightLine()}</p>
       </motion.div>
     </div>
   )

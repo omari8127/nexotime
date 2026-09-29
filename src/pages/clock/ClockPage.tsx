@@ -26,6 +26,7 @@ import { ScanFlow } from '@/components/clock/ScanFlow'
 import { NumberPinFlow } from '@/components/clock/NumberPinFlow'
 import { METHOD_META } from '@/components/shared/badges'
 import { useFeature } from '@/lib/license/features'
+import { copyrightLine } from '@/data/legal'
 import { toast } from '@/components/ui/toast'
 import { useDataStore } from '@/store/dataStore'
 import { useSyncStore } from '@/store/syncStore'
@@ -738,7 +739,7 @@ export function ClockPage() {
         </div>
       </div>
 
-      <p className="pb-4 text-center text-xs text-slate-400">Nexotime · Control de asistencia</p>
+      <p className="pb-4 text-center text-xs text-slate-400">Nexotime · Control de asistencia · {copyrightLine()}</p>
       </section>
     </div>
   )

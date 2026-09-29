@@ -77,3 +77,7 @@ Base de datos: ver [supabase/README.md](supabase/README.md) (orden de las migrac
 ## Antes de vender
 
 Estado y pendientes en [docs/ESTADO.md](docs/ESTADO.md).
+
+## Licencia
+
+Software propietario. Copyright © Omar Isaird Espinoza Guevara — ver [LICENSE](LICENSE). No es código abierto: el uso por parte de una empresa cliente se rige por el contrato de licencia y [docs/legal/terminos-y-condiciones.md](docs/legal/terminos-y-condiciones.md), no por este repositorio.
