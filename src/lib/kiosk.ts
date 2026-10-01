@@ -15,7 +15,7 @@ export interface ResolvedKioskSettings {
 
 export const KIOSK_DEFAULTS: ResolvedKioskSettings = {
   autoRegister: true,
-  autoRegisterSeconds: 3,
+  autoRegisterSeconds: 5,
   faceRequireBlink: true,
   faceStrictness: 'balanced',
   faceThreshold: null,

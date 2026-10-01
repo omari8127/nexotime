@@ -101,7 +101,7 @@ describe('giro de cabeza y parpadeo', () => {
 describe('ajustes del reloj', () => {
   it('usa valores por defecto y acota lo inválido', () => {
     const d = resolveKiosk(undefined)
-    expect(d).toMatchObject({ autoRegister: true, autoRegisterSeconds: 3, faceRequireBlink: true, faceStrictness: 'balanced', minGapMinutes: 2 })
+    expect(d).toMatchObject({ autoRegister: true, autoRegisterSeconds: 5, faceRequireBlink: true, faceStrictness: 'balanced', minGapMinutes: 2 })
     expect(d.faceThreshold).toBeNull()
     const k = resolveKiosk({ kiosk: { autoRegisterSeconds: 99, faceThreshold: 0.95, minGapMinutes: -5 } } as never)
     expect(k.autoRegisterSeconds).toBe(10)
