@@ -123,6 +123,11 @@ export function ClockPage() {
   const effectiveBranchId = branches.some((b) => b.id === branchId) ? branchId : (branches[0]?.id ?? '')
 
   const branch = branches.find((b) => b.id === effectiveBranchId)
+  // The branch's own address (fixed once by an admin) is the real source of truth for a
+  // kiosk that never moves — instant and reliable, unlike the device's own GPS. Only
+  // fall back to the device's location while the branch has none configured yet.
+  const effectiveLocation: PunchLocation | undefined =
+    branch?.lat != null && branch?.lng != null ? { lat: branch.lat, lng: branch.lng } : (deviceLocation ?? undefined)
   const device =
     devices.find((d) => d.branchId === effectiveBranchId && d.status === 'online') ?? devices[0]
   const branchEmployees = useMemo(
@@ -241,7 +246,7 @@ export function ClockPage() {
         method,
         deviceId: device?.id,
         date: today,
-        location: deviceLocation ?? undefined,
+        location: effectiveLocation,
       })
       // Friendly heads-up when the punch reveals something worth knowing.
       const found: Array<{ title: string; detail: string }> = []
@@ -274,7 +279,7 @@ export function ClockPage() {
     }
     // El registro siempre queda guardado localmente de inmediato; si no hay
     // conexión se encola en este dispositivo y se sincroniza al reconectar.
-    setLastPunch({ type, time, location: deviceLocation ?? undefined, photo: pendingPhoto })
+    setLastPunch({ type, time, location: effectiveLocation, photo: pendingPhoto })
     setPhase('success')
   }
 
@@ -808,7 +813,7 @@ export function ClockPage() {
                     <div className="mt-3 overflow-hidden rounded-xl border border-slate-200">
                       <div className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-medium text-slate-500">
                         <MapPin className="h-3.5 w-3.5" />
-                        Ubicación del registro
+                        {branch?.lat != null && branch?.lng != null ? 'Ubicación de la sucursal' : 'Ubicación del registro'}
                       </div>
                       <iframe
                         title="Mapa de la ubicación del registro"

@@ -8,6 +8,7 @@ Ejecuta en el **SQL Editor** de tu proyecto de Supabase, en este orden y una sol
 2. `migrations/002_roles_correcciones.sql` — roles (propietario, administrador, RRHH, supervisor, empleado), alcance por sucursal/departamento, solicitudes de corrección, auditoría y reglas de seguridad (RLS).
 3. `migrations/003_biometricos_solo_admin.sql` — solo propietario y administrador pueden registrar, actualizar o borrar rostros.
 4. `migrations/004_suscripciones.sql` — plan, estado de la suscripción y bitácora de pagos por empresa (Fase 1 del reemplazo del servidor de licencias; la app todavía no la usa, ver `docs/ESTADO.md`).
+5. `migrations/005_sucursales_coordenadas.sql` — latitud/longitud de cada sucursal, para que el reloj checador muestre la ubicación real registrada en vez de depender del GPS del dispositivo.
 
 Las migraciones se pueden volver a correr sin dañar nada.
 

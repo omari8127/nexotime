@@ -120,6 +120,8 @@ export function branchFromRow(row: Record<string, unknown>): Branch {
     timezone: (row.timezone as string) ?? 'America/Mexico_City',
     phone: row.phone as string | undefined,
     active: (row.active as boolean) ?? true,
+    lat: typeof row.lat === 'number' ? row.lat : undefined,
+    lng: typeof row.lng === 'number' ? row.lng : undefined,
   }
 }
 
@@ -134,7 +136,22 @@ export function branchToRow(b: Branch) {
     timezone: b.timezone,
     phone: b.phone ?? null,
     active: b.active,
+    lat: b.lat ?? null,
+    lng: b.lng ?? null,
   }
+}
+
+export function branchToPatch(patch: Partial<Branch>): Record<string, unknown> {
+  const row: Record<string, unknown> = {}
+  if (patch.name !== undefined) row.name = patch.name
+  if (patch.code !== undefined) row.code = patch.code
+  if (patch.address !== undefined) row.address = patch.address
+  if (patch.city !== undefined) row.city = patch.city
+  if (patch.phone !== undefined) row.phone = patch.phone
+  if (patch.active !== undefined) row.active = patch.active
+  if (patch.lat !== undefined) row.lat = patch.lat
+  if (patch.lng !== undefined) row.lng = patch.lng
+  return row
 }
 
 /* -------------------------------- schedule --------------------------------- */

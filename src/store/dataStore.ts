@@ -57,6 +57,7 @@ import {
   liveCreateUserAccount,
   liveInsertAudit,
   liveInsertBranch,
+  liveUpdateBranch,
   liveInsertDevice,
   liveInsertEmployee,
   liveDeleteIncidencia,
@@ -189,6 +190,7 @@ interface DataState {
   removeFace: (id: string, actor: User) => void
 
   addBranch: (branch: Omit<Branch, 'id' | 'companyId'>, actor: User) => Branch
+  updateBranch: (id: string, patch: Partial<Branch>, actor: User) => void
 
   addSchedule: (schedule: Omit<Schedule, 'id' | 'companyId'>, actor: User) => Schedule
   updateSchedule: (id: string, patch: Partial<Schedule>, actor: User) => void
@@ -640,6 +642,25 @@ export const useDataStore = create<DataState>((set, get) => {
         actor,
       )
       return created
+    },
+
+    updateBranch: (id, patch, actor) => {
+      requirePermission('branches.manage')
+      const before = get().branches.find((b) => b.id === id)
+      if (!before) return
+      const merged = { ...before, ...patch }
+      set((s) => ({ branches: s.branches.map((b) => (b.id === id ? merged : b)) }))
+      persist(get().mode, () => liveUpdateBranch(id, patch))
+      writeAudit(
+        {
+          action: 'branch.edit',
+          entityType: 'Branch',
+          entityId: id,
+          entityLabel: merged.name,
+          changes: [{ field: 'Sucursal', before: 'Datos anteriores', after: 'Actualizados' }],
+        },
+        actor,
+      )
     },
 
     addSchedule: (schedule, actor) => {

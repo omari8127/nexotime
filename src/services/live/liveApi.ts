@@ -26,6 +26,7 @@ import {
   auditFromRow,
   auditToRow,
   branchFromRow,
+  branchToPatch,
   branchToRow,
   companyFromRow,
   companyToRow,
@@ -213,6 +214,14 @@ export async function liveUpdateCompany(companyId: string, patch: Partial<Compan
 export async function liveInsertBranch(branch: Branch) {
   const db = client()
   const { error } = await db.from('branches').insert(branchToRow(branch))
+  if (error) throw new Error(error.message)
+}
+
+export async function liveUpdateBranch(id: string, patch: Partial<Branch>) {
+  const db = client()
+  const row = branchToPatch(patch)
+  if (Object.keys(row).length === 0) return
+  const { error } = await db.from('branches').update(row).eq('id', id)
   if (error) throw new Error(error.message)
 }
 

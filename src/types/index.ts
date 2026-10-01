@@ -107,6 +107,11 @@ export interface Branch {
   timezone: string
   phone?: string
   active: boolean
+  /** Fixed once by an admin (search by address or type by hand) — the reloj
+   *  checador uses this instead of the device's own GPS, which is slower
+   *  and less reliable for a kiosk that never moves. */
+  lat?: number
+  lng?: number
 }
 
 /* -------------------------------------------------------------------------- */
@@ -406,6 +411,7 @@ export type AuditAction =
   | 'correction.approve'
   | 'correction.reject'
   | 'branch.create'
+  | 'branch.edit'
   | 'user.role_change'
   | 'face.rejected'
 

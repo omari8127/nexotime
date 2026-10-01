@@ -1,10 +1,14 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, MapPin, Phone } from 'lucide-react'
+import { ArrowLeft, MapPin, Pencil, Phone } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Avatar } from '@/components/ui/misc'
+import { BranchFormDialog } from '@/components/branches/BranchFormDialog'
+import { usePermissions } from '@/hooks/useScopedData'
 import {
   Table,
   TableBody,
@@ -29,6 +33,8 @@ export function BranchDetailPage() {
   const { branches, employees, devices, attendance, schedules } = useScopedData()
   const branch = branches.find((b) => b.id === id)
   const today = useToday()
+  const { can } = usePermissions()
+  const [editOpen, setEditOpen] = useState(false)
 
   const scoped = useMemo(() => {
     return {
@@ -67,10 +73,10 @@ export function BranchDetailPage() {
         description={`${branch.code} · ${scoped.employees.length} empleados · ${scoped.devices.length} dispositivos`}
       />
 
-      <div className="flex flex-wrap gap-4 rounded-xl border border-border bg-card p-4 text-sm">
+      <div className="flex flex-wrap items-center gap-4 rounded-xl border border-border bg-card p-4 text-sm">
         <span className="inline-flex items-center gap-1.5 text-muted-foreground">
           <MapPin className="h-4 w-4" />
-          {branch.address}
+          {branch.address || 'Sin dirección'}
         </span>
         {branch.phone ? (
           <span className="inline-flex items-center gap-1.5 text-muted-foreground">
@@ -78,7 +84,18 @@ export function BranchDetailPage() {
             {branch.phone}
           </span>
         ) : null}
+        <Badge variant={branch.lat && branch.lng ? 'success' : 'warning'}>
+          {branch.lat && branch.lng ? 'Ubicación del reloj configurada' : 'Falta configurar la ubicación del reloj'}
+        </Badge>
+        {can('branches.manage') ? (
+          <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setEditOpen(true)}>
+            <Pencil className="h-3.5 w-3.5" />
+            Editar
+          </Button>
+        ) : null}
       </div>
+
+      <BranchFormDialog open={editOpen} onOpenChange={setEditOpen} branch={branch} />
 
       <Tabs defaultValue="empleados">
         <TabsList>
