@@ -7,7 +7,7 @@
 
 Declaro que he leído el Aviso de privacidad integral de la Empresa y que se me informó que:
 
-1. El sistema de asistencia calcula una **representación numérica de mi rostro** a partir de la cámara del reloj checador. **No se guardan fotografías ni video.**
+1. El sistema de asistencia calcula una **representación numérica de mi rostro** a partir de la cámara del reloj checador; esa representación es lo único que se guarda, nunca una fotografía ni video. Al identificarme, el reloj me muestra en pantalla una foto de verificación del momento, **que no se guarda ni se envía a ningún servidor** — desaparece al cerrar esa pantalla.
 2. Ese dato biométrico es un dato personal **sensible**, y se usa **únicamente** para identificarme al registrar mi asistencia.
 3. El registro facial es **voluntario**. Puedo registrar mi asistencia también con código QR, código de barras o número de empleado y PIN.
 4. Puedo **retirar** este consentimiento en cualquier momento y solicitar que se elimine mi dato biométrico, sin consecuencia para mi relación laboral, comunicándolo a [área responsable] en [correo].

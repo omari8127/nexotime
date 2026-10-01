@@ -26,7 +26,7 @@
 |---|---|---|
 | 1 | **Ejecutar en Supabase** `002` y `003` (ver `supabase/README.md`) y probar con usuarios de cada rol | Sin ellas la seguridad por rol solo existe en la interfaz |
 | 2 | **Probar en la tablet real**: rostro, código de barras, QR, cámara y luz del lugar | Nunca se probó con cámara real; puede requerir ajustar la exigencia |
-| 3 | **Revisión legal** de `docs/legal/` (aviso de privacidad, consentimiento biométrico, términos) | Los datos biométricos son sensibles (LFPDPPP) |
+| 3 | **Revisión legal** de `docs/legal/` (aviso de privacidad, consentimiento biométrico, términos) — ya actualizados a mano para mencionar la ubicación de cada checada y la foto de verificación momentánea del rostro (no se guarda), pero un abogado debe confirmarlos | Los datos biométricos y de ubicación son sensibles (LFPDPPP) |
 | 4 | ~~Desplegar el servidor de licencias~~ — **pausado**: se está migrando a suscripción por cuenta de empresa (ver sección de abajo); no lo despliegues hasta terminar esa migración o quedaría trabajo duplicado | Evita desplegar algo que se va a reemplazar |
 | 5 | **Publicar la app** en un hosting con HTTPS (`sw.js` sin caché) con las variables `VITE_*` de producción | Instalación y cámara exigen HTTPS |
 | 6 | **Piloto de 2 a 4 semanas** con una empresa de confianza | Detecta problemas reales antes de cobrar |

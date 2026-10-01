@@ -93,9 +93,12 @@ export function ClockPage() {
   const [phase, setPhase] = useState<Phase>('idle')
   const [method, setMethod] = useState<CaptureMethod>('qr')
   const [employee, setEmployee] = useState<Employee | null>(null)
-  const [lastPunch, setLastPunch] = useState<{ type: PunchType; time: string; location?: PunchLocation } | null>(
-    null,
-  )
+  const [lastPunch, setLastPunch] = useState<
+    { type: PunchType; time: string; location?: PunchLocation; photo?: string } | null
+  >(null)
+  // Fleeting face-verification snapshot: lives only in memory from the moment someone
+  // is recognized until the success screen closes — never persisted or sent anywhere.
+  const [pendingPhoto, setPendingPhoto] = useState<string | undefined>(undefined)
   const [showWeekSummary, setShowWeekSummary] = useState(false)
   const [notices, setNotices] = useState<Array<{ title: string; detail: string }>>([])
   const [secondsLeft, setSecondsLeft] = useState(0)
@@ -197,16 +200,19 @@ export function ClockPage() {
     setEmployee(null)
     setLastPunch(null)
     setNotices([])
+    setPendingPhoto(undefined)
   }
 
   /**
    * Once someone is identified: when auto-register is on and there is an obvious
    * next movement, go to a short confirmation that registers it by itself;
-   * otherwise show the full movement picker.
+   * otherwise show the full movement picker. `photo` only ever comes from face
+   * recognition — a fleeting snapshot for the success screen, never stored.
    */
-  function identify(emp: Employee, capture: CaptureMethod) {
+  function identify(emp: Employee, capture: CaptureMethod, photo?: string) {
     setEmployee(emp)
     setMethod(capture)
+    setPendingPhoto(photo)
     const record = attendance.find((r) => r.employeeId === emp.id && r.date === today)
     const next = detectNextPunch(record?.punches ?? [], company.attendanceSettings.trackLunch)
     // Same rule the store enforces: a just-registered person cannot punch again right away.
@@ -268,7 +274,7 @@ export function ClockPage() {
     }
     // El registro siempre queda guardado localmente de inmediato; si no hay
     // conexión se encola en este dispositivo y se sincroniza al reconectar.
-    setLastPunch({ type, time, location: deviceLocation ?? undefined })
+    setLastPunch({ type, time, location: deviceLocation ?? undefined, photo: pendingPhoto })
     setPhase('success')
   }
 
@@ -444,7 +450,7 @@ export function ClockPage() {
                   employees={allEmployees}
                   settings={kiosk}
                   onCancel={reset}
-                  onConfirmed={(emp) => identify(emp, 'face')}
+                  onConfirmed={(emp, photo) => identify(emp, 'face', photo)}
                 />
               </FlowCard>
             )}
@@ -744,6 +750,16 @@ export function ClockPage() {
                       </p>
                     </div>
                   </div>
+
+                  {lastPunch.photo ? (
+                    <div className="mt-3.5 overflow-hidden rounded-xl border border-slate-200">
+                      <div className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-medium text-slate-500">
+                        <ScanFace className="h-3.5 w-3.5" />
+                        Verificación facial
+                      </div>
+                      <img src={lastPunch.photo} alt="Verificación facial" className="h-40 w-full object-cover" />
+                    </div>
+                  ) : null}
 
                   {notices.length > 0 ? (
                     <div className="mt-3.5 space-y-2">

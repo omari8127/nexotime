@@ -8,7 +8,8 @@
 
 - **Identificación y laborales:** nombre, número de empleado, puesto, área, sucursal, horario, fecha de ingreso, correo y teléfono.
 - **Asistencia:** fecha, hora y método de cada entrada, salida y comida; retardos, faltas, incidencias y correcciones.
-- **Datos personales sensibles — biométricos:** representación numérica de su rostro (un conjunto de valores calculados a partir de imágenes de su cara), únicamente si usted autoriza el registro facial. **No se conservan fotografías ni video.**
+- **Ubicación:** coordenadas geográficas del dispositivo (reloj checador) al momento de cada registro, obtenidas con el permiso de ubicación del navegador.
+- **Datos personales sensibles — biométricos:** representación numérica de su rostro (un conjunto de valores calculados a partir de imágenes de su cara), únicamente si usted autoriza el registro facial. Esa representación es lo único que se conserva; al identificarle, el reloj le muestra en pantalla una foto de verificación del momento que **no se guarda ni se envía a ningún servidor**.
 
 ## Finalidades
 
