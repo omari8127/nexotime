@@ -15,6 +15,7 @@ import type {
   Employee,
   EmployeeIdentification,
   Incidencia,
+  Payment,
   Punch,
   Schedule,
   User,
@@ -42,6 +43,7 @@ export interface MockDatabase {
   audit: AuditLog[]
   incidencias: Incidencia[]
   corrections: CorrectionRequest[]
+  payments: Payment[]
 }
 
 /* --------------------------- seeded RNG ----------------------------------- */
@@ -96,6 +98,14 @@ const company: Company = {
     roundingMinutes: 1,
   },
   createdAt: '2021-04-18',
+  // Demo mode never gates on this (PlanGate passes it through unconditionally) —
+  // 'empresa'/'active' just means nothing in the demo ever looks restricted.
+  subscription: {
+    plan: 'empresa',
+    status: 'active',
+    trialEndsAt: '2021-05-02T00:00:00',
+    currentPeriodEnd: '2026-10-10T00:00:00',
+  },
 }
 
 const branches: Branch[] = BRANCHES.map((b) => ({
@@ -791,6 +801,31 @@ const audit: AuditLog[] = [
   },
 ]
 
+/* --------------------------- payments ----------------------------------- */
+
+const payments: Payment[] = [
+  {
+    id: 'pay_1',
+    companyId: COMPANY_ID,
+    amount: 2400,
+    currency: 'MXN',
+    method: 'manual',
+    reference: 'Transferencia',
+    monthsCovered: 1,
+    createdAt: '2026-08-10T12:00:00',
+  },
+  {
+    id: 'pay_2',
+    companyId: COMPANY_ID,
+    amount: 2400,
+    currency: 'MXN',
+    method: 'manual',
+    reference: 'Transferencia',
+    monthsCovered: 1,
+    createdAt: '2026-09-10T12:00:00',
+  },
+]
+
 /* --------------------------- assemble -------------------------------- */
 
 export function buildMockDatabase(): MockDatabase {
@@ -805,6 +840,7 @@ export function buildMockDatabase(): MockDatabase {
     audit: structuredClone(audit),
     incidencias: structuredClone(incidencias),
     corrections: structuredClone(corrections),
+    payments: structuredClone(payments),
   }
 }
 

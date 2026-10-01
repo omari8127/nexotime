@@ -6,7 +6,7 @@ import { AdminLayout } from '@/layouts/AdminLayout'
 import { Toaster } from '@/components/ui/toast'
 import { ClockAccessGate, OnboardingGate, RequirePermission } from '@/components/shared/OnboardingGate'
 import { AuthBoot } from '@/components/shared/AuthBoot'
-import { LicenseGate } from '@/components/license/LicenseGate'
+import { PlanGate } from '@/components/subscription/PlanGate'
 import { FeatureGuard } from '@/components/license/FeatureGuard'
 
 import { DashboardPage } from '@/pages/DashboardPage'
@@ -40,7 +40,7 @@ export function App() {
   return (
     <>
       <AuthBoot />
-      <LicenseGate>
+      <PlanGate>
       <AnimatePresence mode="wait">
         <Routes location={location} key={location.pathname.split('/')[1] || 'root'}>
           <Route path="/bienvenida" element={<WelcomePage />} />
@@ -113,7 +113,7 @@ export function App() {
           <Route path="*" element={<Navigate to="/404" replace />} />
         </Routes>
       </AnimatePresence>
-      </LicenseGate>
+      </PlanGate>
       <Toaster />
     </>
   )

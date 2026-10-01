@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
-import { MonitorCheck, ScanFace, ShieldAlert, Trash2 } from 'lucide-react'
+import { LockKeyhole, MonitorCheck, ScanFace, ShieldAlert, Trash2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/input'
+import { Input, Label } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Avatar, Progress } from '@/components/ui/misc'
@@ -53,6 +53,8 @@ export function KioskSettingsPanel() {
   const [threshold, setThreshold] = useState<number | null>(saved.faceThreshold)
   const [challenge, setChallenge] = useState(saved.faceChallenge)
   const [gap, setGap] = useState(String(saved.minGapMinutes))
+  const [exitPin, setExitPin] = useState(saved.exitPin)
+  const exitPinValid = /^\d{4,8}$/.test(exitPin)
   const [testing, setTesting] = useState<Employee | null>(null)
   const [removing, setRemoving] = useState<Employee | null>(null)
   const [enrolling, setEnrolling] = useState<Employee | null>(null)
@@ -65,7 +67,8 @@ export function KioskSettingsPanel() {
     strictness !== saved.faceStrictness ||
     threshold !== saved.faceThreshold ||
     challenge !== saved.faceChallenge ||
-    Number(gap) !== saved.minGapMinutes
+    Number(gap) !== saved.minGapMinutes ||
+    (exitPin !== saved.exitPin && exitPinValid)
 
   const active = useMemo(() => employees.filter((e) => e.status === 'active'), [employees])
   const enrolledCount = active.filter((e) => faceState(e).enrolled).length
@@ -87,6 +90,7 @@ export function KioskSettingsPanel() {
           faceThreshold: threshold ?? undefined,
           faceChallenge: challenge,
           minGapMinutes: Number(gap),
+          exitPin: exitPinValid ? exitPin : saved.exitPin,
         },
       },
       currentUser,
@@ -218,6 +222,33 @@ export function KioskSettingsPanel() {
               disabled={!canManage}
               options={['0', '1', '2', '5', '10'].map((v) => ({ value: v, label: v === '0' ? 'Sin espera' : `${v} min` }))}
             />
+          </div>
+
+          <div className="border-t border-border pt-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <Label className="flex items-center gap-1.5">
+                  <LockKeyhole className="h-3.5 w-3.5 text-muted-foreground" />
+                  Código de salida del reloj
+                </Label>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  El reloj checador no tiene botón para salir: se sale manteniendo presionado el logo 3
+                  segundos y escribiendo este código (4 a 8 dígitos). Solo compártelo con quien administra
+                  la tablet.
+                </p>
+              </div>
+              <Input
+                className="w-28 text-center font-mono tracking-widest"
+                inputMode="numeric"
+                maxLength={8}
+                value={exitPin}
+                onChange={(e) => setExitPin(e.target.value.replace(/\D/g, ''))}
+                disabled={!canManage}
+              />
+            </div>
+            {!exitPinValid ? (
+              <p className="mt-1.5 text-right text-xs text-destructive">Debe tener de 4 a 8 dígitos.</p>
+            ) : null}
           </div>
 
           {canManage ? (

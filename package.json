@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "record-payment": "node --env-file=.env.local scripts/record-payment.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.0",

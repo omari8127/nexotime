@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   ArrowLeft,
@@ -9,11 +9,16 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronUp,
+  LogIn,
+  LogOut,
   Maximize,
+  MapPin,
   Minimize,
   QrCode,
   ScanFace,
   UserRound,
+  Utensils,
+  UtensilsCrossed,
   WifiOff,
 } from 'lucide-react'
 import { NexotimeLogo } from '@/components/shared/Logo'
@@ -24,6 +29,7 @@ import { AnalogClock } from '@/components/clock/AnalogClock'
 import { FaceScanFlow } from '@/components/clock/FaceScanFlow'
 import { ScanFlow } from '@/components/clock/ScanFlow'
 import { NumberPinFlow } from '@/components/clock/NumberPinFlow'
+import { KioskExitGate } from '@/components/clock/KioskExitGate'
 import { METHOD_META } from '@/components/shared/badges'
 import { useFeature } from '@/lib/license/features'
 import { copyrightLine } from '@/data/legal'
@@ -51,13 +57,21 @@ import type { CaptureMethod, Employee, Punch, PunchType } from '@/types'
 type Phase = 'idle' | 'face' | 'qr' | 'barcode' | 'number' | 'confirm' | 'punch' | 'success'
 
 const METHODS: Array<{ key: Phase; method: CaptureMethod; title: string; text: string; Icon: typeof QrCode; soon?: boolean }> = [
-  { key: 'face', method: 'face', title: 'Reconocimiento facial', text: 'Mira a la cámara y parpadea', Icon: ScanFace },
+  { key: 'face', method: 'face', title: 'Reconocimiento facial', text: 'Mira a la cámara y parpadea', Icon: ScanFace, soon: true },
   { key: 'qr', method: 'qr', title: 'Escanear código QR', text: 'Muestra tu credencial a la cámara', Icon: QrCode },
   { key: 'barcode', method: 'barcode', title: 'Código de barras', text: 'Acerca tu credencial a la cámara o lector', Icon: Barcode },
   { key: 'number', method: 'employee_number', title: 'Número de empleado', text: 'Escribe tu número y tu PIN', Icon: UserRound },
 ]
 
+const PUNCH_TYPE_ICON: Record<PunchType, typeof LogIn> = {
+  entry: LogIn,
+  lunch_out: Utensils,
+  lunch_in: UtensilsCrossed,
+  exit: LogOut,
+}
+
 export function ClockPage() {
+  const navigate = useNavigate()
   const company = useDataStore((s) => s.company)
   const branches = useDataStore((s) => s.branches)
   const devices = useDataStore((s) => s.devices)
@@ -80,7 +94,22 @@ export function ClockPage() {
   const [lastPunch, setLastPunch] = useState<{ type: PunchType; time: string } | null>(null)
   const [showWeekSummary, setShowWeekSummary] = useState(false)
   const [notices, setNotices] = useState<Array<{ title: string; detail: string }>>([])
+  const [secondsLeft, setSecondsLeft] = useState(0)
+  const [showExitGate, setShowExitGate] = useState(false)
   const pendingSync = useSyncStore((s) => s.pending)
+
+  // No hay botón visible para salir del reloj checador (lo debe usar cualquier
+  // empleado). Mantener presionado el logo 3 segundos pide el código de salida.
+  const holdTimer = useRef<number | null>(null)
+  const startHold = () => {
+    holdTimer.current = window.setTimeout(() => setShowExitGate(true), 3000)
+  }
+  const cancelHold = () => {
+    if (holdTimer.current !== null) {
+      window.clearTimeout(holdTimer.current)
+      holdTimer.current = null
+    }
+  }
 
   // Falls back to the first branch once real data loads — a brand-new live
   // company has no "br_centro" (that id only exists in the demo seed).
@@ -140,6 +169,15 @@ export function ClockPage() {
     if (phase !== 'confirm' || !nextPunch) return
     const id = setTimeout(() => doPunch(nextPunch.type), kiosk.autoRegisterSeconds * 1000)
     return () => clearTimeout(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase])
+
+  // Visible seconds countdown for the confirm screen's "se registra en…" caption.
+  useEffect(() => {
+    if (phase !== 'confirm') return
+    setSecondsLeft(kiosk.autoRegisterSeconds)
+    const id = setInterval(() => setSecondsLeft((s) => Math.max(0, s - 1)), 1000)
+    return () => clearInterval(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase])
 
@@ -233,7 +271,17 @@ export function ClockPage() {
     <div className="grid min-h-dvh bg-slate-100 text-slate-900 lg:grid-cols-[minmax(340px,40%)_minmax(0,1fr)]">
       {/* ------------------------------------------------------------- side panel */}
       <aside className="relative flex flex-col justify-between gap-6 overflow-hidden bg-sidebar px-8 py-6 text-white lg:min-h-dvh lg:gap-8 lg:py-10">
-        <NexotimeLogo tone="light" size="lg" />
+        <button
+          type="button"
+          onPointerDown={startHold}
+          onPointerUp={cancelHold}
+          onPointerLeave={cancelHold}
+          onContextMenu={(e) => e.preventDefault()}
+          className="w-fit select-none"
+          aria-label="Nexotime"
+        >
+          <NexotimeLogo tone="light" size="lg" />
+        </button>
 
         <div className="flex flex-col items-start gap-6 lg:items-center lg:text-center">
           <AnalogClock now={now} className="hidden h-56 w-56 lg:block xl:h-64 xl:w-64" />
@@ -338,7 +386,7 @@ export function ClockPage() {
       ) : null}
 
       <div className="flex flex-1 items-center justify-center p-6">
-        <div className="w-full max-w-md">
+        <div className="w-full max-w-lg">
           <AnimatePresence mode="wait">
             {phase === 'idle' && (
               <motion.div
@@ -382,14 +430,6 @@ export function ClockPage() {
                     </button>
                   ))}
                 </div>
-
-                <Link
-                  to="/"
-                  className="inline-flex items-center gap-1.5 text-[13px] text-slate-400 hover:text-slate-600"
-                >
-                  <ArrowLeft className="h-3.5 w-3.5" />
-                  Salir del modo checador
-                </Link>
               </motion.div>
             )}
 
@@ -427,16 +467,16 @@ export function ClockPage() {
 
             {phase === 'confirm' && employee && nextPunch && (
               <FlowCard key="confirm" onBack={reset} title="Confirmar registro">
-                <div className="space-y-5">
-                  <div className="flex items-center gap-3 rounded-lg border border-slate-200 px-3.5 py-3">
-                    <Avatar name={employee.fullName} size="md" />
+                <div className="space-y-6">
+                  <div className="flex items-center gap-3.5 rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3.5">
+                    <Avatar name={employee.fullName} size="lg" className="ring-2 ring-white shadow-sm" />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[15px] font-semibold text-slate-900">{employee.fullName}</p>
+                      <p className="truncate text-base font-semibold text-slate-900">{employee.fullName}</p>
                       <p className="truncate text-[13px] text-slate-500">
                         {employee.employeeNumber} · {employee.position}
                       </p>
                     </div>
-                    <span className="flex shrink-0 items-center gap-1.5 text-xs text-slate-500">
+                    <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-500 shadow-xs">
                       {(() => {
                         const Icon = METHOD_META[method].Icon
                         return <Icon className="h-3.5 w-3.5" />
@@ -445,38 +485,55 @@ export function ClockPage() {
                     </span>
                   </div>
 
-                  <div className="text-center">
-                    <p className="text-sm text-slate-500">Se registrará automáticamente</p>
-                    <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">
-                      {PUNCH_TYPE_LABEL[nextPunch.type]}
-                    </p>
-                    <p className="mt-1 font-mono text-3xl font-semibold tabular-nums text-slate-900">
+                  <div className="flex flex-col items-center gap-3 py-1 text-center">
+                    <span className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      {(() => {
+                        const Icon = PUNCH_TYPE_ICON[nextPunch.type]
+                        return <Icon className="h-7 w-7" />
+                      })()}
+                    </span>
+                    <div>
+                      <p className="text-sm text-slate-500">Se registrará automáticamente</p>
+                      <p className="mt-0.5 text-2xl font-bold tracking-tight text-slate-900">
+                        {PUNCH_TYPE_LABEL[nextPunch.type]}
+                      </p>
+                    </div>
+                    <p className="font-mono text-4xl font-bold tabular-nums tracking-tight text-slate-900">
                       {formatTime12(formatClock24(now))}
                     </p>
                   </div>
 
-                  <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
-                    <motion.div
-                      className="h-full origin-left rounded-full bg-primary"
-                      initial={{ scaleX: 0 }}
-                      animate={{ scaleX: 1 }}
-                      transition={{ duration: kiosk.autoRegisterSeconds, ease: 'linear' }}
-                    />
+                  <div className="space-y-2">
+                    <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                      <motion.div
+                        className="h-full origin-left rounded-full bg-gradient-to-r from-primary to-primary/70"
+                        initial={{ scaleX: 0 }}
+                        animate={{ scaleX: 1 }}
+                        transition={{ duration: kiosk.autoRegisterSeconds, ease: 'linear' }}
+                      />
+                    </div>
+                    <p className="text-center text-xs font-medium text-slate-400">
+                      Se registra en {secondsLeft} {secondsLeft === 1 ? 'segundo' : 'segundos'}…
+                    </p>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <Button size="xl" className="w-full text-base" onClick={() => doPunch(nextPunch.type)}>
                       Registrar ahora
                     </Button>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-center gap-4">
                       <button
                         type="button"
                         onClick={() => setPhase('punch')}
-                        className="text-[13px] text-slate-500 hover:text-slate-800"
+                        className="rounded-full px-3 py-1.5 text-[13px] font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
                       >
                         Es otro movimiento
                       </button>
-                      <button type="button" onClick={reset} className="text-[13px] text-slate-500 hover:text-slate-800">
+                      <button
+                        type="button"
+                        onClick={reset}
+                        className="rounded-full px-3 py-1.5 text-[13px] font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
+                      >
                         No soy yo / Cancelar
                       </button>
                     </div>
@@ -640,11 +697,11 @@ export function ClockPage() {
                 animate={{ y: 0, opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-                className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/[0.06]"
+                className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/[0.08]"
               >
-                <div className="relative overflow-hidden bg-gradient-to-b from-emerald-50 to-white px-6 pb-6 pt-8 text-center">
-                  <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[radial-gradient(closest-side,rgba(16,185,129,0.16),transparent)]" />
-                  <div className="relative mx-auto flex h-16 w-16 items-center justify-center">
+                <div className="relative overflow-hidden bg-gradient-to-b from-emerald-50 to-white px-7 pb-7 pt-10 text-center">
+                  <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[radial-gradient(closest-side,rgba(16,185,129,0.18),transparent)]" />
+                  <div className="relative mx-auto flex h-20 w-20 items-center justify-center">
                     <motion.span
                       initial={{ scale: 0.4, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
@@ -655,26 +712,26 @@ export function ClockPage() {
                       initial={{ scale: 0.5, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                       transition={{ delay: 0.1, type: 'spring', stiffness: 320, damping: 16 }}
-                      className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/30"
+                      className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 ring-4 ring-white"
                     >
-                      <Check className="h-6 w-6" strokeWidth={3} />
+                      <Check className="h-7 w-7" strokeWidth={3} />
                     </motion.span>
                   </div>
 
-                  <p className="relative mt-3.5 text-[13px] font-semibold uppercase tracking-wider text-emerald-700">
+                  <p className="relative mt-4 text-sm font-semibold uppercase tracking-wider text-emerald-700">
                     {PUNCH_TYPE_LABEL[lastPunch.type]} registrada
                   </p>
-                  <p className="relative mt-1 font-mono text-5xl font-bold tabular-nums tracking-tight text-slate-900">
+                  <p className="relative mt-1.5 font-mono text-6xl font-bold tabular-nums tracking-tight text-slate-900">
                     {formatTime12(lastPunch.time)}
                   </p>
-                  <p className="relative mt-1 text-[13px] text-slate-400">{formatLongDate(now)}</p>
+                  <p className="relative mt-1.5 text-[13px] text-slate-400">{formatLongDate(now)}</p>
                 </div>
 
-                <div className="border-t border-slate-100 px-6 pb-6 pt-5">
-                  <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-3">
-                    <Avatar name={employee.fullName} size="lg" />
+                <div className="border-t border-slate-100 px-7 pb-7 pt-6">
+                  <div className="flex items-center gap-3.5 rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3.5">
+                    <Avatar name={employee.fullName} size="xl" className="h-14 w-14 text-base ring-4 ring-white shadow-sm" />
                     <div className="min-w-0">
-                      <p className="truncate text-[15px] font-semibold text-slate-900">
+                      <p className="truncate text-base font-semibold text-slate-900">
                         {employee.fullName}
                       </p>
                       <p className="truncate text-[13px] text-slate-500">
@@ -684,7 +741,7 @@ export function ClockPage() {
                   </div>
 
                   {notices.length > 0 ? (
-                    <div className="mt-3 space-y-2">
+                    <div className="mt-3.5 space-y-2">
                       {notices.map((n) => (
                         <div
                           key={n.title}
@@ -700,26 +757,33 @@ export function ClockPage() {
                     </div>
                   ) : null}
 
-                  <div className="mt-4 grid grid-cols-2 gap-2.5">
-                    <div className="rounded-lg border border-slate-200 px-3 py-2.5">
-                      <p className="text-[11px] uppercase tracking-wide text-slate-400">Método</p>
-                      <div className="mt-0.5 flex items-center gap-1.5 text-[13px] font-medium text-slate-800">
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <div className="flex items-center gap-2.5 rounded-xl border border-slate-200 px-3.5 py-3">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500">
                         {(() => {
                           const Icon = METHOD_META[method].Icon
-                          return <Icon className="h-3.5 w-3.5 text-slate-500" />
+                          return <Icon className="h-4 w-4" />
                         })()}
-                        <span className="truncate">{METHOD_META[method].label}</span>
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[11px] uppercase tracking-wide text-slate-400">Método</p>
+                        <p className="truncate text-[13px] font-medium text-slate-800">{METHOD_META[method].label}</p>
                       </div>
                     </div>
-                    <div className="rounded-lg border border-slate-200 px-3 py-2.5">
-                      <p className="text-[11px] uppercase tracking-wide text-slate-400">Punto de registro</p>
-                      <p className="mt-0.5 truncate text-[13px] font-medium text-slate-800">
-                        {device?.name ?? branch?.name ?? '—'}
-                      </p>
+                    <div className="flex items-center gap-2.5 rounded-xl border border-slate-200 px-3.5 py-3">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+                        <MapPin className="h-4 w-4" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[11px] uppercase tracking-wide text-slate-400">Punto de registro</p>
+                        <p className="truncate text-[13px] font-medium text-slate-800">
+                          {device?.name ?? branch?.name ?? '—'}
+                        </p>
+                      </div>
                     </div>
                   </div>
 
-                  <Button className="mt-4 w-full" size="lg" onClick={reset}>
+                  <Button className="mt-5 w-full text-base" size="xl" onClick={reset}>
                     Listo
                   </Button>
                 </div>
@@ -741,6 +805,13 @@ export function ClockPage() {
 
       <p className="pb-4 text-center text-xs text-slate-400">Nexotime · Control de asistencia · {copyrightLine()}</p>
       </section>
+
+      <KioskExitGate
+        open={showExitGate}
+        expectedPin={kiosk.exitPin}
+        onClose={() => setShowExitGate(false)}
+        onSuccess={() => navigate('/')}
+      />
     </div>
   )
 }

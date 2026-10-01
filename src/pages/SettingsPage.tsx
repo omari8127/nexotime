@@ -7,8 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input, Label } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
-import { LicensePanel } from '@/components/settings/LicensePanel'
-import { LICENSE_ENFORCED } from '@/lib/license/config'
+import { SubscriptionPanel } from '@/components/settings/SubscriptionPanel'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from '@/components/ui/toast'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -84,12 +83,12 @@ export function SettingsPage() {
           <TabsTrigger value="asistencia">Asistencia</TabsTrigger>
           <TabsTrigger value="reloj">Reloj checador</TabsTrigger>
           <TabsTrigger value="cumplimiento">Cumplimiento LFT</TabsTrigger>
-          {LICENSE_ENFORCED && mode === 'live' ? <TabsTrigger value="licencia">Licencia</TabsTrigger> : null}
+          {mode === 'live' ? <TabsTrigger value="plan">Plan y pago</TabsTrigger> : null}
           {mode === 'demo' ? <TabsTrigger value="demo">Demo</TabsTrigger> : null}
         </TabsList>
 
-        <TabsContent value="licencia">
-          <LicensePanel />
+        <TabsContent value="plan">
+          <SubscriptionPanel />
         </TabsContent>
 
         <TabsContent value="empresa">

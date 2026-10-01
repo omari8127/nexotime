@@ -1,8 +1,8 @@
-import { LICENSE_ENFORCED } from './config'
-import { useLicenseStore } from './store'
 import { useDataStore } from '@/store/dataStore'
+import type { SubscriptionPlan } from '@/types'
 
-/** What a plan can unlock. The list itself comes from the signed license (server-defined). */
+/** What a plan can unlock. Kept in sync by hand with license-server/src/plans.js
+ *  until the Fase 7 cleanup retires that server for good. */
 export type Feature =
   | 'attendance'
   | 'employees'
@@ -23,17 +23,34 @@ export const FEATURE_LABEL: Partial<Record<Feature, string>> = {
   audit: 'Auditoría',
 }
 
-const allowed = (feat: string[] | undefined, f: Feature, enforced: boolean, mode: string) =>
-  !enforced || mode === 'demo' || !!feat?.includes(f)
+const BASIC: Feature[] = ['attendance', 'employees', 'schedules', 'incidencias', 'corrections']
+const PRO: Feature[] = [...BASIC, 'reports', 'export', 'face', 'audit']
+const ENTERPRISE: Feature[] = [...PRO, 'multi_device', 'multi_branch']
+
+export const PLAN_FEATURES: Record<SubscriptionPlan, Feature[]> = {
+  basico: BASIC,
+  profesional: PRO,
+  empresa: ENTERPRISE,
+}
+
+export const PLAN_LABEL: Record<SubscriptionPlan, string> = {
+  basico: 'Básico',
+  profesional: 'Profesional',
+  empresa: 'Empresa',
+}
+
+const allowed = (plan: SubscriptionPlan, f: Feature, mode: string) =>
+  mode === 'demo' || PLAN_FEATURES[plan].includes(f)
 
 /** For non-React code (services). */
 export function hasFeatureNow(f: Feature): boolean {
-  return allowed(useLicenseStore.getState().payload?.feat, f, LICENSE_ENFORCED, useDataStore.getState().mode)
+  const { company, mode } = useDataStore.getState()
+  return allowed(company.subscription.plan, f, mode)
 }
 
-/** For components. Demo mode and non-enforced builds have everything. */
+/** For components. Demo mode always has everything. */
 export function useFeature(f: Feature): boolean {
-  const feat = useLicenseStore((s) => s.payload?.feat)
+  const plan = useDataStore((s) => s.company.subscription.plan)
   const mode = useDataStore((s) => s.mode)
-  return allowed(feat, f, LICENSE_ENFORCED, mode)
+  return allowed(plan, f, mode)
 }

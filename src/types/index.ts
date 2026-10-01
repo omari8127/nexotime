@@ -30,6 +30,34 @@ export interface Company {
   weeklyTargetHours: number
   attendanceSettings: AttendanceSettings
   createdAt: ISODate
+  /** Read-only: only a service-role process (a payment webhook, or you recording
+   *  a manual payment) can change this — see supabase/migrations/004_suscripciones.sql. */
+  subscription: Subscription
+}
+
+/** Same plan names as license-server/src/plans.js, kept during the migration off licenses. */
+export type SubscriptionPlan = 'basico' | 'profesional' | 'empresa'
+export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'canceled'
+
+export interface Subscription {
+  plan: SubscriptionPlan
+  status: SubscriptionStatus
+  trialEndsAt: ISODateTime
+  currentPeriodEnd: ISODateTime | null
+}
+
+/** Read-only history row: only a service-role process can ever insert one
+ *  (see supabase/migrations/004_suscripciones.sql — no insert policy for the
+ *  app's own session, on purpose). */
+export interface Payment {
+  id: ID
+  companyId: ID
+  amount: number
+  currency: string
+  method: 'manual' | 'stripe' | 'mercadopago'
+  reference: string
+  monthsCovered: number
+  createdAt: ISODateTime
 }
 
 export interface AttendanceSettings {
@@ -65,6 +93,8 @@ export interface KioskSettings {
   faceChallenge?: boolean
   /** Minimum minutes between two punches of the same person (avoids double punches). */
   minGapMinutes?: number
+  /** Code (4–8 digits) that unlocks leaving the reloj checador back to the admin panel. */
+  exitPin?: string
 }
 
 export interface Branch {

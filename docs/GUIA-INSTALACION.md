@@ -32,6 +32,7 @@ Si aparece "No se pudo activar la licencia", el mensaje dice el motivo (código 
 2. Abre `/clock` (o el ícono instalado) y activa la pantalla completa.
 3. **Credenciales:** en Empleados → Credenciales, imprime el gafete con QR y código de barras de cada persona.
 4. **Rostros:** en Configuración → Reloj checador, registra el rostro de cada empleado con su consentimiento (ver `docs/legal`). Son 5 capturas guiadas, con buena luz de frente.
+5. **Salir del reloj:** no hay botón visible para salir (así ningún empleado sale por accidente). Para volver al panel, mantén presionado el logo de Nexotime 3 segundos y escribe el **código de salida** que configuraste en Configuración → Reloj checador (por defecto `1234`; cámbialo antes de dejar la tablet en recepción).
 
 ## 5. Recomendaciones de instalación física
 

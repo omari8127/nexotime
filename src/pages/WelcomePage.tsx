@@ -1,14 +1,11 @@
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowRight, BarChart3, CalendarClock, MonitorSmartphone, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { NexotimeLogo } from '@/components/shared/Logo'
 import { AnalogClock } from '@/components/clock/AnalogClock'
-import { useUIStore } from '@/store/uiStore'
-import { isSupabaseConfigured } from '@/lib/supabaseClient'
+import { useLiveClock, formatClockTime } from '@/hooks/useLiveClock'
 import { copyrightLine } from '@/data/legal'
-
-const FIXED_NOW = new Date('2026-09-10T11:45:32')
 
 const STEPS = [
   { icon: Users, title: 'Configura tu empresa', text: 'Datos fiscales, sucursales y jornada base.' },
@@ -18,13 +15,7 @@ const STEPS = [
 ]
 
 export function WelcomePage() {
-  const navigate = useNavigate()
-  const completeOnboarding = useUIStore((s) => s.completeOnboarding)
-
-  const startDemo = () => {
-    completeOnboarding()
-    navigate('/')
-  }
+  const now = useLiveClock()
 
   return (
     <div className="grid min-h-dvh lg:grid-cols-2">
@@ -66,41 +57,19 @@ export function WelcomePage() {
             ))}
           </ol>
 
-          {isSupabaseConfigured ? (
-            <>
-              <div className="mt-9 flex flex-col gap-2 sm:flex-row">
-                <Link to="/signup" className="flex-1">
-                  <Button size="lg" className="w-full">
-                    Crear cuenta de mi empresa
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </Link>
-                <Link to="/login" className="flex-1">
-                  <Button size="lg" variant="secondary" className="w-full">
-                    Iniciar sesión
-                  </Button>
-                </Link>
-              </div>
-              <button
-                type="button"
-                onClick={startDemo}
-                className="mt-4 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-              >
-                Solo quiero ver una demo, sin cuenta →
-              </button>
-            </>
-          ) : (
-            <div className="mt-9 space-y-3">
-              <Button size="lg" className="w-full" onClick={startDemo}>
-                Entrar a la demo
+          <div className="mt-9 flex flex-col gap-2 sm:flex-row">
+            <Link to="/signup" className="flex-1">
+              <Button size="lg" className="w-full">
+                Crear cuenta de mi empresa
                 <ArrowRight className="h-4 w-4" />
               </Button>
-              <p className="text-xs text-muted-foreground">
-                El registro con cuenta real aún no está configurado en este entorno — por ahora
-                puedes explorar todo con datos de ejemplo.
-              </p>
-            </div>
-          )}
+            </Link>
+            <Link to="/login" className="flex-1">
+              <Button size="lg" variant="secondary" className="w-full">
+                Iniciar sesión
+              </Button>
+            </Link>
+          </div>
         </motion.div>
         <p className="mt-10 text-xs text-muted-foreground">{copyrightLine()}</p>
       </div>
@@ -117,9 +86,9 @@ export function WelcomePage() {
               Reloj checador
             </p>
             <div className="p-6">
-              <AnalogClock now={FIXED_NOW} className="mx-auto h-40 w-40" />
+              <AnalogClock now={now} className="mx-auto h-40 w-40" />
               <p className="mt-4 text-center font-mono text-3xl font-semibold tabular-nums text-white">
-                11:45:32
+                {formatClockTime(now)}
               </p>
               <p className="mt-1 text-center text-sm text-white/60">Registra tu asistencia</p>
               <div className="mt-5 space-y-2">

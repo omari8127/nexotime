@@ -28,6 +28,7 @@ import type {
   Incidencia,
   IncidenciaStatus,
   IncidenciaType,
+  Payment,
   Permission,
   Punch,
   PunchType,
@@ -165,6 +166,8 @@ interface DataState {
   audit: AuditLog[]
   incidencias: Incidencia[]
   corrections: CorrectionRequest[]
+  /** Read-only: only a service-role process ever inserts a row (see 004_suscripciones.sql). */
+  payments: Payment[]
 
   currentUser: User
   setCurrentUser: (userId: string) => void
@@ -428,6 +431,7 @@ export const useDataStore = create<DataState>((set, get) => {
         audit: bundle.audit,
         incidencias: bundle.incidencias,
         corrections: bundle.corrections,
+        payments: bundle.payments,
         currentUser: bundle.currentUser,
       }),
 

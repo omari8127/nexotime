@@ -27,10 +27,56 @@
 | 1 | **Ejecutar en Supabase** `002` y `003` (ver `supabase/README.md`) y probar con usuarios de cada rol | Sin ellas la seguridad por rol solo existe en la interfaz |
 | 2 | **Probar en la tablet real**: rostro, código de barras, QR, cámara y luz del lugar | Nunca se probó con cámara real; puede requerir ajustar la exigencia |
 | 3 | **Revisión legal** de `docs/legal/` (aviso de privacidad, consentimiento biométrico, términos) | Los datos biométricos son sensibles (LFPDPPP) |
-| 4 | **Desplegar el servidor de licencias** con HTTPS, volumen persistente y respaldo diario fuera del servidor | Hoy corre solo en tu equipo |
+| 4 | ~~Desplegar el servidor de licencias~~ — **pausado**: se está migrando a suscripción por cuenta de empresa (ver sección de abajo); no lo despliegues hasta terminar esa migración o quedaría trabajo duplicado | Evita desplegar algo que se va a reemplazar |
 | 5 | **Publicar la app** en un hosting con HTTPS (`sw.js` sin caché) con las variables `VITE_*` de producción | Instalación y cámara exigen HTTPS |
 | 6 | **Piloto de 2 a 4 semanas** con una empresa de confianza | Detecta problemas reales antes de cobrar |
 | 7 | En Empleados, aceptar el aviso «Regenerar códigos» si hay QR antiguos, y reimprimir gafetes | Los QR viejos son fáciles de adivinar |
+
+## Migración en curso: de licencia por dispositivo a cuenta de empresa con suscripción
+
+Decisión: en vez de instalar y activar por dispositivo (`license-server/`), cada empresa se
+registra en línea y su acceso depende de su plan y su pago, no de un código. Se decidió
+migrar ahora porque el servidor de licencias todavía no está desplegado ni ha corrido
+ningún piloto — no hay nada que migrar todavía. Valores por defecto usados: 14 días de
+prueba gratis, pago registrado a mano al inicio (Stripe/Mercado Pago después), mismos 3
+planes (`basico`, `profesional`, `empresa`), sin rol de vendedor por ahora.
+
+- [x] **Fase 1 — Modelo de datos** (`supabase/migrations/004_suscripciones.sql`): columnas
+      `plan`, `subscription_status`, `trial_ends_at`, `current_period_end` en `companies`;
+      tabla `payments`; protegidas para que solo la llave de servicio (no el cliente) pueda
+      cambiarlas.
+- [x] **Fase 2** — `PlanGate` (`src/components/subscription/PlanGate.tsx`) reemplazó a
+      `LicenseGate` en `App.tsx`. Lee `company.subscription` ya cargada (en vivo o del
+      respaldo sin conexión), sin token ni llamada aparte; `trialEndsAt`/`currentPeriodEnd`
+      hacen de tolerancia sin Internet. Nota: `LICENSE_ENFORCED` quedó en `false` para no
+      bloquear Reportes/Exportación/Rostro/Auditoría mientras no llega la Fase 3.
+- [x] **Fase 3** — `useFeature`/`hasFeatureNow`/`FeatureGuard` (`src/lib/license/features.ts`)
+      ya leen `company.subscription.plan` en vez del token de licencia; `LICENSE_ENFORCED`
+      deja de ser necesario para esto. Probado con `src/lib/license/features.test.ts`
+      (básico/profesional/empresa y que la demo siga sin restricciones).
+- [x] **Fase 4** — Pestaña "Plan y pago" en Configuración (`src/components/settings/SubscriptionPanel.tsx`,
+      solo lectura, reemplaza a "Licencia"), con historial de pagos. Para registrar un pago a
+      mano: `npm run record-payment -- --email correo@cliente.com --amount 2400` (ver
+      `scripts/record-payment.js`). Requiere `SUPABASE_SERVICE_ROLE_KEY` en `.env.local`
+      (nunca con prefijo `VITE_`).
+- [x] **Fase 5** — Confirmado contra Supabase real (no solo en teoría): se creó una empresa
+      de prueba por `/signup` y nació con `plan: basico`, `subscription_status: trialing`,
+      `trial_ends_at` exactamente 14 días después de `created_at` — sin tocar
+      `create_company_and_owner`, solo por los valores por defecto de la Fase 1. De paso se
+      probó `PlanGate` de punta a punta contra la base real: bloquea con "Cuenta cancelada"
+      al poner `subscription_status: canceled`, y "Ya pagué, reintentar" la desbloquea sin
+      recargar la página en cuanto el estado vuelve a `trialing`/`active`. Empresa y usuario
+      de prueba ya se borraron.
+- [ ] **Fase 6** — Panel para ver todas las empresas y sus pagos (hoy vive en
+      `license-server/admin/`).
+- [ ] **Fase 7** — Apagar `license-server/`: quitar `LicenseGate`/`FeatureGuard` viejos,
+      variables `VITE_LICENSE_*`, y archivar la carpeta.
+
+Efecto secundario ya presente desde la Fase 2: el monitoreo de errores de los equipos de
+los clientes (`src/lib/errorReport.ts` → panel de licencias → Errores) depende del mismo
+token que ya no se emite, así que quedó inactivo. No se repara ahora porque vive en el
+panel que se va a reemplazar en la Fase 6/7; si quieres monitoreo de errores antes de eso,
+avisa para priorizarlo aparte.
 
 ## Pendiente — siguiente ronda de desarrollo
 

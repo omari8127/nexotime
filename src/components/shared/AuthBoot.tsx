@@ -68,7 +68,7 @@ export function AuthBoot() {
     // Safety net: retry on a timer in case the browser missed an 'online' event.
     const timer = window.setInterval(() => {
       if (navigator.onLine) void sync()
-    }, 60_000)
+    }, 600_000)
 
     const { data } = client.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT') {

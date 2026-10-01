@@ -15,6 +15,7 @@ import type {
   Device,
   Employee,
   Incidencia,
+  Payment,
   RoleKey,
   Schedule,
   User,
@@ -36,6 +37,7 @@ import {
   employeeToRow,
   incidenciaFromRow,
   incidenciaToRow,
+  paymentFromRow,
   profileFromRow,
   profileToPatch,
   scheduleFromRow,
@@ -68,6 +70,7 @@ export interface LiveBundle {
   audit: AuditLog[]
   incidencias: Incidencia[]
   corrections: CorrectionRequest[]
+  payments: Payment[]
   currentUser: User
 }
 
@@ -146,20 +149,32 @@ async function fetchLiveBundle(companyId: string): Promise<LiveBundle> {
   const db = client()
   const { data: authData } = await db.auth.getUser()
 
-  const [companyRes, branchesRes, schedulesRes, profilesRes, employeesRes, devicesRes, attendanceRes, auditRes, incidenciasRes, correctionsRes] =
-    await Promise.all([
-      db.from('companies').select('*').eq('id', companyId).single(),
-      db.from('branches').select('*').eq('company_id', companyId).order('name'),
-      db.from('schedules').select('*').eq('company_id', companyId).order('name'),
-      db.from('profiles').select('*').eq('company_id', companyId),
-      db.from('employees').select('*').eq('company_id', companyId).order('employee_number'),
-      db.from('devices').select('*').eq('company_id', companyId),
-      db.from('attendance_records').select('*').eq('company_id', companyId).order('date', { ascending: false }).limit(5000),
-      db.from('audit_log').select('*').eq('company_id', companyId).order('created_at', { ascending: false }).limit(500),
-      db.from('incidencias').select('*').eq('company_id', companyId).order('from_date', { ascending: false }),
-      // Tabla nueva: si la migración aún no se corrió, la lista simplemente llega vacía.
-      db.from('correction_requests').select('*').eq('company_id', companyId).order('created_at', { ascending: false }),
-    ])
+  const [
+    companyRes,
+    branchesRes,
+    schedulesRes,
+    profilesRes,
+    employeesRes,
+    devicesRes,
+    attendanceRes,
+    auditRes,
+    incidenciasRes,
+    correctionsRes,
+    paymentsRes,
+  ] = await Promise.all([
+    db.from('companies').select('*').eq('id', companyId).single(),
+    db.from('branches').select('*').eq('company_id', companyId).order('name'),
+    db.from('schedules').select('*').eq('company_id', companyId).order('name'),
+    db.from('profiles').select('*').eq('company_id', companyId),
+    db.from('employees').select('*').eq('company_id', companyId).order('employee_number'),
+    db.from('devices').select('*').eq('company_id', companyId),
+    db.from('attendance_records').select('*').eq('company_id', companyId).order('date', { ascending: false }).limit(5000),
+    db.from('audit_log').select('*').eq('company_id', companyId).order('created_at', { ascending: false }).limit(500),
+    db.from('incidencias').select('*').eq('company_id', companyId).order('from_date', { ascending: false }),
+    // Tablas nuevas: si la migración aún no se corrió, la lista simplemente llega vacía.
+    db.from('correction_requests').select('*').eq('company_id', companyId).order('created_at', { ascending: false }),
+    db.from('payments').select('*').eq('company_id', companyId).order('created_at', { ascending: false }),
+  ])
 
   if (companyRes.error) throw new Error(companyRes.error.message)
 
@@ -178,6 +193,7 @@ async function fetchLiveBundle(companyId: string): Promise<LiveBundle> {
     audit: (auditRes.data ?? []).map(auditFromRow),
     incidencias: (incidenciasRes.data ?? []).map(incidenciaFromRow),
     corrections: (correctionsRes.data ?? []).map(correctionFromRow),
+    payments: (paymentsRes.data ?? []).map(paymentFromRow),
     currentUser,
   }
 }

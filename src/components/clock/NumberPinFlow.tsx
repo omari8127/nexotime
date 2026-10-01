@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Delete } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { Delete, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { Employee } from '@/types'
@@ -26,6 +27,7 @@ export function NumberPinFlow({
   }
   const [candidate, setCandidate] = useState<Employee | null>(null)
   const [error, setError] = useState('')
+  const [errorTick, setErrorTick] = useState(0)
 
   const title =
     step === 'number'
@@ -33,6 +35,11 @@ export function NumberPinFlow({
       : `Hola ${candidate?.firstName}, ingresa tu PIN`
   const example = employees[0]?.employeeNumber ?? 'EMP-001'
   const exampleDigits = String(Number(example.replace(/\D/g, '')) || 1)
+
+  const flagError = (message: string) => {
+    setError(message)
+    setErrorTick((t) => t + 1)
+  }
 
   const press = (key: string) => {
     setError('')
@@ -55,13 +62,13 @@ export function NumberPinFlow({
         )
       })
       if (!found) {
-        setError('No se encontró ese número de empleado. No es tu PIN: el PIN se pide en el siguiente paso.')
+        flagError('No se encontró ese número de empleado. No es tu PIN: el PIN se pide en el siguiente paso.')
         return
       }
       const pinEnabled = found.identifications.find((i) => i.method === 'pin')?.enabled
       if (pinEnabled && !found.pin) {
         // Never let someone in by number alone when the PIN is supposed to protect the punch.
-        setError('Este empleado no tiene PIN configurado. Pide a RH que lo asigne.')
+        flagError('Este empleado no tiene PIN configurado. Pide a RH que lo asigne.')
         return
       }
       if (pinEnabled) {
@@ -75,7 +82,7 @@ export function NumberPinFlow({
       if (value === candidate.pin) {
         onIdentified(candidate)
       } else {
-        setError('PIN incorrecto')
+        flagError('PIN incorrecto')
         setValue('')
       }
     }
@@ -103,12 +110,16 @@ export function NumberPinFlow({
   }, [])
 
   return (
-    <div className="flex flex-col items-center gap-5 text-center">
-      <div className="space-y-1">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+    <div className="flex flex-col items-center gap-6 text-center">
+      <div className="space-y-2.5">
+        <div className="flex items-center justify-center gap-1.5">
+          <span className="h-1.5 w-9 rounded-full bg-primary" />
+          <span className={cn('h-1.5 w-9 rounded-full transition-colors', step === 'pin' ? 'bg-primary' : 'bg-slate-200')} />
+        </div>
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Paso {step === 'number' ? '1' : '2'} de 2
         </p>
-        <p className="text-lg font-medium">{title}</p>
+        <p className="text-xl font-semibold tracking-tight text-slate-900">{title}</p>
         {step === 'number' ? (
           <p className="text-sm text-muted-foreground">
             Tu número de empleado, no tu PIN. Ejemplo: {example} → escribe {exampleDigits}.
@@ -118,40 +129,88 @@ export function NumberPinFlow({
 
       <div
         className={cn(
-          'flex h-16 w-full max-w-xs items-center justify-center rounded-lg border bg-white text-3xl font-semibold tracking-[0.3em]',
-          error ? 'border-destructive' : 'border-slate-300',
+          'flex h-20 w-full max-w-xs items-center justify-center rounded-2xl border-2 bg-white shadow-sm transition-colors',
+          error ? 'border-destructive bg-destructive/5' : 'border-slate-200',
         )}
       >
-        {step === 'pin'
-          ? '•'.repeat(value.length) || <span className="text-muted-foreground/40">••••</span>
-          : value || <span className="text-muted-foreground/40 tracking-normal text-lg">Ej. 1, 2, 3…</span>}
+        {step === 'pin' ? (
+          value ? (
+            <div className="flex items-center gap-2.5">
+              {Array.from(value).map((_, i) => (
+                <motion.span
+                  key={i}
+                  initial={{ scale: 0.4, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ type: 'spring', stiffness: 420, damping: 22 }}
+                  className="h-3.5 w-3.5 rounded-full bg-slate-900"
+                />
+              ))}
+            </div>
+          ) : (
+            <span className="flex items-center gap-2.5">
+              {[0, 1, 2, 3].map((i) => (
+                <span key={i} className="h-3.5 w-3.5 rounded-full border-2 border-slate-200" />
+              ))}
+            </span>
+          )
+        ) : value ? (
+          <motion.span
+            key={value.length}
+            initial={{ scale: 0.85, opacity: 0.4 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.15 }}
+            className="text-4xl font-bold tabular-nums tracking-[0.2em] text-slate-900"
+          >
+            {value}
+          </motion.span>
+        ) : (
+          <span className="text-lg tracking-normal text-muted-foreground/40">Ej. 1, 2, 3…</span>
+        )}
       </div>
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
-      <div className="grid w-full max-w-xs grid-cols-3 gap-2">
+      {error ? (
+        <motion.div
+          key={errorTick}
+          initial={{ x: 0 }}
+          animate={{ x: [0, -6, 6, -4, 4, 0] }}
+          transition={{ duration: 0.35 }}
+          className="flex items-center gap-2 rounded-full border border-destructive/30 bg-destructive/10 px-4 py-2 text-[13px] font-medium text-destructive"
+        >
+          <TriangleAlert className="h-4 w-4 shrink-0" />
+          {error}
+        </motion.div>
+      ) : null}
+
+      <div className="grid w-full max-w-xs grid-cols-3 gap-2.5">
         {KEYS.map((key) => (
-          <button
+          <motion.button
             key={key}
             type="button"
+            whileTap={{ scale: 0.92 }}
             onClick={() => press(key)}
-            className="flex h-16 items-center justify-center rounded-lg border border-slate-200 bg-white text-xl font-semibold text-slate-900 transition-colors hover:bg-slate-50 active:bg-slate-100"
+            className={cn(
+              'flex h-[4.5rem] items-center justify-center rounded-2xl border text-2xl font-semibold shadow-sm transition-colors active:bg-slate-100',
+              key === 'clear'
+                ? 'border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100'
+                : 'border-slate-200 bg-white text-slate-900 hover:bg-slate-50',
+            )}
           >
             {key === 'back' ? (
-              <Delete className="h-5 w-5" />
+              <Delete className="h-6 w-6" />
             ) : key === 'clear' ? (
-              <span className="text-sm font-medium text-muted-foreground">C</span>
+              <span className="text-base font-semibold">C</span>
             ) : (
               key
             )}
-          </button>
+          </motion.button>
         ))}
       </div>
 
       <div className="flex w-full max-w-xs gap-3">
         <Button
           variant="secondary"
-          size="lg"
-          className="flex-1"
+          size="xl"
+          className="flex-1 text-base"
           onClick={() => {
             if (step === 'pin') {
               setStep('number')
@@ -164,7 +223,7 @@ export function NumberPinFlow({
         >
           {step === 'pin' ? 'Atrás' : 'Cancelar'}
         </Button>
-        <Button size="lg" className="flex-1" disabled={!value} onClick={submit}>
+        <Button size="xl" className="flex-1 text-base" disabled={!value} onClick={submit}>
           Continuar
         </Button>
       </div>

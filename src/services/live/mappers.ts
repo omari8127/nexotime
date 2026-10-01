@@ -14,9 +14,13 @@ import type {
   Employee,
   EmployeeIdentification,
   Incidencia,
+  Payment,
   Punch,
   Schedule,
   ScheduleDay,
+  Subscription,
+  SubscriptionPlan,
+  SubscriptionStatus,
   User,
 } from '@/types'
 
@@ -32,6 +36,33 @@ export function companyFromRow(row: Record<string, unknown>): Company {
     timezone: (row.timezone as string) ?? 'America/Mexico_City',
     weeklyTargetHours: Number(row.weekly_target_hours ?? 40),
     attendanceSettings: row.attendance_settings as AttendanceSettings,
+    createdAt: (row.created_at as string) ?? new Date().toISOString(),
+    subscription: subscriptionFromRow(row),
+  }
+}
+
+// Defensive fallbacks: a company row from before migration 004 (or read with an
+// older cached snapshot) simply won't have these columns yet.
+function subscriptionFromRow(row: Record<string, unknown>): Subscription {
+  return {
+    plan: (row.plan as SubscriptionPlan) ?? 'basico',
+    status: (row.subscription_status as SubscriptionStatus) ?? 'trialing',
+    trialEndsAt: (row.trial_ends_at as string) ?? new Date(Date.now() + 14 * 24 * 3600_000).toISOString(),
+    currentPeriodEnd: (row.current_period_end as string | null) ?? null,
+  }
+}
+
+/* --------------------------------- payments -------------------------------- */
+
+export function paymentFromRow(row: Record<string, unknown>): Payment {
+  return {
+    id: row.id as string,
+    companyId: row.company_id as string,
+    amount: Number(row.amount),
+    currency: (row.currency as string) ?? 'MXN',
+    method: (row.method as Payment['method']) ?? 'manual',
+    reference: (row.reference as string) ?? '',
+    monthsCovered: Number(row.months_covered ?? 1),
     createdAt: (row.created_at as string) ?? new Date().toISOString(),
   }
 }
