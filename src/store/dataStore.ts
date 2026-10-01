@@ -31,6 +31,7 @@ import type {
   Payment,
   Permission,
   Punch,
+  PunchLocation,
   PunchType,
   RoleKey,
   Schedule,
@@ -117,6 +118,7 @@ export interface PunchInput {
   method: Punch['method']
   deviceId?: string
   date?: string
+  location?: PunchLocation
 }
 
 export interface CorrectionInput {
@@ -718,6 +720,7 @@ export const useDataStore = create<DataState>((set, get) => {
         time: input.time,
         method: input.method,
         deviceId: input.deviceId,
+        location: input.location,
       }
 
       const nextPunches = [...(record?.punches.filter((p) => p.type !== input.type) ?? []), punch].sort(

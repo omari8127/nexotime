@@ -258,6 +258,15 @@ export interface Punch {
   deviceId?: ID
   /** True when an admin added or edited this punch. */
   edited?: boolean
+  /** Where the device sat when it registered this punch (browser geolocation). */
+  location?: PunchLocation
+}
+
+export interface PunchLocation {
+  lat: number
+  lng: number
+  /** Meters, as reported by the browser — smaller is more precise. */
+  accuracy?: number
 }
 
 export type AttendanceStatus =

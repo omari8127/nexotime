@@ -43,6 +43,7 @@ import { useLiveClock, formatClockTime } from '@/hooks/useLiveClock'
 import { useFullscreen } from '@/hooks/useFullscreen'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { useToday } from '@/hooks/useToday'
+import { useGeolocation } from '@/hooks/useGeolocation'
 import {
   calculateWeeklyHours,
   canRegisterPunch,
@@ -52,7 +53,7 @@ import {
 } from '@/lib/attendance'
 import { weekDates } from '@/lib/week'
 import { formatClock24, formatDuration, formatLongDate, formatTime12 } from '@/lib/utils'
-import type { CaptureMethod, Employee, Punch, PunchType } from '@/types'
+import type { CaptureMethod, Employee, Punch, PunchLocation, PunchType } from '@/types'
 
 type Phase = 'idle' | 'face' | 'qr' | 'barcode' | 'number' | 'confirm' | 'punch' | 'success'
 
@@ -86,12 +87,15 @@ export function ClockPage() {
   const today = useToday()
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen()
   const isOnline = useOnlineStatus()
+  const { location: deviceLocation } = useGeolocation()
 
   const [branchId, setBranchId] = useState('')
   const [phase, setPhase] = useState<Phase>('idle')
   const [method, setMethod] = useState<CaptureMethod>('qr')
   const [employee, setEmployee] = useState<Employee | null>(null)
-  const [lastPunch, setLastPunch] = useState<{ type: PunchType; time: string } | null>(null)
+  const [lastPunch, setLastPunch] = useState<{ type: PunchType; time: string; location?: PunchLocation } | null>(
+    null,
+  )
   const [showWeekSummary, setShowWeekSummary] = useState(false)
   const [notices, setNotices] = useState<Array<{ title: string; detail: string }>>([])
   const [secondsLeft, setSecondsLeft] = useState(0)
@@ -231,6 +235,7 @@ export function ClockPage() {
         method,
         deviceId: device?.id,
         date: today,
+        location: deviceLocation ?? undefined,
       })
       // Friendly heads-up when the punch reveals something worth knowing.
       const found: Array<{ title: string; detail: string }> = []
@@ -263,7 +268,7 @@ export function ClockPage() {
     }
     // El registro siempre queda guardado localmente de inmediato; si no hay
     // conexión se encola en este dispositivo y se sincroniza al reconectar.
-    setLastPunch({ type, time })
+    setLastPunch({ type, time, location: deviceLocation ?? undefined })
     setPhase('success')
   }
 
@@ -783,6 +788,29 @@ export function ClockPage() {
                     </div>
                   </div>
 
+                  {lastPunch.location ? (
+                    <div className="mt-3 overflow-hidden rounded-xl border border-slate-200">
+                      <div className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-medium text-slate-500">
+                        <MapPin className="h-3.5 w-3.5" />
+                        Ubicación del registro
+                      </div>
+                      <iframe
+                        title="Mapa de la ubicación del registro"
+                        className="h-36 w-full border-0 grayscale-[15%]"
+                        loading="lazy"
+                        src={osmEmbedUrl(lastPunch.location)}
+                      />
+                      <a
+                        href={`https://www.google.com/maps?q=${lastPunch.location.lat},${lastPunch.location.lng}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block px-3.5 py-2 text-center text-[12px] font-medium text-primary hover:underline"
+                      >
+                        Ver en el mapa · {lastPunch.location.lat.toFixed(5)}, {lastPunch.location.lng.toFixed(5)}
+                      </a>
+                    </div>
+                  ) : null}
+
                   <Button className="mt-5 w-full text-base" size="xl" onClick={reset}>
                     Listo
                   </Button>
@@ -822,6 +850,14 @@ function humanMinutes(total: number): string {
   const m = total % 60
   if (h === 0) return `${m} min`
   return m === 0 ? `${h} h` : `${h} h ${m} min`
+}
+
+/** Free OpenStreetMap embed, no API key — close enough zoom to see the street. */
+function osmEmbedUrl({ lat, lng }: PunchLocation): string {
+  const dLng = 0.004
+  const dLat = 0.0028
+  const bbox = [lng - dLng, lat - dLat, lng + dLng, lat + dLat].join('%2C')
+  return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&marker=${lat}%2C${lng}&layer=mapnik`
 }
 
 function FlowCard({
