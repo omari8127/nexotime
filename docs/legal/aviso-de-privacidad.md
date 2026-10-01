@@ -9,7 +9,8 @@
 - **Identificación y laborales:** nombre, número de empleado, puesto, área, sucursal, horario, fecha de ingreso, correo y teléfono.
 - **Asistencia:** fecha, hora y método de cada entrada, salida y comida; retardos, faltas, incidencias y correcciones.
 - **Ubicación:** coordenadas geográficas del dispositivo (reloj checador) al momento de cada registro, obtenidas con el permiso de ubicación del navegador.
-- **Datos personales sensibles — biométricos:** representación numérica de su rostro (un conjunto de valores calculados a partir de imágenes de su cara), únicamente si usted autoriza el registro facial. Esa representación es lo único que se conserva; al identificarle, el reloj le muestra en pantalla una foto de verificación del momento que **no se guarda ni se envía a ningún servidor**.
+- **Datos personales sensibles — biométricos:** representación numérica de su rostro (un conjunto de valores calculados a partir de imágenes de su cara), únicamente si usted autoriza el registro facial. Esa representación es lo único que se conserva.
+- **Foto de verificación:** sin importar el método que use para checar (rostro, QR, código de barras o número de empleado), el reloj toma una foto del momento y la muestra en pantalla para confirmar quién está registrando su asistencia — así nadie puede checar en nombre de otra persona. Esa foto **no se guarda ni se envía a ningún servidor**: desaparece al cerrar la pantalla.
 
 ## Finalidades
 
@@ -23,7 +24,7 @@ No usamos sus datos biométricos para fines distintos a los de identificarle al 
 
 ## Datos biométricos: consentimiento y alternativa
 
-El registro facial es **voluntario**. Requiere su consentimiento expreso por escrito (ver formato de consentimiento). Si no lo otorga, o lo retira, podrá registrar su asistencia con código QR, código de barras o número de empleado y PIN, sin consecuencia alguna para su relación laboral.
+El registro facial es **voluntario**. Requiere su consentimiento expreso por escrito (ver formato de consentimiento). Si no lo otorga, o lo retira, podrá registrar su asistencia con código QR, código de barras o número de empleado y PIN, sin consecuencia alguna para su relación laboral. Con cualquiera de esos métodos se sigue tomando la foto de verificación momentánea descrita arriba — lo único que cambia es que no se guarda la representación numérica de su rostro.
 
 ## Con quién compartimos sus datos
 

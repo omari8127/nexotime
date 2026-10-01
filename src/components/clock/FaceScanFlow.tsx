@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { FaceViewport } from '@/components/clock/FaceViewport'
+import { captureVideoFrame } from '@/lib/camera'
 import { useCameraStream } from '@/hooks/useCameraStream'
 import { useDataStore } from '@/store/dataStore'
 import { usePermissions } from '@/hooks/useScopedData'
@@ -39,22 +40,6 @@ const REJECT_LOG_COOLDOWN_MS = 30_000
  *     still the same person;
  *  3. hand the identified employee to the clock, which registers the movement.
  */
-/** A still frame of the live video, as a JPEG data URL — kept only in memory for
- *  the success screen (see ClockPage) and never sent anywhere or persisted. */
-function captureSnapshot(video: HTMLVideoElement): string | undefined {
-  try {
-    const canvas = document.createElement('canvas')
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
-    const ctx = canvas.getContext('2d')
-    if (!ctx || canvas.width === 0 || canvas.height === 0) return undefined
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-    return canvas.toDataURL('image/jpeg', 0.82)
-  } catch {
-    return undefined
-  }
-}
-
 export function FaceScanFlow({
   employees,
   settings,
@@ -153,7 +138,7 @@ export function FaceScanFlow({
 
       const accept = (m: FaceMatch) => {
         alive = false
-        confirmRef.current(m.employee, captureSnapshot(video))
+        confirmRef.current(m.employee, captureVideoFrame(video))
       }
 
       const loop = async () => {

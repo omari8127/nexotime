@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { Keyboard } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { CameraScanner } from '@/components/clock/CameraScanner'
+import { CameraScanner, type CameraScannerHandle } from '@/components/clock/CameraScanner'
 
 /**
  * Reads a QR or barcode credential from the camera, a USB scanner
  * (they behave like a keyboard and end with Enter) or manual typing. The parent
  * resolves the code to an employee and returns an error message when it can't.
+ * The camera feed is live the whole time this screen is shown (it is how the
+ * code gets read), so a code accepted from any source also grabs a fleeting
+ * verification photo from that same feed — so a badge can't be used for
+ * someone else without it showing who actually checked in.
  */
 export function ScanFlow({
   mode,
@@ -15,8 +19,9 @@ export function ScanFlow({
   demoCode,
 }: {
   mode: 'qr' | 'barcode'
-  /** Returns an error message to show, or null when the code was accepted. */
-  onCode: (code: string) => string | null
+  /** `photo` is a fleeting, in-memory snapshot for the success screen only — not stored.
+   *  Returns an error message to show, or null when the code was accepted. */
+  onCode: (code: string, photo?: string) => string | null
   onCancel: () => void
   /** Demo mode only: a valid code to use when there is no badge at hand. */
   demoCode?: string
@@ -25,6 +30,7 @@ export function ScanFlow({
   const isQr = mode === 'qr'
   const [error, setError] = useState<string | null>(null)
   const lastRead = useRef<{ code: string; at: number }>({ code: '', at: 0 })
+  const scannerRef = useRef<CameraScannerHandle>(null)
 
   const submit = (raw: string) => {
     const code = raw.trim()
@@ -33,7 +39,7 @@ export function ScanFlow({
     const now = Date.now()
     if (lastRead.current.code === code && now - lastRead.current.at < 3000) return
     lastRead.current = { code, at: now }
-    setError(onCode(code))
+    setError(onCode(code, scannerRef.current?.capture()))
   }
 
   useEffect(() => {
@@ -44,7 +50,7 @@ export function ScanFlow({
 
   return (
     <div className="flex flex-col items-center gap-5 text-center">
-      <CameraScanner kind={mode} onDecode={submit} />
+      <CameraScanner ref={scannerRef} kind={mode} onDecode={submit} />
 
       <div className="space-y-1">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -58,6 +64,7 @@ export function ScanFlow({
             ? 'Se registra automáticamente al leerlo.'
             : 'También funciona con un lector USB: escanea con este campo activo.'}
         </p>
+        <p className="text-xs text-slate-400">Se toma una foto de verificación que no se guarda.</p>
       </div>
 
       {error ? (

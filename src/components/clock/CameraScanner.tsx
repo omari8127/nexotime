@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { BrowserMultiFormatReader } from '@zxing/browser'
 import { BarcodeFormat, DecodeHintType } from '@zxing/library'
 import { CameraOff, LoaderCircle } from 'lucide-react'
+import { captureVideoFrame } from '@/lib/camera'
 
 type ScanKind = 'qr' | 'barcode'
 
@@ -43,11 +44,17 @@ function describeCameraError(err: unknown): string {
   return 'No se pudo iniciar la cámara.'
 }
 
+export interface CameraScannerHandle {
+  /** A still frame of the live feed, for the fleeting verification photo (see ClockPage). */
+  capture: () => string | undefined
+}
+
 /**
  * Live camera decoding (ZXing). Calls `onDecode` for every frame that contains
  * a code — the parent debounces. The camera is always released on unmount.
  */
-export function CameraScanner({ kind, onDecode }: { kind: ScanKind; onDecode: (text: string) => void }) {
+export const CameraScanner = forwardRef<CameraScannerHandle, { kind: ScanKind; onDecode: (text: string) => void }>(
+  function CameraScanner({ kind, onDecode }, ref) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [state, setState] = useState<'starting' | 'ready' | 'error'>('starting')
   const [message, setMessage] = useState('')
@@ -55,6 +62,9 @@ export function CameraScanner({ kind, onDecode }: { kind: ScanKind; onDecode: (t
   useEffect(() => {
     decodeRef.current = onDecode
   })
+  useImperativeHandle(ref, () => ({
+    capture: () => (videoRef.current ? captureVideoFrame(videoRef.current) : undefined),
+  }))
 
   useEffect(() => {
     let stopped = false
@@ -157,4 +167,5 @@ export function CameraScanner({ kind, onDecode }: { kind: ScanKind; onDecode: (t
       ) : null}
     </div>
   )
-}
+  },
+)

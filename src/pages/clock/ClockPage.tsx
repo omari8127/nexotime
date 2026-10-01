@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   ArrowLeft,
+  Camera,
   Check,
   TriangleAlert,
   Barcode,
@@ -146,10 +147,10 @@ export function ClockPage() {
   }, [branchEmployees])
 
   /** Badge codes work at any branch of the company, not only this kiosk's. */
-  function handleCode(kind: 'qr' | 'barcode', code: string): string | null {
+  function handleCode(kind: 'qr' | 'barcode', code: string, photo?: string): string | null {
     const match = findEmployeeByCode(allEmployees, code)
     if (!match.ok) return CODE_ERROR_TEXT[match.reason]
-    identify(match.employee, kind)
+    identify(match.employee, kind, photo)
     return null
   }
 
@@ -530,7 +531,7 @@ export function ClockPage() {
                 <ScanFlow
                   mode={phase}
                   onCancel={backToMethod}
-                  onCode={(code) => handleCode(phase, code)}
+                  onCode={(code, photo) => handleCode(phase, code, photo)}
                   demoCode={mode === 'demo' && candidate ? credentialValue(candidate, phase) : undefined}
                 />
               </FlowCard>
@@ -541,7 +542,7 @@ export function ClockPage() {
                 <NumberPinFlow
                   employees={branchEmployees}
                   onCancel={backToMethod}
-                  onIdentified={(emp) => identify(emp, 'employee_number')}
+                  onIdentified={(emp, photo) => identify(emp, 'employee_number', photo)}
                 />
               </FlowCard>
             )}
@@ -812,10 +813,10 @@ export function ClockPage() {
                   {lastPunch.photo ? (
                     <div className="mt-3.5 overflow-hidden rounded-xl border border-slate-200">
                       <div className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-medium text-slate-500">
-                        <ScanFace className="h-3.5 w-3.5" />
-                        Verificación facial
+                        <Camera className="h-3.5 w-3.5" />
+                        Foto de verificación
                       </div>
-                      <img src={lastPunch.photo} alt="Verificación facial" className="h-40 w-full object-cover" />
+                      <img src={lastPunch.photo} alt="Foto de verificación" className="h-40 w-full object-cover" />
                     </div>
                   ) : null}
 

@@ -1,11 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Delete, TriangleAlert } from 'lucide-react'
+import { Camera, Delete, Loader2, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { captureVideoFrame } from '@/lib/camera'
+import { useCameraStream } from '@/hooks/useCameraStream'
 import { cn } from '@/lib/utils'
 import type { Employee } from '@/types'
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'clear', '0', 'back']
+/** How long to wait for the camera before giving up and checking in without a
+ *  photo — a missing or blocked camera must never stop someone from clocking in. */
+const PHOTO_TIMEOUT_MS = 4000
 
 export function NumberPinFlow({
   employees,
@@ -13,10 +18,13 @@ export function NumberPinFlow({
   onCancel,
 }: {
   employees: Employee[]
-  onIdentified: (employee: Employee) => void
+  /** `photo` is a fleeting, in-memory snapshot for the success screen only — not stored. */
+  onIdentified: (employee: Employee, photo?: string) => void
   onCancel: () => void
 }) {
-  const [step, setStep] = useState<'number' | 'pin'>('number')
+  const [step, setStep] = useState<'number' | 'pin' | 'photo'>('number')
+  const [identified, setIdentified] = useState<Employee | null>(null)
+  const { videoRef, state: cameraState } = useCameraStream(step === 'photo')
   const [value, setValueState] = useState('')
   // Mirror of `value` that is always current, so a fast typist's Enter never reads stale state.
   const valueRef = useRef('')
@@ -76,17 +84,50 @@ export function NumberPinFlow({
         setStep('pin')
         setValue('')
       } else {
-        onIdentified(found)
+        setIdentified(found)
+        setStep('photo')
       }
     } else if (candidate) {
       if (value === candidate.pin) {
-        onIdentified(candidate)
+        setIdentified(candidate)
+        setStep('photo')
       } else {
         flagError('PIN incorrecto')
         setValue('')
       }
     }
   }
+
+  // Grabs one frame once the camera is up (or gives up after PHOTO_TIMEOUT_MS)
+  // and hands the employee off — a slow or missing camera must never block a
+  // real check-in.
+  const identifiedRef = useRef(identified)
+  const onIdentifiedRef = useRef(onIdentified)
+  useEffect(() => {
+    identifiedRef.current = identified
+    onIdentifiedRef.current = onIdentified
+  })
+  useEffect(() => {
+    if (step !== 'photo') return
+    let done = false
+    const finish = (photo?: string) => {
+      if (done || !identifiedRef.current) return
+      done = true
+      onIdentifiedRef.current(identifiedRef.current, photo)
+    }
+    const timeout = window.setTimeout(() => finish(undefined), PHOTO_TIMEOUT_MS)
+    let capture: number | undefined
+    if (cameraState === 'ready') {
+      // A short grace period so the frame isn't the camera's first, still-dark one.
+      capture = window.setTimeout(() => finish(videoRef.current ? captureVideoFrame(videoRef.current) : undefined), 450)
+    } else if (cameraState === 'error') {
+      finish(undefined)
+    }
+    return () => {
+      clearTimeout(timeout)
+      if (capture) clearTimeout(capture)
+    }
+  }, [step, cameraState, videoRef])
 
   // Physical / on-screen keyboard: digits, Backspace, Enter, Escape. The latest
   // handlers are kept in a ref so the listener is attached only once.
@@ -109,6 +150,28 @@ export function NumberPinFlow({
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  if (step === 'photo') {
+    return (
+      <div className="flex flex-col items-center gap-5 text-center">
+        <div className="relative flex h-40 w-40 items-center justify-center overflow-hidden rounded-full border-2 border-primary/30 bg-slate-900">
+          <video ref={videoRef} muted playsInline className="h-full w-full scale-x-[-1] object-cover" />
+          {cameraState !== 'ready' ? (
+            <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
+              <Loader2 className="h-7 w-7 animate-spin text-white/70" />
+            </div>
+          ) : null}
+        </div>
+        <div className="space-y-1">
+          <p className="flex items-center justify-center gap-1.5 text-lg font-semibold text-slate-900">
+            <Camera className="h-4 w-4 text-primary" />
+            Hola, {identified?.firstName}
+          </p>
+          <p className="text-sm text-muted-foreground">Tomando tu foto de verificación…</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col items-center gap-6 text-center">
       <div className="space-y-2.5">
@@ -122,7 +185,8 @@ export function NumberPinFlow({
         <p className="text-xl font-semibold tracking-tight text-slate-900">{title}</p>
         {step === 'number' ? (
           <p className="text-sm text-muted-foreground">
-            Tu número de empleado, no tu PIN. Ejemplo: {example} → escribe {exampleDigits}.
+            Tu número de empleado, no tu PIN. Ejemplo: {example} → escribe {exampleDigits}. Se toma una foto de
+            verificación que no se guarda.
           </p>
         ) : null}
       </div>
