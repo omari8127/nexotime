@@ -106,7 +106,6 @@ export function ClockPage() {
   const [pendingPhoto, setPendingPhoto] = useState<string | undefined>(undefined)
   const [showWeekSummary, setShowWeekSummary] = useState(false)
   const [notices, setNotices] = useState<Array<{ title: string; detail: string }>>([])
-  const [secondsLeft, setSecondsLeft] = useState(0)
   const [showExitGate, setShowExitGate] = useState(false)
   const pendingSync = useSyncStore((s) => s.pending)
 
@@ -191,15 +190,6 @@ export function ClockPage() {
     if (phase !== 'confirm' || !confirmPunch) return
     const id = setTimeout(() => doPunch(confirmPunch.type), kiosk.autoRegisterSeconds * 1000)
     return () => clearTimeout(id)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase])
-
-  // Visible seconds countdown for the confirm screen's "se registra en…" caption.
-  useEffect(() => {
-    if (phase !== 'confirm') return
-    setSecondsLeft(kiosk.autoRegisterSeconds)
-    const id = setInterval(() => setSecondsLeft((s) => Math.max(0, s - 1)), 1000)
-    return () => clearInterval(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase])
 
@@ -591,20 +581,6 @@ export function ClockPage() {
                     </div>
                     <p className="font-mono text-4xl font-bold tabular-nums tracking-tight text-slate-900">
                       {formatTime12(formatClock24(now))}
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                      <motion.div
-                        className="h-full origin-left rounded-full bg-gradient-to-r from-success to-success/70"
-                        initial={{ scaleX: 0 }}
-                        animate={{ scaleX: 1 }}
-                        transition={{ duration: kiosk.autoRegisterSeconds, ease: 'linear' }}
-                      />
-                    </div>
-                    <p className="text-center text-xs font-medium text-slate-400">
-                      Se registra en {secondsLeft} {secondsLeft === 1 ? 'segundo' : 'segundos'}…
                     </p>
                   </div>
 
