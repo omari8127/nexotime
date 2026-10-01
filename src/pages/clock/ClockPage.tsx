@@ -44,6 +44,7 @@ import { useFullscreen } from '@/hooks/useFullscreen'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { useToday } from '@/hooks/useToday'
 import { useGeolocation } from '@/hooks/useGeolocation'
+import { useLiveRefresh } from '@/hooks/useLiveRefresh'
 import {
   calculateWeeklyHours,
   canRegisterPunch,
@@ -90,6 +91,7 @@ export function ClockPage() {
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen()
   const isOnline = useOnlineStatus()
   const { location: deviceLocation } = useGeolocation()
+  useLiveRefresh()
 
   const [branchId, setBranchId] = useState('')
   const [phase, setPhase] = useState<Phase>('idle')
