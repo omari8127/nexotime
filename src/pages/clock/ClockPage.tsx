@@ -55,7 +55,7 @@ import { weekDates } from '@/lib/week'
 import { formatClock24, formatDuration, formatLongDate, formatTime12 } from '@/lib/utils'
 import type { CaptureMethod, Employee, Punch, PunchLocation, PunchType } from '@/types'
 
-type Phase = 'idle' | 'face' | 'qr' | 'barcode' | 'number' | 'confirm' | 'punch' | 'success'
+type Phase = 'idle' | 'method' | 'face' | 'qr' | 'barcode' | 'number' | 'confirm' | 'punch' | 'success'
 
 const METHODS: Array<{ key: Phase; method: CaptureMethod; title: string; text: string; Icon: typeof QrCode; soon?: boolean }> = [
   { key: 'face', method: 'face', title: 'Reconocimiento facial', text: 'Mira a la cámara y parpadea', Icon: ScanFace, soon: true },
@@ -70,6 +70,8 @@ const PUNCH_TYPE_ICON: Record<PunchType, typeof LogIn> = {
   lunch_in: UtensilsCrossed,
   exit: LogOut,
 }
+
+const PUNCH_TYPE_ORDER: PunchType[] = ['entry', 'lunch_out', 'lunch_in', 'exit']
 
 export function ClockPage() {
   const navigate = useNavigate()
@@ -91,6 +93,7 @@ export function ClockPage() {
 
   const [branchId, setBranchId] = useState('')
   const [phase, setPhase] = useState<Phase>('idle')
+  const [selectedPunchType, setSelectedPunchType] = useState<PunchType | null>(null)
   const [method, setMethod] = useState<CaptureMethod>('qr')
   const [employee, setEmployee] = useState<Employee | null>(null)
   const [lastPunch, setLastPunch] = useState<
@@ -154,6 +157,11 @@ export function ClockPage() {
     : undefined
   const punches: Punch[] = todayRecord?.punches ?? []
   const nextPunch = detectNextPunch(punches, company.attendanceSettings.trackLunch)
+  // What the confirm/registration screens act on: the movement the employee explicitly
+  // chose on the first screen, falling back to auto-detection only if none was set.
+  const confirmPunch = selectedPunchType
+    ? { type: selectedPunchType, label: `Registrar ${PUNCH_TYPE_LABEL[selectedPunchType].toLowerCase()}` }
+    : nextPunch
   const kiosk = resolveKiosk(company.attendanceSettings)
 
   const weekSummary = useMemo(() => {
@@ -178,8 +186,8 @@ export function ClockPage() {
 
   // Auto-register: when the cancel window ends, register the proposed movement.
   useEffect(() => {
-    if (phase !== 'confirm' || !nextPunch) return
-    const id = setTimeout(() => doPunch(nextPunch.type), kiosk.autoRegisterSeconds * 1000)
+    if (phase !== 'confirm' || !confirmPunch) return
+    const id = setTimeout(() => doPunch(confirmPunch.type), kiosk.autoRegisterSeconds * 1000)
     return () => clearTimeout(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase])
@@ -202,37 +210,41 @@ export function ClockPage() {
 
   function reset() {
     setPhase('idle')
+    setSelectedPunchType(null)
     setEmployee(null)
     setLastPunch(null)
     setNotices([])
     setPendingPhoto(undefined)
   }
 
+  function backToMethod() {
+    setPhase('method')
+  }
+
   /**
-   * Once someone is identified: when auto-register is on and there is an obvious
-   * next movement, go to a short confirmation that registers it by itself;
-   * otherwise show the full movement picker. `photo` only ever comes from face
-   * recognition — a fleeting snapshot for the success screen, never stored.
+   * Once someone is identified: validate the movement they picked on the first screen
+   * against today's record, then go to a short confirmation before registering it.
+   * `photo` only ever comes from face recognition — a fleeting snapshot for the
+   * success screen, never stored.
    */
   function identify(emp: Employee, capture: CaptureMethod, photo?: string) {
     setEmployee(emp)
     setMethod(capture)
     setPendingPhoto(photo)
     const record = attendance.find((r) => r.employeeId === emp.id && r.date === today)
-    const next = detectNextPunch(record?.punches ?? [], company.attendanceSettings.trackLunch)
-    // Same rule the store enforces: a just-registered person cannot punch again right away.
-    if (next) {
-      const wait = canRegisterPunch(record?.punches ?? [], next.type, company.attendanceSettings, {
+    const type = selectedPunchType ?? detectNextPunch(record?.punches ?? [], company.attendanceSettings.trackLunch)?.type
+    if (type) {
+      const blocked = canRegisterPunch(record?.punches ?? [], type, company.attendanceSettings, {
         minutes: kiosk.minGapMinutes,
         now: formatClock24(now),
       })
-      if (wait && wait.startsWith('Acabas')) {
-        toast.error(`${emp.firstName}, ya registraste`, wait)
+      if (blocked) {
+        toast.error(`${emp.firstName}, no se pudo registrar`, blocked)
         reset()
         return
       }
     }
-    setPhase(kiosk.autoRegister && next ? 'confirm' : 'punch')
+    setPhase(kiosk.autoRegister && type ? 'confirm' : 'punch')
   }
 
   function doPunch(type: PunchType) {
@@ -417,7 +429,68 @@ export function ClockPage() {
                   <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
                     Registra tu asistencia
                   </h1>
-                  <p className="mt-1.5 text-[15px] text-slate-500">Elige cómo quieres identificarte.</p>
+                  <p className="mt-1.5 text-[15px] text-slate-500">¿Qué movimiento quieres registrar?</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {PUNCH_TYPE_ORDER.filter(
+                    (t) => company.attendanceSettings.trackLunch || (t !== 'lunch_out' && t !== 'lunch_in'),
+                  ).map((t) => {
+                    const Icon = PUNCH_TYPE_ICON[t]
+                    return (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => {
+                          setSelectedPunchType(t)
+                          setPhase('method')
+                        }}
+                        className="group flex flex-col items-center gap-3 rounded-xl border border-slate-200 bg-white p-6 text-center shadow-sm transition-colors hover:border-primary/40 hover:bg-slate-50 active:bg-slate-100"
+                      >
+                        <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                          <Icon className="h-7 w-7" />
+                        </span>
+                        <span className="text-base font-semibold text-slate-900">{PUNCH_TYPE_LABEL[t]}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </motion.div>
+            )}
+
+            {phase === 'method' && (
+              <motion.div
+                key="method"
+                initial={{ y: 12 }}
+                animate={{ y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.25 }}
+                className="space-y-7"
+              >
+                <div className="space-y-3">
+                  <button
+                    type="button"
+                    onClick={reset}
+                    className="inline-flex items-center gap-1.5 text-[13px] font-medium text-slate-500 hover:text-slate-800"
+                  >
+                    <ArrowLeft className="h-3.5 w-3.5" />
+                    Volver
+                  </button>
+                  <div>
+                    <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+                      Registra tu asistencia
+                    </h1>
+                    <p className="mt-1.5 text-[15px] text-slate-500">Elige cómo quieres identificarte.</p>
+                  </div>
+                  {selectedPunchType ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                      {(() => {
+                        const Icon = PUNCH_TYPE_ICON[selectedPunchType]
+                        return <Icon className="h-3.5 w-3.5" />
+                      })()}
+                      {PUNCH_TYPE_LABEL[selectedPunchType]}
+                    </span>
+                  ) : null}
                 </div>
 
                 <div className="space-y-3">
@@ -450,21 +523,21 @@ export function ClockPage() {
             )}
 
             {phase === 'face' && (
-              <FlowCard key="face" onBack={reset} title="Reconocimiento facial">
+              <FlowCard key="face" onBack={backToMethod} title="Reconocimiento facial">
                 <FaceScanFlow
                   employees={allEmployees}
                   settings={kiosk}
-                  onCancel={reset}
+                  onCancel={backToMethod}
                   onConfirmed={(emp, photo) => identify(emp, 'face', photo)}
                 />
               </FlowCard>
             )}
 
             {(phase === 'qr' || phase === 'barcode') && (
-              <FlowCard key={phase} onBack={reset} title={phase === 'qr' ? 'Código QR' : 'Código de barras'}>
+              <FlowCard key={phase} onBack={backToMethod} title={phase === 'qr' ? 'Código QR' : 'Código de barras'}>
                 <ScanFlow
                   mode={phase}
-                  onCancel={reset}
+                  onCancel={backToMethod}
                   onCode={(code) => handleCode(phase, code)}
                   demoCode={mode === 'demo' && candidate ? credentialValue(candidate, phase) : undefined}
                 />
@@ -472,16 +545,16 @@ export function ClockPage() {
             )}
 
             {phase === 'number' && (
-              <FlowCard key="number" onBack={reset}>
+              <FlowCard key="number" onBack={backToMethod}>
                 <NumberPinFlow
                   employees={branchEmployees}
-                  onCancel={reset}
+                  onCancel={backToMethod}
                   onIdentified={(emp) => identify(emp, 'employee_number')}
                 />
               </FlowCard>
             )}
 
-            {phase === 'confirm' && employee && nextPunch && (
+            {phase === 'confirm' && employee && confirmPunch && (
               <FlowCard key="confirm" onBack={reset} title="Confirmar registro">
                 <div className="space-y-6">
                   <div className="flex items-center gap-3.5 rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3.5">
@@ -504,14 +577,14 @@ export function ClockPage() {
                   <div className="flex flex-col items-center gap-3 py-1 text-center">
                     <span className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
                       {(() => {
-                        const Icon = PUNCH_TYPE_ICON[nextPunch.type]
+                        const Icon = PUNCH_TYPE_ICON[confirmPunch.type]
                         return <Icon className="h-7 w-7" />
                       })()}
                     </span>
                     <div>
                       <p className="text-sm text-slate-500">Se registrará automáticamente</p>
                       <p className="mt-0.5 text-2xl font-bold tracking-tight text-slate-900">
-                        {PUNCH_TYPE_LABEL[nextPunch.type]}
+                        {PUNCH_TYPE_LABEL[confirmPunch.type]}
                       </p>
                     </div>
                     <p className="font-mono text-4xl font-bold tabular-nums tracking-tight text-slate-900">
@@ -538,7 +611,7 @@ export function ClockPage() {
                       size="xl"
                       variant="success"
                       className="w-full text-base"
-                      onClick={() => doPunch(nextPunch.type)}
+                      onClick={() => doPunch(confirmPunch.type)}
                     >
                       <Check className="h-5 w-5" strokeWidth={3} />
                       Registrar ahora
@@ -657,10 +730,10 @@ export function ClockPage() {
                     </div>
                   ) : null}
 
-                  {nextPunch ? (
+                  {confirmPunch ? (
                     <div className="space-y-2 pt-1">
-                      <Button size="xl" className="w-full text-base" onClick={() => doPunch(nextPunch.type)}>
-                        {nextPunch.label}
+                      <Button size="xl" className="w-full text-base" onClick={() => doPunch(confirmPunch.type)}>
+                        {confirmPunch.label}
                         <span className="ml-2 font-mono text-sm opacity-90">
                           {formatClockTime(now).replace(/:\d\d /, ' ')}
                         </span>
