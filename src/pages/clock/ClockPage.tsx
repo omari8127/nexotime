@@ -522,7 +522,7 @@ export function ClockPage() {
                   <div className="space-y-2">
                     <div className="h-2 overflow-hidden rounded-full bg-slate-100">
                       <motion.div
-                        className="h-full origin-left rounded-full bg-gradient-to-r from-primary to-primary/70"
+                        className="h-full origin-left rounded-full bg-gradient-to-r from-success to-success/70"
                         initial={{ scaleX: 0 }}
                         animate={{ scaleX: 1 }}
                         transition={{ duration: kiosk.autoRegisterSeconds, ease: 'linear' }}
@@ -533,24 +533,26 @@ export function ClockPage() {
                     </p>
                   </div>
 
-                  <div className="space-y-3">
-                    <Button size="xl" className="w-full text-base" onClick={() => doPunch(nextPunch.type)}>
+                  <div className="space-y-2.5">
+                    <Button
+                      size="xl"
+                      variant="success"
+                      className="w-full text-base"
+                      onClick={() => doPunch(nextPunch.type)}
+                    >
+                      <Check className="h-5 w-5" strokeWidth={3} />
                       Registrar ahora
                     </Button>
-                    <div className="flex items-center justify-center gap-4">
+                    <Button size="lg" variant="destructive" className="w-full" onClick={reset}>
+                      No soy yo / Cancelar
+                    </Button>
+                    <div className="text-center">
                       <button
                         type="button"
                         onClick={() => setPhase('punch')}
                         className="rounded-full px-3 py-1.5 text-[13px] font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
                       >
                         Es otro movimiento
-                      </button>
-                      <button
-                        type="button"
-                        onClick={reset}
-                        className="rounded-full px-3 py-1.5 text-[13px] font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
-                      >
-                        No soy yo / Cancelar
                       </button>
                     </div>
                   </div>
