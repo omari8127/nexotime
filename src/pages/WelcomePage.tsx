@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { ArrowRight, BarChart3, CalendarClock, MonitorSmartphone, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { NexotimeLogo } from '@/components/shared/Logo'
+import { BrandDarkBackdrop } from '@/components/shared/BrandDarkBackdrop'
 import { AnalogClock } from '@/components/clock/AnalogClock'
 import { useLiveClock, formatClockTime } from '@/hooks/useLiveClock'
 import { copyrightLine } from '@/data/legal'
@@ -26,22 +27,7 @@ export function WelcomePage() {
 
   return (
     <div className="relative min-h-dvh overflow-hidden bg-sidebar text-sidebar-foreground">
-      {/* Ambient background: soft brand glow + a faint dot grid for texture. */}
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          backgroundImage:
-            'radial-gradient(60rem 36rem at 15% -10%, hsl(var(--primary) / 0.22), transparent 60%), radial-gradient(44rem 30rem at 100% 100%, hsl(199 89% 55% / 0.14), transparent 55%)',
-        }}
-      />
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.25]"
-        style={{
-          backgroundImage: 'radial-gradient(hsl(var(--sidebar-border)) 1px, transparent 1px)',
-          backgroundSize: '26px 26px',
-          maskImage: 'linear-gradient(to bottom, black, transparent 85%)',
-        }}
-      />
+      <BrandDarkBackdrop />
 
       <div className="relative mx-auto grid min-h-dvh max-w-7xl lg:grid-cols-2">
         <div className="flex flex-col justify-center px-6 py-14 sm:px-12 lg:px-16">

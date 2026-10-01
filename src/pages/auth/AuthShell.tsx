@@ -3,8 +3,16 @@ import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft } from 'lucide-react'
 import { NexotimeLogo } from '@/components/shared/Logo'
+import { BrandDarkBackdrop } from '@/components/shared/BrandDarkBackdrop'
 import { copyrightLine } from '@/data/legal'
 
+/**
+ * Shell for the public login/signup pages. Like WelcomePage, it always uses
+ * the dark brand palette instead of the saved light/dark theme — same first
+ * impression for every visitor. The `dark` class is scoped to this subtree
+ * (not applied to <html>) so the shared Input/Button/Label components pick
+ * up their dark-mode colors here without changing the rest of the app.
+ */
 export function AuthShell({
   title,
   description,
@@ -17,32 +25,33 @@ export function AuthShell({
   footer?: ReactNode
 }) {
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-background px-6 py-12">
+    <div className="dark relative flex min-h-dvh items-center justify-center overflow-hidden bg-sidebar px-6 py-12 text-sidebar-foreground">
+      <BrandDarkBackdrop />
       <motion.div
-        initial={{ y: 10 }}
-        animate={{ y: 0 }}
-        transition={{ duration: 0.25 }}
-        className="w-full max-w-md"
+        initial={{ y: 10, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+        className="relative w-full max-w-md"
       >
         <div className="mb-5 flex items-center justify-between">
-          <NexotimeLogo tone="dark" />
+          <NexotimeLogo tone="light" />
           <Link
             to="/bienvenida"
-            className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground"
+            className="inline-flex items-center gap-1.5 text-[13px] text-sidebar-foreground/60 hover:text-white"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             Volver
           </Link>
         </div>
-        <div className="rounded-xl border border-border bg-card p-8 shadow-sm">
-          <h1 className="text-xl font-semibold tracking-tight text-foreground">{title}</h1>
-          <p className="mt-1.5 text-sm text-muted-foreground">{description}</p>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-8 shadow-2xl shadow-black/40 backdrop-blur-sm">
+          <h1 className="text-xl font-semibold tracking-tight text-white">{title}</h1>
+          <p className="mt-1.5 text-sm text-sidebar-foreground/60">{description}</p>
 
           <div className="mt-6">{children}</div>
         </div>
 
-        {footer ? <div className="mt-5 text-center text-sm text-muted-foreground">{footer}</div> : null}
-        <p className="mt-6 text-center text-xs text-muted-foreground">{copyrightLine()}</p>
+        {footer ? <div className="mt-5 text-center text-sm text-sidebar-foreground/60">{footer}</div> : null}
+        <p className="mt-6 text-center text-xs text-sidebar-foreground/40">{copyrightLine()}</p>
       </motion.div>
     </div>
   )
