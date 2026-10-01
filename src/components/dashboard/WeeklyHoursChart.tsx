@@ -81,7 +81,7 @@ export function WeeklyHoursChart({ records }: { records: AttendanceRecord[] }) {
         />
         <Bar
           dataKey="Programadas"
-          fill="hsl(214 24% 84%)"
+          fill="hsl(var(--border))"
           radius={[3, 3, 0, 0]}
           maxBarSize={26}
           isAnimationActive={false}
@@ -94,21 +94,21 @@ export function WeeklyHoursChart({ records }: { records: AttendanceRecord[] }) {
           isAnimationActive={false}
         >
           {data.map((d, i) => (
-            <Cell key={i} fill={d.future ? 'hsl(214 24% 88%)' : 'hsl(var(--primary))'} />
+            <Cell key={i} fill={d.future ? 'hsl(var(--secondary))' : 'hsl(var(--primary))'} />
           ))}
         </Bar>
         <Line
           type="monotone"
           dataKey="Extra"
-          stroke="hsl(152 62% 40%)"
+          stroke="hsl(var(--success))"
           strokeWidth={2}
-          dot={{ r: 3, fill: 'hsl(152 62% 40%)' }}
+          dot={{ r: 3, fill: 'hsl(var(--success))' }}
           isAnimationActive={false}
         />
         <Line
           type="monotone"
           dataKey="Faltantes"
-          stroke="hsl(33 92% 48%)"
+          stroke="hsl(var(--warning))"
           strokeWidth={2}
           strokeDasharray="4 4"
           dot={false}
