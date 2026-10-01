@@ -14,6 +14,7 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { WeeklyHoursPicker } from '@/components/shared/WeeklyHoursPicker'
 import { MX_TIMEZONES } from '@/data/timezones'
 import { KioskSettingsPanel } from '@/components/settings/KioskSettingsPanel'
+import { GoogleDriveIntegrationPanel } from '@/components/settings/GoogleDriveIntegrationPanel'
 import { useDataStore } from '@/store/dataStore'
 import { usePermissions } from '@/hooks/useScopedData'
 import { useUIStore } from '@/store/uiStore'
@@ -83,12 +84,17 @@ export function SettingsPage() {
           <TabsTrigger value="asistencia">Asistencia</TabsTrigger>
           <TabsTrigger value="reloj">Reloj checador</TabsTrigger>
           <TabsTrigger value="cumplimiento">Cumplimiento LFT</TabsTrigger>
+          {mode === 'live' ? <TabsTrigger value="integraciones">Integraciones</TabsTrigger> : null}
           {mode === 'live' ? <TabsTrigger value="plan">Plan y pago</TabsTrigger> : null}
           {mode === 'demo' ? <TabsTrigger value="demo">Demo</TabsTrigger> : null}
         </TabsList>
 
         <TabsContent value="plan">
           <SubscriptionPanel />
+        </TabsContent>
+
+        <TabsContent value="integraciones">
+          <GoogleDriveIntegrationPanel />
         </TabsContent>
 
         <TabsContent value="empresa">

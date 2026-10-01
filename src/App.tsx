@@ -29,6 +29,7 @@ import { NotFoundPage } from '@/pages/NotFoundPage'
 import { ClockPage } from '@/pages/clock/ClockPage'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { SignupPage } from '@/pages/auth/SignupPage'
+import { GoogleDriveCallbackPage } from '@/pages/integrations/GoogleDriveCallbackPage'
 
 const guard = (permission: Permission, element: ReactNode) => (
   <RequirePermission permission={permission}>{element}</RequirePermission>
@@ -104,6 +105,14 @@ export function App() {
               element={
                 <RequirePermission permission="settings.view">
                   <SettingsPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/integraciones/google/callback"
+              element={
+                <RequirePermission permission="settings.view">
+                  <GoogleDriveCallbackPage />
                 </RequirePermission>
               }
             />

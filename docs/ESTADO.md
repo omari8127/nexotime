@@ -19,6 +19,7 @@
 - Importar empleados desde Excel o CSV, con plantilla descargable (usa las sucursales y horarios reales de la empresa) y vista previa fila por fila antes de crear a nadie.
 - Importar correcciones de asistencia desde Excel o CSV: se descarga el periodo ya con las horas registradas, se corrige solo lo necesario y se vuelve a subir; una celda vacía nunca borra un dato.
 - Lector propio de `.xlsx` en el navegador (sin dependencias): entiende archivos reales guardados por Excel, Google Sheets o LibreOffice.
+- Integración con Google Drive (Configuración → Integraciones): cada empresa conecta su propia cuenta y recibe ahí, una vez al día, un CSV con la asistencia del día anterior. Falta la puesta en marcha única del proyecto (ver pendiente #8).
 
 ## Pendiente — depende de ti (no se puede hacer desde el código)
 
@@ -31,6 +32,7 @@
 | 5 | **Publicar la app** en un hosting con HTTPS (`sw.js` sin caché) con las variables `VITE_*` de producción | Instalación y cámara exigen HTTPS |
 | 6 | **Piloto de 2 a 4 semanas** con una empresa de confianza | Detecta problemas reales antes de cobrar |
 | 7 | En Empleados, aceptar el aviso «Regenerar códigos» si hay QR antiguos, y reimprimir gafetes | Los QR viejos son fáciles de adivinar |
+| 8 | **Puesta en marcha de la integración con Google Drive** (`supabase/README.md` § Integraciones): crear la credencial OAuth en Google Cloud Console, correr la migración `006`, desplegar las dos Edge Functions y programar el cron diario | Mientras no se haga, el botón "Conectar con Google Drive" existe pero no puede completarse |
 
 ## Migración en curso: de licencia por dispositivo a cuenta de empresa con suscripción
 

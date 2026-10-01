@@ -412,6 +412,8 @@ export type AuditAction =
   | 'correction.reject'
   | 'branch.create'
   | 'branch.edit'
+  | 'integration.connect'
+  | 'integration.disconnect'
   | 'user.role_change'
   | 'face.rejected'
 
