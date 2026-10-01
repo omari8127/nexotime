@@ -10,7 +10,10 @@ import type { Employee } from '@/types'
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'clear', '0', 'back']
 /** How long to wait for the camera before giving up and checking in without a
  *  photo — a missing or blocked camera must never stop someone from clocking in. */
-const PHOTO_TIMEOUT_MS = 4000
+const PHOTO_TIMEOUT_MS = 7000
+/** Seconds of visible countdown once the camera is ready, so the photo is a
+ *  deliberate "look up and smile" moment instead of an invisible instant snap. */
+const PHOTO_COUNTDOWN_S = 3
 
 export function NumberPinFlow({
   employees,
@@ -25,6 +28,7 @@ export function NumberPinFlow({
   const [step, setStep] = useState<'number' | 'pin' | 'photo'>('number')
   const [identified, setIdentified] = useState<Employee | null>(null)
   const { videoRef, state: cameraState } = useCameraStream(step === 'photo')
+  const [countdown, setCountdown] = useState(PHOTO_COUNTDOWN_S)
   const [value, setValueState] = useState('')
   // Mirror of `value` that is always current, so a fast typist's Enter never reads stale state.
   const valueRef = useRef('')
@@ -116,16 +120,24 @@ export function NumberPinFlow({
       onIdentifiedRef.current(identifiedRef.current, photo)
     }
     const timeout = window.setTimeout(() => finish(undefined), PHOTO_TIMEOUT_MS)
-    let capture: number | undefined
+    let tick: number | undefined
     if (cameraState === 'ready') {
-      // A short grace period so the frame isn't the camera's first, still-dark one.
-      capture = window.setTimeout(() => finish(videoRef.current ? captureVideoFrame(videoRef.current) : undefined), 450)
+      // Visible "3, 2, 1" so the photo is a deliberate moment, not an invisible instant snap.
+      tick = window.setInterval(() => {
+        setCountdown((s) => {
+          if (s <= 1) {
+            finish(videoRef.current ? captureVideoFrame(videoRef.current) : undefined)
+            return 0
+          }
+          return s - 1
+        })
+      }, 1000)
     } else if (cameraState === 'error') {
       finish(undefined)
     }
     return () => {
       clearTimeout(timeout)
-      if (capture) clearTimeout(capture)
+      if (tick) clearInterval(tick)
     }
   }, [step, cameraState, videoRef])
 
@@ -159,14 +171,26 @@ export function NumberPinFlow({
             <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
               <Loader2 className="h-7 w-7 animate-spin text-white/70" />
             </div>
-          ) : null}
+          ) : (
+            <motion.div
+              key={countdown}
+              initial={{ scale: 1.4, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.3 }}
+              className="pointer-events-none absolute inset-0 flex items-center justify-center bg-slate-900/25"
+            >
+              <span className="font-mono text-5xl font-bold text-white drop-shadow">{countdown}</span>
+            </motion.div>
+          )}
         </div>
         <div className="space-y-1">
           <p className="flex items-center justify-center gap-1.5 text-lg font-semibold text-slate-900">
             <Camera className="h-4 w-4 text-primary" />
             Hola, {identified?.firstName}
           </p>
-          <p className="text-sm text-muted-foreground">Tomando tu foto de verificación…</p>
+          <p className="text-sm text-muted-foreground">
+            {cameraState === 'ready' ? 'Mira a la cámara…' : 'Tomando tu foto de verificación…'}
+          </p>
         </div>
       </div>
     )

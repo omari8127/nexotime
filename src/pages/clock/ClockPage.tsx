@@ -75,6 +75,11 @@ const PUNCH_TYPE_ICON: Record<PunchType, typeof LogIn> = {
 
 const PUNCH_TYPE_ORDER: PunchType[] = ['entry', 'lunch_out', 'lunch_in', 'exit']
 
+/** How long the success screen stays up before closing itself. Longer when it
+ *  has a verification photo on it — there's actually something to look at. */
+const SUCCESS_SCREEN_MS = 4500
+const SUCCESS_SCREEN_MS_WITH_PHOTO = 8000
+
 export function ClockPage() {
   const navigate = useNavigate()
   const company = useDataStore((s) => s.company)
@@ -196,7 +201,8 @@ export function ClockPage() {
 
   useEffect(() => {
     if (phase !== 'success') return
-    const id = setTimeout(() => reset(), 4500)
+    // More time to actually look at the verification photo when there is one.
+    const id = setTimeout(() => reset(), lastPunch?.photo ? SUCCESS_SCREEN_MS_WITH_PHOTO : SUCCESS_SCREEN_MS)
     return () => clearTimeout(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase])
@@ -897,7 +903,10 @@ export function ClockPage() {
                     className="h-full origin-left bg-emerald-500/70"
                     initial={{ scaleX: 1 }}
                     animate={{ scaleX: 0 }}
-                    transition={{ duration: 4.5, ease: 'linear' }}
+                    transition={{
+                      duration: (lastPunch.photo ? SUCCESS_SCREEN_MS_WITH_PHOTO : SUCCESS_SCREEN_MS) / 1000,
+                      ease: 'linear',
+                    }}
                   />
                 </div>
               </motion.div>
