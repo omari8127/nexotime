@@ -82,7 +82,6 @@ avisa para priorizarlo aparte.
 
 - Cobro automático con tarjeta (Stripe / Mercado Pago). Hoy los pagos se registran a mano en el panel de licencias, que ya renueva la licencia y suma ingresos; falta conectar un proveedor.
 - Pruebas de interfaz de extremo a extremo (hoy las pruebas cubren la lógica, no las pantallas).
-- Empaquetado como app: Windows (Electron) y Android (Capacitor); ver `license-server/README.md` sobre licencias en Android.
 - Endurecimiento extra de licencias: exigir licencia vigente también en las reglas de Supabase.
 
 ## Límites conocidos
