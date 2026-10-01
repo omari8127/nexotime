@@ -33,6 +33,7 @@ const ACTION_LABEL: Record<AuditAction, string> = {
   'correction.approve': 'Aprobó corrección de asistencia',
   'correction.reject': 'Rechazó corrección de asistencia',
   'branch.create': 'Creó sucursal',
+  'branch.edit': 'Editó sucursal',
   'user.role_change': 'Cambió permisos de usuario',
   'face.rejected': 'Identificación facial rechazada',
 }
