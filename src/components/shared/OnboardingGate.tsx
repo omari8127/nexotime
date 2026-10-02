@@ -23,7 +23,12 @@ function LiveSessionGate({ children }: { children: ReactNode }) {
 export function OnboardingGate({ children }: { children: ReactNode }) {
   const completed = useUIStore((s) => s.onboardingCompleted)
   const mode = useDataStore((s) => s.mode)
+  const status = useAuthStore((s) => s.status)
 
+  // After a page refresh the store starts in demo mode until the saved session is
+  // restored. Deciding now would send a signed-in person to /bienvenida (or flash demo
+  // data), so wait for the session check to finish first.
+  if (status === 'checking') return <FullScreenLoader />
   if (mode === 'live') return <LiveSessionGate>{children}</LiveSessionGate>
   if (!completed) return <Navigate to="/bienvenida" replace />
   return <>{children}</>
@@ -34,6 +39,9 @@ export function OnboardingGate({ children }: { children: ReactNode }) {
  *  set up the tablet to have signed in on it at least once. */
 export function ClockAccessGate({ children }: { children: ReactNode }) {
   const mode = useDataStore((s) => s.mode)
+  const status = useAuthStore((s) => s.status)
+  // Same reason as above: don't show (or let anyone punch into) demo data while the saved session loads.
+  if (status === 'checking') return <FullScreenLoader />
   if (mode === 'live') return <LiveSessionGate>{children}</LiveSessionGate>
   return <>{children}</>
 }
