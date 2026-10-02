@@ -46,6 +46,7 @@ import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { useToday } from '@/hooks/useToday'
 import { useGeolocation } from '@/hooks/useGeolocation'
 import { useLiveRefresh } from '@/hooks/useLiveRefresh'
+import { faceCandidates, loadFaceApi } from '@/lib/face'
 import {
   calculateWeeklyHours,
   canRegisterPunch,
@@ -77,6 +78,7 @@ const PUNCH_TYPE_ORDER: PunchType[] = ['entry', 'lunch_out', 'lunch_in', 'exit']
 
 /** How long the success screen stays up before closing itself. Longer when it
  *  has a verification photo on it — there's actually something to look at. */
+const FACE_CONFIRM_SECONDS = 2
 const SUCCESS_SCREEN_MS = 4500
 const SUCCESS_SCREEN_MS_WITH_PHOTO = 8000
 
@@ -98,6 +100,15 @@ export function ClockPage() {
   const isOnline = useOnlineStatus()
   const { location: deviceLocation } = useGeolocation()
   useLiveRefresh()
+
+  // Load and warm up the face models in the background as soon as the kiosk opens (only when
+  // someone is actually enrolled), so tapping "Reconocimiento facial" doesn't wait on them.
+  const hasEnrolledFaces = useMemo(() => faceCandidates(allEmployees).length > 0, [allEmployees])
+  useEffect(() => {
+    if (!faceAllowed || !hasEnrolledFaces) return
+    const id = window.setTimeout(() => void loadFaceApi().catch(() => undefined), 800)
+    return () => clearTimeout(id)
+  }, [faceAllowed, hasEnrolledFaces])
 
   const [branchId, setBranchId] = useState('')
   const [phase, setPhase] = useState<Phase>('idle')
@@ -194,7 +205,10 @@ export function ClockPage() {
   // Auto-register: when the cancel window ends, register the proposed movement.
   useEffect(() => {
     if (phase !== 'confirm' || !confirmPunch) return
-    const id = setTimeout(() => doPunch(confirmPunch.type), kiosk.autoRegisterSeconds * 1000)
+    // Face recognition already matched the person and checked a live blink, so its "No soy yo"
+    // window can be short — queues in the morning shouldn't wait on a countdown.
+    const seconds = method === 'face' ? Math.min(kiosk.autoRegisterSeconds, FACE_CONFIRM_SECONDS) : kiosk.autoRegisterSeconds
+    const id = setTimeout(() => doPunch(confirmPunch.type), seconds * 1000)
     return () => clearTimeout(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase])

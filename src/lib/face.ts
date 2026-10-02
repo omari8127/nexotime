@@ -25,17 +25,23 @@ export function loadFaceApi(): Promise<FaceApi> {
       await tf.ready()
       const base = `${import.meta.env.BASE_URL}models`
       await Promise.all([
-        // SSD MobileNet finds faces far more reliably than the tiny detector in poor light,
-        // at an angle or farther from the camera — and better boxes mean better descriptors.
+        // Two detectors: the tiny one is several times faster and handles the normal case;
+        // SSD MobileNet is slower but finds faces in poor light, at an angle or farther away,
+        // so it is the fallback (and what enrollment uses for its saved samples).
+        api.nets.tinyFaceDetector.loadFromUri(base),
         api.nets.ssdMobilenetv1.loadFromUri(base),
         api.nets.faceLandmark68Net.loadFromUri(base),
         api.nets.faceRecognitionNet.loadFromUri(base),
       ])
-      // The first inference compiles the GPU shaders (seconds on a tablet). Pay that here,
-      // while the screen says "Preparando…", instead of on the first real camera frame.
+      // The first inference of each network compiles its GPU shaders (seconds on a tablet).
+      // Pay that here, in the background / on the "Preparando…" screen, instead of on the
+      // first real camera frame: run every network once on blank input.
       try {
-        const blank = Object.assign(document.createElement('canvas'), { width: 160, height: 120 })
-        await api.detectAllFaces(blank, new api.SsdMobilenetv1Options({ minConfidence: 0.5 }))
+        const canvas = (size: number) => Object.assign(document.createElement('canvas'), { width: size, height: size })
+        await api.detectAllFaces(canvas(160), new api.TinyFaceDetectorOptions({ inputSize: 320 }))
+        await api.detectAllFaces(canvas(160), new api.SsdMobilenetv1Options({ minConfidence: 0.5 }))
+        await api.nets.faceLandmark68Net.detectLandmarks(canvas(112))
+        await api.nets.faceRecognitionNet.computeFaceDescriptor(canvas(150))
       } catch {
         /* warm-up is best effort */
       }
@@ -156,14 +162,31 @@ function faceSharpness(video: HTMLVideoElement, box: { x: number; y: number; wid
   return sum / ((FOCUS - 2) * (FOCUS - 2))
 }
 
+/**
+ * 'accurate' (default): SSD MobileNet. Every descriptor that is saved or compared (enrollment
+ * samples, the reloj, the recognition test) must come from this one: a different detector
+ * shifts the descriptor of the same face by ≈0.09, which we avoid paying for matching.
+ * 'fast': the tiny detector, with SSD as a fallback when it finds nothing. Only for readings
+ * that never leave the screen (enrollment pose guidance), where speed is free.
+ */
+export type DetectorKind = 'fast' | 'accurate'
+
 export async function readFace(
   api: FaceApi,
   video: HTMLVideoElement,
   withDescriptor: boolean,
+  detector: DetectorKind = 'accurate',
 ): Promise<ReadResult> {
-  const options = new api.SsdMobilenetv1Options({ minConfidence: 0.5, maxResults: 3 })
-  const task = api.detectAllFaces(video, options).withFaceLandmarks()
-  const faces = withDescriptor ? await task.withFaceDescriptors() : await task
+  const run = (options: Parameters<FaceApi['detectAllFaces']>[1]) => {
+    const task = api.detectAllFaces(video, options).withFaceLandmarks()
+    return withDescriptor ? task.withFaceDescriptors() : task
+  }
+  const ssd = () => run(new api.SsdMobilenetv1Options({ minConfidence: 0.5, maxResults: 3 }))
+  let faces =
+    detector === 'accurate'
+      ? await ssd()
+      : await run(new api.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.45 }))
+  if (faces.length === 0 && detector === 'fast') faces = await ssd()
   if (faces.length === 0) return { kind: 'none' }
   if (faces.length > 1) return { kind: 'multiple' }
   const f = faces[0]

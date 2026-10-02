@@ -39,11 +39,11 @@ const STEPS = [
   { pose: 'front', title: 'Vuelve a mirar de frente', nudge: 'Mira directo a la cámara' },
 ] as const
 
-const SAMPLE_GAP_MS = 500
+const SAMPLE_GAP_MS = 250
 /** Good frames in a row before a sample is taken: this is the visible "hold still" moment. */
-const STABLE_FRAMES = 6
+const STABLE_FRAMES = 4
 /** Frames averaged into each saved sample (averages out frame-to-frame noise). */
-const SAMPLE_FRAMES = 3
+const SAMPLE_FRAMES = 2
 /** Bad frames in a row tolerated before the hold progress restarts, so one flicker doesn't reset it. */
 const MISS_TOLERANCE = 3
 /** Head-turn gates are relative to the person's own straight-ahead yaw (learned on step 1):
@@ -113,6 +113,12 @@ export function FaceEnrollDialog({
     othersRef.current = others
   })
 
+  // Start loading the face models as soon as the dialog opens (while the person reads the
+  // tips), so "Comenzar" doesn't sit on a "Preparando…" screen.
+  useEffect(() => {
+    if (open) void loadFaceApi().catch(() => undefined)
+  }, [open])
+
   useEffect(() => {
     if (!open) {
       setStage(testOnly ? 'test' : 'intro')
@@ -170,7 +176,8 @@ export function FaceEnrollDialog({
         let finished = false
         try {
           // Cheap pass first (no descriptor): is there one clear face in the right pose?
-          const result = await readFace(api, video, false)
+          // 'fast' is fine here: this reading only guides the pose and is never saved.
+          const result = await readFace(api, video, false, 'fast')
           if (!alive) return
           const step = STEPS[samples.length]
           if (result.kind !== 'face') {
@@ -208,8 +215,9 @@ export function FaceEnrollDialog({
               if (stable >= STABLE_FRAMES && Date.now() - lastAccepted >= SAMPLE_GAP_MS) {
                 // Hold complete: read a few frames with descriptors and average them.
                 const frames: number[][] = []
-                for (let i = 0; i < SAMPLE_FRAMES && alive; i++) {
-                  const again = await readFace(api, video, true)
+                // Saved samples use the accurate detector, same as the reloj; one spare attempt for a bad frame.
+                for (let i = 0; i < SAMPLE_FRAMES + 1 && frames.length < SAMPLE_FRAMES && alive; i++) {
+                  const again = await readFace(api, video, true, 'accurate')
                   if (
                     again.kind === 'face' &&
                     again.reading.descriptor &&
@@ -219,7 +227,7 @@ export function FaceEnrollDialog({
                   }
                 }
                 if (!alive) return
-                if (frames.length < 2) {
+                if (frames.length < SAMPLE_FRAMES) {
                   restartHold()
                   setHint('No alcanzamos a verte bien. Mantén la posición.')
                 } else {
@@ -257,7 +265,7 @@ export function FaceEnrollDialog({
                       // Let the last segment light up before moving on.
                       stageTimer = window.setTimeout(() => {
                         if (alive) setStage('test')
-                      }, 900)
+                      }, 600)
                     } else {
                       setHint('')
                     }
@@ -269,7 +277,7 @@ export function FaceEnrollDialog({
         } catch {
           /* skip a bad frame */
         }
-        if (!finished && alive) timer = window.setTimeout(loop, 80)
+        if (!finished && alive) timer = window.setTimeout(loop, 30)
       }
       loop()
     }
@@ -319,7 +327,7 @@ export function FaceEnrollDialog({
           setTestResult({ ok: false })
           return
         }
-        timer = window.setTimeout(loop, 150)
+        timer = window.setTimeout(loop, 60)
       }
       loop()
     }

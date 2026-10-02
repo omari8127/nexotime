@@ -31,6 +31,9 @@ const SMOOTHING_FRAMES = 3
 /** Frames of a clear, well-lit face with no trustworthy match before it is logged as rejected. */
 const REJECT_FRAMES = 14
 const REJECT_LOG_COOLDOWN_MS = 30_000
+/** A blink seen while the face was being matched counts if it happened this recently, so people
+ *  who blink naturally while looking at the camera don't have to wait to blink again. */
+const BLINK_GRACE_MS = 3500
 
 /**
  * Identify by face, hands-free:
@@ -122,6 +125,8 @@ export function FaceScanFlow({
         logRef.current(reason)
       }
       const blink = new BlinkDetector()
+      let blinksSeen = 0
+      let lastBlinkAt = 0
 
       const restart = (message: string) => {
         identified = null
@@ -131,6 +136,8 @@ export function FaceScanFlow({
         unknownFrames = 0
         step = 'blink'
         blink.blinks = 0
+        blinksSeen = 0
+        lastBlinkAt = 0
         setWho(null)
         setStage('searching')
         setHint(message)
@@ -158,6 +165,11 @@ export function FaceScanFlow({
             streak = 0
             setHint('Debe haber una sola persona frente a la cámara')
           } else if (!identified) {
+            // Watch for blinks from the very first frame, in parallel with the match.
+            if (blink.update(result.reading.ear) > blinksSeen) {
+              blinksSeen = blink.blinks
+              lastBlinkAt = Date.now()
+            }
             const issues = qualityIssues(result.reading)
             if (issues.length > 0 || !result.reading.descriptor) {
               recent = []
@@ -180,8 +192,14 @@ export function FaceScanFlow({
                   identified = m
                   livenessStart = Date.now()
                   setWho(m.employee.firstName)
-                  setStage('liveness')
-                  setHint('Parpadea una vez para confirmar')
+                  const blinkedJustNow = blink.blinks > 0 && Date.now() - lastBlinkAt <= BLINK_GRACE_MS
+                  if (!blinkedJustNow) blink.blinks = 0
+                  // Already blinked while matching: the next pass finishes the liveness check at
+                  // once (skip flashing the "blink" prompt for a split second).
+                  if (!(blinkedJustNow && !faceChallenge)) {
+                    setStage('liveness')
+                    setHint('Parpadea una vez para confirmar')
+                  }
                 }
               } else {
                 streak = 0
@@ -236,7 +254,7 @@ export function FaceScanFlow({
         } catch {
           /* a dropped frame is not worth surfacing */
         }
-        timer = window.setTimeout(loop, identified ? 60 : 110)
+        timer = window.setTimeout(loop, identified ? 30 : 40)
       }
       loop()
     }
