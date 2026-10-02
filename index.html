@@ -11,9 +11,48 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="description" content="NEXOTIME — control de asistencia y reloj checador para empresas." />
     <title>NEXOTIME</title>
+
+    <!-- Fonts load in parallel with the app instead of after the CSS file (was an @import). -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600;700&family=IBM+Plex+Mono:wght@500;600;700&display=swap"
+    />
+
+    <script>
+      // Apply the saved theme before first paint so the boot screen (and the app) never flash the wrong one.
+      try {
+        if (JSON.parse(localStorage.getItem('nexotime.ui') || '{}').theme === 'dark') {
+          document.documentElement.classList.add('dark')
+        }
+      } catch (e) {}
+    </script>
+    <style>
+      .nx-boot { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; background: #f8fafc; }
+      .dark .nx-boot { background: #0b1220; }
+      .nx-boot svg { width: 56px; height: 56px; animation: nx-pop 1.6s ease-in-out infinite; }
+      .nx-boot-bar { width: 120px; height: 3px; border-radius: 3px; overflow: hidden; background: rgba(100, 116, 139, 0.2); }
+      .nx-boot-bar::after { content: ''; display: block; width: 45%; height: 100%; border-radius: 3px; background: #2554eb; animation: nx-slide 1.1s ease-in-out infinite; }
+      @keyframes nx-pop { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+      @keyframes nx-slide { 0% { transform: translateX(-110%); } 100% { transform: translateX(260%); } }
+      @media (prefers-reduced-motion: reduce) { .nx-boot svg, .nx-boot-bar::after { animation: none; } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Shown only until React mounts and replaces it. -->
+      <div class="nx-boot" role="status" aria-label="Cargando Nexotime">
+        <svg viewBox="0 0 40 40" aria-hidden="true">
+          <rect width="40" height="40" rx="10" fill="#1d4fd8" />
+          <path d="M12.5 28.5V11.5L27.5 28.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M27.5 28.5V17" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" />
+          <circle cx="27.5" cy="11.5" r="3.4" fill="#7dd3fc" />
+        </svg>
+        <div class="nx-boot-bar"></div>
+      </div>
+    </div>
+    <noscript>Nexotime necesita JavaScript para funcionar. Actívalo en tu navegador e inténtalo de nuevo.</noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

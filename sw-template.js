@@ -2,7 +2,7 @@
  *
  * Goal: the reloj checador must OPEN with no Internet (tablet reboot, router down).
  *  - The app shell and every built file are cached on install (all-or-nothing).
- *  - The face-recognition models (~7 MB) are cached in the background, once.
+ *  - The face-recognition models (~12 MB) are cached in the background, once.
  *  - Navigation is network-first (so updates arrive), falling back to the cached shell.
  *  - Only same-origin GET requests are touched: Supabase and the license API always go
  *    to the network, where the app handles being offline itself (write queue, signed license).

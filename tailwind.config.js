@@ -83,6 +83,13 @@ export default {
           from: { height: 'var(--radix-accordion-content-height)' },
           to: { height: '0' },
         },
+        shimmer: {
+          '100%': { transform: 'translateX(100%)' },
+        },
+        indeterminate: {
+          '0%': { transform: 'translateX(-110%)' },
+          '100%': { transform: 'translateX(260%)' },
+        },
         'scan-line': {
           '0%': { transform: 'translateY(0)' },
           '50%': { transform: 'translateY(220px)' },
@@ -93,6 +100,8 @@ export default {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
         'scan-line': 'scan-line 2.4s ease-in-out infinite',
+        shimmer: 'shimmer 1.6s ease-in-out infinite',
+        indeterminate: 'indeterminate 1.1s ease-in-out infinite',
       },
     },
   },

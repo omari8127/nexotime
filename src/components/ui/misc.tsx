@@ -81,7 +81,17 @@ export function Separator({
 /* -------------------------------- Skeleton ------------------------------- */
 
 export function Skeleton({ className }: { className?: string }) {
-  return <div className={cn('animate-pulse rounded-md bg-muted', className)} />
+  return (
+    <div
+      aria-hidden
+      className={cn(
+        'relative overflow-hidden rounded-md bg-muted',
+        'after:absolute after:inset-0 after:-translate-x-full after:bg-gradient-to-r after:from-transparent after:via-foreground/[0.06] after:to-transparent',
+        'motion-safe:after:animate-shimmer',
+        className,
+      )}
+    />
+  )
 }
 
 /* -------------------------------- Tooltip -------------------------------- */

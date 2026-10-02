@@ -1,20 +1,12 @@
 import type { ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
-import { Loader2 } from 'lucide-react'
+import { FullScreenLoader } from '@/components/shared/Loaders'
 import { useUIStore } from '@/store/uiStore'
 import { useDataStore } from '@/store/dataStore'
 import { useAuthStore } from '@/store/authStore'
 import { usePermissions } from '@/hooks/useScopedData'
 import { homePathFor } from '@/data/roles'
 import type { Permission } from '@/types'
-
-function FullScreenLoader() {
-  return (
-    <div className="flex min-h-dvh items-center justify-center bg-background">
-      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-    </div>
-  )
-}
 
 /** Shared by any route that requires a real (live-mode) session: while the
  *  session restore check is running show a loader, then either let the route

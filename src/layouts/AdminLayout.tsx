@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { Suspense, useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Menu, X } from 'lucide-react'
@@ -6,6 +6,7 @@ import { Sidebar } from '@/components/shared/Sidebar'
 import { NexotimeLogo } from '@/components/shared/Logo'
 import { BranchSelector } from '@/components/shared/BranchSelector'
 import { NotificationBell } from '@/components/shared/NotificationBell'
+import { PageSkeleton } from '@/components/shared/Loaders'
 import { useUIStore, applyTheme } from '@/store/uiStore'
 import { useDataStore } from '@/store/dataStore'
 import { copyrightLine } from '@/data/legal'
@@ -80,7 +81,9 @@ export function AdminLayout() {
 
         <main className="flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-[1180px] px-4 py-6 sm:px-6 sm:py-8">
-            <Outlet />
+            <Suspense fallback={<PageSkeleton />}>
+              <Outlet />
+            </Suspense>
             <p className="mt-10 text-center text-xs text-muted-foreground">{copyrightLine()}</p>
           </div>
         </main>
