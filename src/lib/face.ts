@@ -11,7 +11,7 @@ export type FaceApi = typeof import('@vladmandic/face-api')
 
 let apiPromise: Promise<FaceApi> | null = null
 
-/** Lazy-loads the library (≈1.3 MB) and the three models (≈7 MB) once. */
+/** Lazy-loads the library (≈1.3 MB) and the three models (≈12 MB) once. */
 export function loadFaceApi(): Promise<FaceApi> {
   if (!apiPromise) {
     apiPromise = (async () => {
@@ -25,10 +25,20 @@ export function loadFaceApi(): Promise<FaceApi> {
       await tf.ready()
       const base = `${import.meta.env.BASE_URL}models`
       await Promise.all([
-        api.nets.tinyFaceDetector.loadFromUri(base),
+        // SSD MobileNet finds faces far more reliably than the tiny detector in poor light,
+        // at an angle or farther from the camera — and better boxes mean better descriptors.
+        api.nets.ssdMobilenetv1.loadFromUri(base),
         api.nets.faceLandmark68Net.loadFromUri(base),
         api.nets.faceRecognitionNet.loadFromUri(base),
       ])
+      // The first inference compiles the GPU shaders (seconds on a tablet). Pay that here,
+      // while the screen says "Preparando…", instead of on the first real camera frame.
+      try {
+        const blank = Object.assign(document.createElement('canvas'), { width: 160, height: 120 })
+        await api.detectAllFaces(blank, new api.SsdMobilenetv1Options({ minConfidence: 0.5 }))
+      } catch {
+        /* warm-up is best effort */
+      }
       return api
     })().catch((err) => {
       apiPromise = null // let the next attempt retry
@@ -53,8 +63,9 @@ export interface Tuning {
 
 export const TUNING: Record<FaceStrictness, Tuning> = {
   strict: { threshold: 0.5, margin: 0.07, streak: 3 },
-  // Default level: ≈28% de coincidencia mínima (antes ≈40%) — reconoce más rápido, con más margen de tolerancia.
-  balanced: { threshold: 0.65, margin: 0.04, streak: 2 },
+  // Default level: ≈25% de coincidencia mínima (antes ≈28% y, antes, ≈40%) — reconoce más rápido, con más
+  // margen de tolerancia. El margen contra el segundo más parecido sigue protegiendo contra gemelos/parecidos.
+  balanced: { threshold: 0.675, margin: 0.04, streak: 2 },
   relaxed: { threshold: 0.72, margin: 0.03, streak: 2 },
 }
 
@@ -150,7 +161,7 @@ export async function readFace(
   video: HTMLVideoElement,
   withDescriptor: boolean,
 ): Promise<ReadResult> {
-  const options = new api.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.4 })
+  const options = new api.SsdMobilenetv1Options({ minConfidence: 0.5, maxResults: 3 })
   const task = api.detectAllFaces(video, options).withFaceLandmarks()
   const faces = withDescriptor ? await task.withFaceDescriptors() : await task
   if (faces.length === 0) return { kind: 'none' }

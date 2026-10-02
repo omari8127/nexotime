@@ -87,7 +87,7 @@ export interface KioskSettings {
   faceRequireBlink?: boolean
   /** How sure the system must be before accepting a face. */
   faceStrictness?: FaceStrictness
-  /** Exact match distance (0.35–0.65, lower = stricter). Overrides the strictness level when set. */
+  /** Exact match distance (0.35–0.75, lower = stricter). Overrides the strictness level when set. */
   faceThreshold?: number
   /** Besides blinking, ask to turn the head to one side and back (harder to fake with a video). */
   faceChallenge?: boolean

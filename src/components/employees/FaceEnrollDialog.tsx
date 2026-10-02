@@ -21,6 +21,7 @@ import {
   faceCandidates,
   loadFaceApi,
   matchPercent,
+  meanDescriptor,
   nearestFace,
   qualityIssues,
   readFace,
@@ -41,7 +42,9 @@ const STEPS = [
 ] as const
 
 const SAMPLE_GAP_MS = 650
-const STABLE_FRAMES = 2 // the pose and quality must hold for this many frames in a row
+/** The pose and quality must hold for this many frames in a row; each saved sample is the
+ *  average of those frames, which averages out frame-to-frame noise in the descriptor. */
+const STABLE_FRAMES = 4
 const SAME_PERSON_FRONT = 0.42
 const SAME_PERSON_TURNED = 0.5
 const DUPLICATE_DISTANCE = 0.42
@@ -123,7 +126,12 @@ export function FaceEnrollDialog({
     const samples: number[][] = []
     let lastAccepted = 0
     let stable = 0
+    let buf: number[][] = []
     let firstTurnSide = 0
+    const resetStable = () => {
+      stable = 0
+      buf = []
+    }
 
     const fail = (msg: string) => {
       setError(msg)
@@ -146,7 +154,7 @@ export function FaceEnrollDialog({
           const result = await readFace(api, video, true)
           if (!alive) return
           if (result.kind !== 'face') {
-            stable = 0
+            resetStable()
             setLive({ issues: [], faces: result.kind === 'none' ? 'none' : 'multiple' })
             setHint(result.kind === 'none' ? 'Coloca el rostro dentro del óvalo' : 'Debe aparecer una sola persona')
           } else {
@@ -162,20 +170,21 @@ export function FaceEnrollDialog({
                   ? side !== 0
                   : side !== 0 && side === -firstTurnSide
             if (issues.length > 0) {
-              stable = 0
+              resetStable()
               setHint(QUALITY_TEXT[issues[0]])
             } else if (!poseOk) {
-              stable = 0
+              resetStable()
               setHint(step.text)
             } else {
               stable += 1
+              if (r.descriptor) buf.push(r.descriptor)
               setHint(step.text)
-              if (stable >= STABLE_FRAMES && r.descriptor && Date.now() - lastAccepted >= SAMPLE_GAP_MS) {
-                const d = r.descriptor
+              if (stable >= STABLE_FRAMES && buf.length >= STABLE_FRAMES && Date.now() - lastAccepted >= SAMPLE_GAP_MS) {
+                const d = meanDescriptor(buf.slice(-STABLE_FRAMES))
                 const limit = step.pose === 'front' ? SAME_PERSON_FRONT : SAME_PERSON_TURNED
                 if (samples.length > 0 && descriptorDistance(samples[0], d) > limit) {
                   setHint('Mantén el mismo rostro frente a la cámara')
-                  stable = 0
+                  resetStable()
                 } else {
                   const twin = othersRef.current.find((c) =>
                     c.descriptors.some((x) => descriptorDistance(x, d) < DUPLICATE_DISTANCE),
@@ -187,7 +196,7 @@ export function FaceEnrollDialog({
                   if (step.pose === 'turn') firstTurnSide = side
                   samples.push(d)
                   lastAccepted = Date.now()
-                  stable = 0
+                  resetStable()
                   setCount(samples.length)
                   if (samples.length >= STEPS.length) {
                     saved.current = samples
