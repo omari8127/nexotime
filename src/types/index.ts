@@ -83,14 +83,10 @@ export interface KioskSettings {
   autoRegister?: boolean
   /** Seconds of the cancel window before auto-registering. */
   autoRegisterSeconds?: number
-  /** Ask for a blink before accepting a face (blocks photos on a screen or paper). */
-  faceRequireBlink?: boolean
   /** How sure the system must be before accepting a face. */
   faceStrictness?: FaceStrictness
   /** Exact match distance (0.35–0.75, lower = stricter). Overrides the strictness level when set. */
   faceThreshold?: number
-  /** Besides blinking, ask to turn the head to one side and back (harder to fake with a video). */
-  faceChallenge?: boolean
   /** Minimum minutes between two punches of the same person (avoids double punches). */
   minGapMinutes?: number
   /** Code (4–8 digits) that unlocks leaving the reloj checador back to the admin panel. */

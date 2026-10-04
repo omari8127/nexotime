@@ -92,4 +92,4 @@ avisa para priorizarlo aparte.
 ## Límites conocidos
 
 - Una app web puede ser alterada por una persona técnica; la licencia frena el uso normal no autorizado, no a un atacante decidido.
-- El reconocimiento facial no es infalible ni detiene un video grabado del empleado; por eso hay prueba de vida, umbral ajustable y métodos alternos.
+- El reconocimiento facial no es infalible ni detiene un video grabado del empleado; por eso hay umbral ajustable, margen contra personas parecidas, foto de verificación en pantalla y métodos alternos. Se quitó la prueba de vida por parpadeo porque estorbaba más de lo que protegía; si algún cliente la necesita, habría que volver a incorporarla.

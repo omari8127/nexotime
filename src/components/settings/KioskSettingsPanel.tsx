@@ -48,10 +48,8 @@ export function KioskSettingsPanel() {
   const saved = resolveKiosk(company.attendanceSettings)
   const [autoRegister, setAutoRegister] = useState(saved.autoRegister)
   const [seconds, setSeconds] = useState(String(saved.autoRegisterSeconds))
-  const [blink, setBlink] = useState(saved.faceRequireBlink)
   const [strictness, setStrictness] = useState<FaceStrictness>(saved.faceStrictness)
   const [threshold, setThreshold] = useState<number | null>(saved.faceThreshold)
-  const [challenge, setChallenge] = useState(saved.faceChallenge)
   const [gap, setGap] = useState(String(saved.minGapMinutes))
   const [exitPin, setExitPin] = useState(saved.exitPin)
   const exitPinValid = /^\d{4,8}$/.test(exitPin)
@@ -63,10 +61,8 @@ export function KioskSettingsPanel() {
   const dirty =
     autoRegister !== saved.autoRegister ||
     Number(seconds) !== saved.autoRegisterSeconds ||
-    blink !== saved.faceRequireBlink ||
     strictness !== saved.faceStrictness ||
     threshold !== saved.faceThreshold ||
-    challenge !== saved.faceChallenge ||
     Number(gap) !== saved.minGapMinutes ||
     (exitPin !== saved.exitPin && exitPinValid)
 
@@ -85,10 +81,8 @@ export function KioskSettingsPanel() {
         kiosk: {
           autoRegister,
           autoRegisterSeconds: Number(seconds),
-          faceRequireBlink: blink,
           faceStrictness: strictness,
           faceThreshold: threshold ?? undefined,
-          faceChallenge: challenge,
           minGapMinutes: Number(gap),
           exitPin: exitPinValid ? exitPin : saved.exitPin,
         },
@@ -134,19 +128,7 @@ export function KioskSettingsPanel() {
             </div>
           ) : null}
 
-          <div className="border-t border-border pt-5">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <Label>Prueba de vida (parpadeo)</Label>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Pide parpadear antes de aceptar un rostro. Evita que alguien use una foto o una pantalla.
-                </p>
-              </div>
-              <Switch checked={blink} onCheckedChange={setBlink} disabled={!canManage} />
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center justify-between gap-4 border-t border-border pt-5">
             <div>
               <Label>Exigencia del reconocimiento</Label>
               <p className="mt-1 text-sm text-muted-foreground">{STRICTNESS[strictness].text}</p>
@@ -158,19 +140,6 @@ export function KioskSettingsPanel() {
               disabled={!canManage}
               options={(Object.keys(STRICTNESS) as FaceStrictness[]).map((k) => ({ value: k, label: STRICTNESS[k].label }))}
             />
-          </div>
-
-          <div className="border-t border-border pt-5">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <Label>Prueba de vida reforzada</Label>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Además de parpadear, pide girar la cabeza a un lado y volver. Es más difícil de burlar con un video
-                  grabado, pero es un paso más para el empleado.
-                </p>
-              </div>
-              <Switch checked={challenge} onCheckedChange={setChallenge} disabled={!canManage || !blink} />
-            </div>
           </div>
 
           <div className="space-y-2">
@@ -339,8 +308,8 @@ export function KioskSettingsPanel() {
             Intentos rechazados
           </CardTitle>
           <p className="text-sm text-muted-foreground">
-            Rostros que el reloj no aceptó por baja confianza o por no superar la prueba de vida. También aparecen en
-            Auditoría.
+            Rostros que el reloj no aceptó por baja confianza o por parecerse demasiado a otra persona. También
+            aparecen en Auditoría.
           </p>
         </CardHeader>
         <CardContent>

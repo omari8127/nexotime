@@ -61,7 +61,7 @@ import type { CaptureMethod, Employee, Punch, PunchLocation, PunchType } from '@
 type Phase = 'idle' | 'method' | 'face' | 'qr' | 'barcode' | 'number' | 'confirm' | 'punch' | 'success'
 
 const METHODS: Array<{ key: Phase; method: CaptureMethod; title: string; text: string; Icon: typeof QrCode; soon?: boolean }> = [
-  { key: 'face', method: 'face', title: 'Reconocimiento facial', text: 'Mira a la cámara y parpadea', Icon: ScanFace, soon: true },
+  { key: 'face', method: 'face', title: 'Reconocimiento facial', text: 'Mira a la cámara', Icon: ScanFace, soon: true },
   { key: 'qr', method: 'qr', title: 'Escanear código QR', text: 'Muestra tu credencial a la cámara', Icon: QrCode },
   { key: 'barcode', method: 'barcode', title: 'Código de barras', text: 'Acerca tu credencial a la cámara o lector', Icon: Barcode },
   { key: 'number', method: 'employee_number', title: 'Número de empleado', text: 'Escribe tu número y tu PIN', Icon: UserRound },

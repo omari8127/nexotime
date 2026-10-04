@@ -7,7 +7,7 @@ Sistema para que las empresas de México registren la asistencia de su personal 
 ## Qué incluye
 
 **Reloj checador** (`/clock`, pantalla completa, funciona sin Internet)
-- Identificación por **reconocimiento facial** (con prueba de vida por parpadeo), **código QR**, **código de barras** o **número de empleado + PIN**.
+- Identificación por **reconocimiento facial** (con foto de verificación momentánea para confirmar quién checa), **código QR**, **código de barras** o **número de empleado + PIN**.
 - Propone el siguiente movimiento (entrada, comida, salida) y lo registra solo tras una cuenta regresiva que el empleado puede cancelar.
 - Evita registros dobles, valida la secuencia del día y guarda las checadas en el equipo si se cae la red.
 
