@@ -82,6 +82,25 @@ const FACE_CONFIRM_SECONDS = 2
 const SUCCESS_SCREEN_MS = 4500
 const SUCCESS_SCREEN_MS_WITH_PHOTO = 8000
 
+const CLOCK_BRANCH_KEY = 'nexotime.clockBranch'
+
+/** The branch this device's kiosk was last set to (per device, so a tablet keeps its own). */
+function readClockBranch(): string {
+  try {
+    return localStorage.getItem(CLOCK_BRANCH_KEY) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+function saveClockBranch(id: string) {
+  try {
+    localStorage.setItem(CLOCK_BRANCH_KEY, id)
+  } catch {
+    /* private mode: it just won't be remembered */
+  }
+}
+
 export function ClockPage() {
   const navigate = useNavigate()
   const company = useDataStore((s) => s.company)
@@ -110,6 +129,10 @@ export function ClockPage() {
     return () => clearTimeout(id)
   }, [faceAllowed, hasEnrolledFaces])
 
+  // Which branch this kiosk is for: what was picked on this screen, else the branch being worked on in
+  // the panel, else the one this device used last time, else the first. It used to be "the first one"
+  // every time, which silently showed a different set of employees whenever a company has 2+ branches.
+  const panelBranch = useUIStore((s) => s.branchFilter)
   const [branchId, setBranchId] = useState('')
   const [phase, setPhase] = useState<Phase>('idle')
   const [selectedPunchType, setSelectedPunchType] = useState<PunchType | null>(null)
@@ -141,7 +164,14 @@ export function ClockPage() {
 
   // Falls back to the first branch once real data loads — a brand-new live
   // company has no "br_centro" (that id only exists in the demo seed).
-  const effectiveBranchId = branches.some((b) => b.id === branchId) ? branchId : (branches[0]?.id ?? '')
+  const effectiveBranchId =
+    [branchId, panelBranch, readClockBranch()].find((id) => id && branches.some((b) => b.id === id)) ??
+    branches[0]?.id ??
+    ''
+  const chooseBranch = (id: string) => {
+    setBranchId(id)
+    saveClockBranch(id)
+  }
 
   const branch = branches.find((b) => b.id === effectiveBranchId)
   // The branch's own address (fixed once by an admin) is the real source of truth for a
@@ -394,7 +424,7 @@ export function ClockPage() {
           >
             <DropdownLabel>Punto de registro</DropdownLabel>
             {branches.map((b) => (
-              <DropdownItem key={b.id} onSelect={() => setBranchId(b.id)}>
+              <DropdownItem key={b.id} onSelect={() => chooseBranch(b.id)}>
                 {b.name}
               </DropdownItem>
             ))}

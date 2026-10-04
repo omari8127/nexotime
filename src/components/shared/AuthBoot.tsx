@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { isSupabaseConfigured, supabase } from '@/lib/supabaseClient'
 import { restoreSession } from '@/services/live/liveApi'
 import {
@@ -19,6 +20,7 @@ import { toast } from '@/components/ui/toast'
  * returns, and reacts to being signed out elsewhere. Renders nothing.
  */
 export function AuthBoot() {
+  const navigate = useNavigate()
   const hydrateLive = useDataStore((s) => s.hydrateLive)
   const switchToDemo = useDataStore((s) => s.switchToDemo)
   const setStatus = useAuthStore((s) => s.setStatus)
@@ -75,7 +77,10 @@ export function AuthBoot() {
         setStatus('anonymous')
         if (useDataStore.getState().mode === 'live') {
           switchToDemo()
-          toast.info('Sesión cerrada', 'Volviste al modo demostración.')
+          // Never stay on a company screen (or the kiosk) showing the sample company in place of the real
+          // one: signed out means signing in again.
+          navigate('/login', { replace: true })
+          toast.info('Sesión cerrada', 'Inicia sesión de nuevo para continuar.')
         }
       }
     })
