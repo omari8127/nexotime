@@ -3,14 +3,47 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <!-- Pinch-zoom stays enabled (accessibility); double-tap zoom is turned off in CSS for the kiosk. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#2554eb" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="description" content="NEXOTIME — control de asistencia y reloj checador para empresas." />
-    <title>NEXOTIME</title>
+    <meta name="description" content="Reloj checador con rostro, QR o código de empleado, horarios, reportes exportables y auditoría completa. Controla la asistencia de tu equipo desde cualquier navegador." />
+    <title>NEXOTIME — Control de asistencia y reloj checador para empresas</title>
+
+    <!-- Link previews (WhatsApp, Facebook, LinkedIn, X) do not run JavaScript: they read these static tags. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="NEXOTIME" />
+    <meta property="og:locale" content="es_MX" />
+    <meta property="og:title" content="NEXOTIME — Control de asistencia y reloj checador para empresas" />
+    <meta property="og:description" content="Reloj checador con rostro, QR o código de empleado, horarios, reportes exportables y auditoría completa." />
+    <meta property="og:url" content="__SITE_URL__/bienvenida" />
+    <meta property="og:image" content="__SITE_URL__/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="NEXOTIME: control de asistencia sin hojas de cálculo" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="NEXOTIME — Control de asistencia y reloj checador" />
+    <meta name="twitter:description" content="Reloj checador con rostro, QR o código de empleado, horarios y reportes." />
+    <meta name="twitter:image" content="__SITE_URL__/og-image.png" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "NEXOTIME",
+        "url": "__SITE_URL__/bienvenida",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web (cualquier navegador)",
+        "inLanguage": "es-MX",
+        "description": "Control de asistencia y reloj checador para empresas: registro con rostro, QR o código de empleado, horarios, reportes exportables y auditoría.",
+        "image": "__SITE_URL__/og-image.png",
+        "author": { "@type": "Person", "name": "Omar Isaird Espinoza Guevara" }
+      }
+    </script>
 
     <!-- Fonts load in parallel with the app instead of after the CSS file (was an @import). -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />

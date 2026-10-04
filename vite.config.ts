@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vitest/config'
 import { serviceWorkerPlugin } from './vite-sw-plugin.ts'
+import { seoPlugin } from './vite-seo-plugin.ts'
 
 const dir = path.dirname(fileURLToPath(import.meta.url))
 
@@ -12,7 +13,7 @@ const tunnelHosts = ['.ngrok-free.app', '.ngrok-free.dev', '.ngrok.app', '.ngrok
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), serviceWorkerPlugin(dir)],
+  plugins: [react(), seoPlugin(), serviceWorkerPlugin(dir)],
   resolve: {
     alias: {
       '@': path.resolve(dir, './src'),

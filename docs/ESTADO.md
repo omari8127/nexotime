@@ -20,6 +20,7 @@
 - Importar correcciones de asistencia desde Excel o CSV: se descarga el periodo ya con las horas registradas, se corrige solo lo necesario y se vuelve a subir; una celda vacía nunca borra un dato.
 - Lector propio de `.xlsx` en el navegador (sin dependencias): entiende archivos reales guardados por Excel, Google Sheets o LibreOffice.
 - Integración con Google Drive (Configuración → Integraciones): cada empresa conecta su propia cuenta y recibe ahí, una vez al día, un CSV con la asistencia del día anterior. Falta la puesta en marcha única del proyecto (ver pendiente #8).
+- Sitio público y SEO: páginas de Aviso legal, Privacidad, Términos y Cookies (`/aviso-legal`, `/privacidad`, `/terminos`, `/cookies`) con enlaces en bienvenida, login y registro; aviso de cookies informativo; casilla «acepto» en el registro (guarda la versión aceptada en el usuario); título, descripción, canonical y Open Graph por ruta; `robots.txt` y `sitemap.xml` reales (se generan en cada build); datos estructurados; imagen de vista previa al compartir; íconos PNG; contraste revisado (WCAG AA) y zoom del móvil habilitado.
 
 ## Pendiente — depende de ti (no se puede hacer desde el código)
 
@@ -33,6 +34,8 @@
 | 6 | **Piloto de 2 a 4 semanas** con una empresa de confianza | Detecta problemas reales antes de cobrar |
 | 7 | En Empleados, aceptar el aviso «Regenerar códigos» si hay QR antiguos, y reimprimir gafetes | Los QR viejos son fáciles de adivinar |
 | 8 | **Puesta en marcha de la integración con Google Drive** (`supabase/README.md` § Integraciones): crear la credencial OAuth en Google Cloud Console, correr la migración `006`, desplegar las dos Edge Functions y programar el cron diario | Mientras no se haga, el botón "Conectar con Google Drive" existe pero no puede completarse |
+| 9 | **Completar los datos legales** en `src/data/legal.ts` (`LEGAL_ENTITY`: RFC, domicilio y correo de contacto/ARCO). Mientras estén vacíos, las páginas legales muestran «pendiente de completar». Un abogado debe revisar los textos publicados (aviso legal, privacidad, términos, cookies) | El aviso legal y el de privacidad exigen titular, domicilio y medio para ejercer derechos ARCO |
+| 10 | **Pendientes de la web que necesitan tu decisión o datos**: botón de WhatsApp (número y mensaje), analítica (si es Google Analytics, el aviso de cookies debe pasar a aceptar/rechazar), ficha de Google Business, dominio propio (poner `SITE_URL` en Vercel; el sitemap y las vistas previas lo toman solo) y captcha en el registro (Turnstile + Supabase Auth) | Completan la lista de revisión de un sitio profesional |
 
 ## Migración en curso: de licencia por dispositivo a cuenta de empresa con suscripción
 

@@ -1,8 +1,11 @@
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { NexotimeLogo } from '@/components/shared/Logo'
+import { useAuthStore } from '@/store/authStore'
 
 export function NotFoundPage() {
+  const signedIn = useAuthStore((s) => s.status === 'authenticated')
+
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-background px-6 text-center">
       <NexotimeLogo tone="dark" />
@@ -12,8 +15,8 @@ export function NotFoundPage() {
           La página que buscas no existe o fue movida.
         </p>
       </div>
-      <Link to="/">
-        <Button>Volver al dashboard</Button>
+      <Link to={signedIn ? '/' : '/bienvenida'}>
+        <Button>{signedIn ? 'Volver al panel' : 'Ir al inicio'}</Button>
       </Link>
     </div>
   )

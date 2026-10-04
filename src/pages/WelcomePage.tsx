@@ -6,6 +6,7 @@ import { NexotimeLogo } from '@/components/shared/Logo'
 import { BrandDarkBackdrop } from '@/components/shared/BrandDarkBackdrop'
 import { AnalogClock } from '@/components/clock/AnalogClock'
 import { useLiveClock, formatClockTime } from '@/hooks/useLiveClock'
+import { LegalLinks } from '@/components/shared/LegalLinks'
 import { copyrightLine } from '@/data/legal'
 
 const STEPS = [
@@ -73,7 +74,7 @@ export function WelcomePage() {
                       <s.icon className="h-3.5 w-3.5 text-sky-300" strokeWidth={2} />
                       {s.title}
                     </p>
-                    <p className="mt-0.5 text-sm text-sidebar-foreground/60">{s.text}</p>
+                    <p className="mt-0.5 text-sm text-sidebar-foreground/75">{s.text}</p>
                   </div>
                 </motion.li>
               ))}
@@ -98,7 +99,10 @@ export function WelcomePage() {
             </div>
           </motion.div>
 
-          <p className="mt-12 text-xs text-sidebar-foreground/40">{copyrightLine()}</p>
+          <div className="mt-12 space-y-2.5">
+            <LegalLinks className="text-sidebar-foreground/70 hover:text-white" />
+            <p className="text-xs text-sidebar-foreground/75">{copyrightLine()}</p>
+          </div>
         </div>
 
         <div className="relative hidden items-center justify-center p-12 lg:flex">
@@ -115,7 +119,7 @@ export function WelcomePage() {
             />
             <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.05] shadow-2xl shadow-black/40 backdrop-blur-sm">
               <div className="flex items-center justify-between border-b border-white/10 px-5 py-3.5">
-                <p className="text-xs font-semibold uppercase tracking-wide text-white/50">Reloj checador</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-white/65">Reloj checador</p>
                 <span className="flex items-center gap-1.5 text-[11px] font-medium text-success">
                   <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-success" />
                   Vista previa en vivo
@@ -126,7 +130,7 @@ export function WelcomePage() {
                 <p className="mt-4 text-center font-mono text-3xl font-semibold tabular-nums text-white">
                   {formatClockTime(now)}
                 </p>
-                <p className="mt-1 text-center text-sm text-white/55">Registra tu asistencia</p>
+                <p className="mt-1 text-center text-sm text-white/70">Registra tu asistencia</p>
                 <div className="mt-5 space-y-2">
                   {['Escanear código QR', 'Número de empleado'].map((m) => (
                     <div

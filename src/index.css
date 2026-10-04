@@ -20,7 +20,7 @@
     --secondary-foreground: 222 40% 20%;
 
     --muted: 214 32% 95%;
-    --muted-foreground: 215 16% 47%;
+    --muted-foreground: 215 16% 42%;
 
     --accent: 214 95% 96%;
     --accent-foreground: 222 83% 45%;
@@ -85,6 +85,8 @@
 
   html {
     -webkit-text-size-adjust: 100%;
+    /* No double-tap zoom (a kiosk tablet gets tapped fast); pinch-zoom stays available. */
+    touch-action: manipulation;
   }
 
   body {

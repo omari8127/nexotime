@@ -8,6 +8,9 @@ import { AuthBoot } from '@/components/shared/AuthBoot'
 import { FullScreenLoader } from '@/components/shared/Loaders'
 import { PlanGate } from '@/components/subscription/PlanGate'
 import { FeatureGuard } from '@/components/license/FeatureGuard'
+import { RouteMeta } from '@/components/shared/RouteMeta'
+import { CookieNotice } from '@/components/shared/CookieNotice'
+import { LEGAL_PATHS } from '@/data/legal'
 
 // The first visit (bienvenida / login / registro) loads right away; everything
 // else is split per screen and downloaded when it is first opened, which keeps
@@ -56,6 +59,10 @@ const MyAttendancePage = page(() => import('@/pages/MyAttendancePage'), 'MyAtten
 const IncidenciasPage = page(() => import('@/pages/IncidenciasPage'), 'IncidenciasPage')
 const NotFoundPage = page(() => import('@/pages/NotFoundPage'), 'NotFoundPage')
 const ClockPage = page(() => import('@/pages/clock/ClockPage'), 'ClockPage')
+const AvisoLegalPage = page(() => import('@/pages/legal/LegalPages'), 'AvisoLegalPage')
+const PrivacidadPage = page(() => import('@/pages/legal/LegalPages'), 'PrivacidadPage')
+const TerminosPage = page(() => import('@/pages/legal/LegalPages'), 'TerminosPage')
+const CookiesPage = page(() => import('@/pages/legal/LegalPages'), 'CookiesPage')
 const GoogleDriveCallbackPage = page(
   () => import('@/pages/integrations/GoogleDriveCallbackPage'),
   'GoogleDriveCallbackPage',
@@ -71,6 +78,7 @@ export function App() {
   return (
     <>
       <AuthBoot />
+      <RouteMeta />
       <PlanGate>
       <Suspense fallback={<FullScreenLoader />}>
       <AnimatePresence mode="wait">
@@ -79,6 +87,10 @@ export function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
+          <Route path={LEGAL_PATHS.aviso} element={<AvisoLegalPage />} />
+          <Route path={LEGAL_PATHS.privacidad} element={<PrivacidadPage />} />
+          <Route path={LEGAL_PATHS.terminos} element={<TerminosPage />} />
+          <Route path={LEGAL_PATHS.cookies} element={<CookiesPage />} />
           <Route
             path="/clock"
             element={
@@ -155,6 +167,7 @@ export function App() {
       </AnimatePresence>
       </Suspense>
       </PlanGate>
+      <CookieNotice />
       <Toaster />
     </>
   )

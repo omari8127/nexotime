@@ -80,11 +80,16 @@ export async function signUpCompany(input: {
   ownerName: string
   email: string
   password: string
+  /** Version of the terms / privacy notice the person ticked "acepto" for (kept as proof of consent). */
+  legalVersion?: string
 }) {
   const db = client()
   const { data, error } = await db.auth.signUp({
     email: input.email,
     password: input.password,
+    options: input.legalVersion
+      ? { data: { terms_version: input.legalVersion, terms_accepted_at: new Date().toISOString() } }
+      : undefined,
   })
   if (error) throw new Error(error.message)
   if (!data.session) {

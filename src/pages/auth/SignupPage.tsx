@@ -9,6 +9,7 @@ import { signUpCompany } from '@/services/live/liveApi'
 import { useDataStore } from '@/store/dataStore'
 import { useAuthStore } from '@/store/authStore'
 import { toast } from '@/components/ui/toast'
+import { LEGAL_PATHS, LEGAL_VERSION } from '@/data/legal'
 
 export function SignupPage() {
   const navigate = useNavigate()
@@ -19,6 +20,7 @@ export function SignupPage() {
   const [ownerName, setOwnerName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [accepted, setAccepted] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -33,6 +35,10 @@ export function SignupPage() {
       setError('La contraseña debe tener al menos 6 caracteres.')
       return
     }
+    if (!accepted) {
+      setError('Para crear la cuenta debes aceptar los términos y el aviso de privacidad.')
+      return
+    }
     setLoading(true)
     try {
       const bundle = await signUpCompany({
@@ -40,6 +46,7 @@ export function SignupPage() {
         ownerName: ownerName.trim(),
         email: email.trim(),
         password,
+        legalVersion: LEGAL_VERSION,
       })
       hydrateLive(bundle)
       setAuthStatus('authenticated')
@@ -59,7 +66,7 @@ export function SignupPage() {
       footer={
         <>
           ¿Ya tienes cuenta?{' '}
-          <Link to="/login" className="font-medium text-primary hover:underline">
+          <Link to="/login" className="font-medium text-sky-300 hover:underline">
             Iniciar sesión
           </Link>
         </>
@@ -104,12 +111,31 @@ export function SignupPage() {
               placeholder="Mínimo 6 caracteres"
             />
           </div>
+          <label className="flex cursor-pointer items-start gap-2.5 text-[13px] leading-relaxed text-sidebar-foreground/85">
+            <input
+              type="checkbox"
+              checked={accepted}
+              onChange={(e) => setAccepted(e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-white/30 accent-primary"
+            />
+            <span>
+              He leído y acepto los{' '}
+              <Link to={LEGAL_PATHS.terminos} target="_blank" className="font-medium text-sky-300 hover:underline">
+                Términos y condiciones
+              </Link>{' '}
+              y el{' '}
+              <Link to={LEGAL_PATHS.privacidad} target="_blank" className="font-medium text-sky-300 hover:underline">
+                Aviso de privacidad
+              </Link>
+              .
+            </span>
+          </label>
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
           <Button type="submit" size="lg" className="w-full" disabled={loading}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Crear cuenta
           </Button>
-          <p className="text-xs leading-relaxed text-muted-foreground">
+          <p className="text-xs leading-relaxed text-sidebar-foreground/75">
             Empezarás con una empresa vacía — el asistente de configuración te ayuda a definir tu
             jornada, agregar tu primera sucursal y tus empleados.
           </p>

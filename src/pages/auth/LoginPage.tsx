@@ -48,7 +48,7 @@ export function LoginPage() {
       footer={
         <>
           ¿Tu empresa no tiene cuenta todavía?{' '}
-          <Link to="/signup" className="font-medium text-primary hover:underline">
+          <Link to="/signup" className="font-medium text-sky-300 hover:underline">
             Crear cuenta
           </Link>
         </>
