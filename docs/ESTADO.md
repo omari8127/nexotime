@@ -93,3 +93,8 @@ avisa para priorizarlo aparte.
 
 - Una app web puede ser alterada por una persona técnica; la licencia frena el uso normal no autorizado, no a un atacante decidido.
 - El reconocimiento facial no es infalible ni detiene un video grabado del empleado; por eso hay umbral ajustable, margen contra personas parecidas, foto de verificación en pantalla y métodos alternos. Se quitó la prueba de vida por parpadeo porque estorbaba más de lo que protegía; si algún cliente la necesita, habría que volver a incorporarla.
+- Los PIN de empleado se guardan tal cual y se comparan en el navegador del reloj (como en muchos relojes checadores); quien administra los puede ver. Para una versión posterior: guardarlos con hash y verificar en el servidor.
+- Los vectores faciales viajan al navegador de quien tenga acceso a los empleados (el reconocimiento se hace ahí, sin enviar fotos). Escritura protegida a propietario/administrador en la base de datos (migración 003).
+- Sin conexión, el reloj abre con una copia de los últimos 62 días (o menos si el navegador no le da espacio). Una checada hecha sin conexión se conserva hasta poder enviarse; si el servidor la rechaza varias veces se aparta en el equipo (`nexotime.syncRejected`) y se avisa, no se pierde en silencio.
+- La hora se corrige con la del servidor mientras haya conexión. Si el equipo arranca sin conexión usa su propio reloj hasta reconectar.
+- Antes de cada entrega a un cliente: `docs/QA-PRUEBAS.md`, en el equipo real.

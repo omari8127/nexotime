@@ -31,8 +31,8 @@ export function SignupPage() {
       setError('Completa todos los campos.')
       return
     }
-    if (password.length < 6) {
-      setError('La contraseña debe tener al menos 6 caracteres.')
+    if (password.length < 8) {
+      setError('La contraseña debe tener al menos 8 caracteres.')
       return
     }
     if (!accepted) {
@@ -108,7 +108,7 @@ export function SignupPage() {
               autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Mínimo 6 caracteres"
+              placeholder="Mínimo 8 caracteres"
             />
           </div>
           <label className="flex cursor-pointer items-start gap-2.5 text-[13px] leading-relaxed text-sidebar-foreground/85">

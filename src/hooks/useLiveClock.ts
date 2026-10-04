@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useDataStore } from '@/store/dataStore'
 import { DEMO_TODAY } from '@/data/catalog'
+import { businessNow } from '@/lib/today'
 
 function demoAnchor(): Date {
   return new Date(`${DEMO_TODAY}T11:45:32`)
@@ -14,12 +15,14 @@ function demoAnchor(): Date {
  */
 export function useLiveClock(): Date {
   const mode = useDataStore((s) => s.mode)
-  const [now, setNow] = useState(() => (mode === 'live' ? new Date() : demoAnchor()))
+  // Re-reads when the company changes its time zone (the clock is the company's, not the device's).
+  const timezone = useDataStore((s) => s.company.timezone)
+  const [now, setNow] = useState(() => (mode === 'live' ? businessNow() : demoAnchor()))
 
   useEffect(() => {
     if (mode === 'live') {
-      setNow(new Date())
-      const id = setInterval(() => setNow(new Date()), 1000)
+      setNow(businessNow())
+      const id = setInterval(() => setNow(businessNow()), 1000)
       return () => clearInterval(id)
     }
 
@@ -30,7 +33,7 @@ export function useLiveClock(): Date {
       setNow(new Date(base + (Date.now() - start)))
     }, 1000)
     return () => clearInterval(id)
-  }, [mode])
+  }, [mode, timezone])
 
   return now
 }

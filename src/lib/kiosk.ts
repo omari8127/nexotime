@@ -24,6 +24,34 @@ export const KIOSK_DEFAULTS: ResolvedKioskSettings = {
   exitPin: '1234',
 }
 
+/**
+ * The branch the kiosk is for: the first candidate that is a real branch of this company
+ * (what was picked on the kiosk, the branch being worked on in the panel, the one this device
+ * used last time), else the company's first branch.
+ */
+export function pickKioskBranch(branches: { id: string }[], ...candidates: (string | null | undefined)[]): string {
+  return candidates.find((id) => id && branches.some((b) => b.id === id)) ?? branches[0]?.id ?? ''
+}
+
+/**
+ * The device record of THIS branch. Never another branch's: its name is shown on the kiosk and its
+ * id is stored on every punch, so borrowing one from a different branch would mislabel both.
+ */
+export function kioskDevice<T extends { branchId: string; status: string }>(devices: T[], branchId: string): T | undefined {
+  const mine = devices.filter((d) => d.branchId === branchId)
+  return mine.find((d) => d.status === 'online') ?? mine[0]
+}
+
+/**
+ * Everyone who may clock in at this kiosk by number + PIN: the active staff of the whole company
+ * (like face and QR/barcode already work at any branch), with this branch's own people first so a
+ * number that exists in two branches resolves to the local one.
+ */
+export function punchableEmployees<T extends { branchId: string; status: string }>(employees: T[], branchId: string): T[] {
+  const active = employees.filter((e) => e.status === 'active')
+  return [...active.filter((e) => e.branchId === branchId), ...active.filter((e) => e.branchId !== branchId)]
+}
+
 export function resolveKiosk(settings: AttendanceSettings | undefined): ResolvedKioskSettings {
   const k = settings?.kiosk ?? {}
   return {

@@ -38,7 +38,7 @@ import { toast } from '@/components/ui/toast'
 import { useDataStore } from '@/store/dataStore'
 import { useSyncStore } from '@/store/syncStore'
 import { applyTheme, useUIStore } from '@/store/uiStore'
-import { resolveKiosk } from '@/lib/kiosk'
+import { kioskDevice, pickKioskBranch, punchableEmployees, resolveKiosk } from '@/lib/kiosk'
 import { CODE_ERROR_TEXT, credentialValue, findEmployeeByCode } from '@/lib/credentials'
 import { useLiveClock, formatClockTime } from '@/hooks/useLiveClock'
 import { useFullscreen } from '@/hooks/useFullscreen'
@@ -165,9 +165,7 @@ export function ClockPage() {
   // Falls back to the first branch once real data loads — a brand-new live
   // company has no "br_centro" (that id only exists in the demo seed).
   const effectiveBranchId =
-    [branchId, panelBranch, readClockBranch()].find((id) => id && branches.some((b) => b.id === id)) ??
-    branches[0]?.id ??
-    ''
+    pickKioskBranch(branches, branchId, panelBranch, readClockBranch())
   const chooseBranch = (id: string) => {
     setBranchId(id)
     saveClockBranch(id)
@@ -179,12 +177,13 @@ export function ClockPage() {
   // fall back to the device's location while the branch has none configured yet.
   const effectiveLocation: PunchLocation | undefined =
     branch?.lat != null && branch?.lng != null ? { lat: branch.lat, lng: branch.lng } : (deviceLocation ?? undefined)
-  const device =
-    devices.find((d) => d.branchId === effectiveBranchId && d.status === 'online') ?? devices[0]
+  const device = kioskDevice(devices, effectiveBranchId)
   const branchEmployees = useMemo(
     () => allEmployees.filter((e) => e.branchId === effectiveBranchId && e.status === 'active'),
     [allEmployees, effectiveBranchId],
   )
+  // Number + PIN, like face and QR/barcode, works for anyone of the company at any of its kiosks.
+  const punchable = useMemo(() => punchableEmployees(allEmployees, effectiveBranchId), [allEmployees, effectiveBranchId])
 
   // Rotating demo candidate for the "scan" methods; Juan Pérez leads.
   const candidate = useMemo(() => {
@@ -235,7 +234,7 @@ export function ClockPage() {
   // Auto-register: when the cancel window ends, register the proposed movement.
   useEffect(() => {
     if (phase !== 'confirm' || !confirmPunch) return
-    // Face recognition already matched the person and checked a live blink, so its "No soy yo"
+    // Face recognition already matched the person with a clear margin, so its "No soy yo"
     // window can be short — queues in the morning shouldn't wait on a countdown.
     const seconds = method === 'face' ? Math.min(kiosk.autoRegisterSeconds, FACE_CONFIRM_SECONDS) : kiosk.autoRegisterSeconds
     const id = setTimeout(() => doPunch(confirmPunch.type), seconds * 1000)
@@ -590,7 +589,7 @@ export function ClockPage() {
             {phase === 'number' && (
               <FlowCard key="number" onBack={backToMethod}>
                 <NumberPinFlow
-                  employees={branchEmployees}
+                  employees={punchable}
                   onCancel={backToMethod}
                   onIdentified={(emp, photo) => identify(emp, 'employee_number', photo)}
                 />

@@ -51,7 +51,7 @@ import { buildMockDatabase } from '@/data/mock'
 import { can } from '@/data/roles'
 import { canAccessEmployee } from '@/lib/scope'
 import { generateBarcodeValue, generateQrValue, takenBarcodes } from '@/lib/credentials'
-import { getToday, nowISO } from '@/lib/today'
+import { getToday, nowISO, setBusinessTimezone } from '@/lib/today'
 import type { LiveBundle } from '@/services/live/liveApi'
 import {
   liveCreateUserAccount,
@@ -70,7 +70,7 @@ import {
   liveUpsertCorrection,
   liveUpsertIncidencia,
 } from '@/services/live/liveApi'
-import { enqueue, isNetworkError, type NewQueueItem } from '@/services/live/syncQueue'
+import { applyPendingWrites, enqueue, isNetworkError, type NewQueueItem } from '@/services/live/syncQueue'
 
 export type BackendMode = 'demo' | 'live'
 
@@ -422,7 +422,9 @@ export const useDataStore = create<DataState>((set, get) => {
         return { currentUser: next }
       }),
 
-    hydrateLive: (bundle) =>
+    hydrateLive: (serverBundle) => {
+      // Punches still waiting to upload stay visible (a refresh must not make them vanish).
+      const bundle = applyPendingWrites(serverBundle)
       set({
         mode: 'live',
         company: bundle.company,
@@ -437,7 +439,8 @@ export const useDataStore = create<DataState>((set, get) => {
         corrections: bundle.corrections,
         payments: bundle.payments,
         currentUser: bundle.currentUser,
-      }),
+      })
+    },
 
     switchToDemo: () => {
       const fresh = buildMockDatabase()
@@ -1312,5 +1315,9 @@ export const useDataStore = create<DataState>((set, get) => {
     },
   }
 })
+
+// The company's own time zone drives "now" and "today" in live mode (see lib/today.ts); the demo
+// keeps its pinned date. Kept in step with the store whenever the company loads or changes.
+useDataStore.subscribe((s) => setBusinessTimezone(s.mode === 'live' ? s.company.timezone : null))
 
 export { weekdayFromISO }

@@ -93,13 +93,35 @@ async function run(item: QueueItem) {
 
 let flushing = false
 
-/** Replay parked writes. Stops at the first network failure; drops an item only
- *  after it was rejected by the server several times (e.g. a permission error). */
-export async function flushQueue(): Promise<{ sent: number; remaining: number }> {
-  if (flushing) return { sent: 0, remaining: readQueue().length }
+const DEAD_KEY = 'nexotime.syncRejected'
+
+/** Writes the server refused several times. They are kept here (not silently thrown away) so
+ *  support can recover them, and the person is told. */
+export function readRejected(): QueueItem[] {
+  try {
+    return JSON.parse(localStorage.getItem(DEAD_KEY) ?? '[]') as QueueItem[]
+  } catch {
+    return []
+  }
+}
+
+function keepRejected(items: QueueItem[]) {
+  if (items.length === 0) return
+  try {
+    localStorage.setItem(DEAD_KEY, JSON.stringify([...readRejected(), ...items].slice(-100)))
+  } catch {
+    /* storage full: the warning below still reaches the person */
+  }
+}
+
+/** Replay parked writes. Stops at the first network failure; an item the server rejects
+ *  several times (e.g. a permission error) is moved aside and reported, never lost quietly. */
+export async function flushQueue(): Promise<{ sent: number; remaining: number; rejected: number }> {
+  if (flushing) return { sent: 0, remaining: readQueue().length, rejected: 0 }
   flushing = true
   useSyncStore.getState().setSyncing(true)
   let sent = 0
+  let rejected = 0
   try {
     for (const item of readQueue()) {
       try {
@@ -109,31 +131,37 @@ export async function flushQueue(): Promise<{ sent: number; remaining: number }>
       } catch (err) {
         if (isNetworkError(err)) break
         const failures = (item.failures ?? 0) + 1
-        writeQueue(
-          readQueue()
-            .map((q) => (q.key === item.key ? ({ ...q, failures } as QueueItem) : q))
-            .filter((q) => (q.failures ?? 0) < MAX_FAILURES),
-        )
+        const next = readQueue().map((q) => (q.key === item.key ? ({ ...q, failures } as QueueItem) : q))
+        const dead = next.filter((q) => (q.failures ?? 0) >= MAX_FAILURES)
+        keepRejected(dead)
+        rejected += dead.length
+        writeQueue(next.filter((q) => (q.failures ?? 0) < MAX_FAILURES))
       }
     }
   } finally {
     flushing = false
     useSyncStore.getState().setSyncing(false)
   }
-  return { sent, remaining: readQueue().length }
+  return { sent, remaining: readQueue().length, rejected }
 }
 
 /**
- * Offline boot: the last server snapshot with every parked write layered on
- * top, so punches made while disconnected are visible right away.
+ * Lays every parked write of this company on top of freshly loaded server data. Without it, a
+ * refresh would make a punch that is still waiting to upload disappear from the screen (and let the
+ * employee punch twice). Writes that belong to another company are ignored.
  */
-export function loadOfflineBundle(sessionUserId?: string): LiveBundle | null {
-  const snap = loadSnapshot()
-  if (!snap) return null
-  if (sessionUserId && snap.currentUser.id !== sessionUserId) return null
-
-  const bundle: LiveBundle = structuredClone(snap)
-  for (const item of readQueue()) {
+export function applyPendingWrites(source: LiveBundle): LiveBundle {
+  const companyId = source.company.id
+  const pending = readQueue().filter((q) => q.payload.companyId === companyId)
+  if (pending.length === 0) return source
+  const bundle: LiveBundle = {
+    ...source,
+    attendance: [...source.attendance],
+    audit: [...source.audit],
+    corrections: [...source.corrections],
+    incidencias: [...source.incidencias],
+  }
+  for (const item of pending) {
     switch (item.kind) {
       case 'attendance': {
         const i = bundle.attendance.findIndex(
@@ -161,4 +189,15 @@ export function loadOfflineBundle(sessionUserId?: string): LiveBundle | null {
     }
   }
   return bundle
+}
+
+/**
+ * Offline boot: the last server snapshot with every parked write layered on
+ * top, so punches made while disconnected are visible right away.
+ */
+export function loadOfflineBundle(sessionUserId?: string): LiveBundle | null {
+  const snap = loadSnapshot()
+  if (!snap) return null
+  if (sessionUserId && snap.currentUser.id !== sessionUserId) return null
+  return applyPendingWrites(structuredClone(snap))
 }

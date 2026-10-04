@@ -156,7 +156,7 @@ export function FaceEnrollDialog({
       setTestResult(null)
       setLoadingModels(false)
     }
-  }, [open])
+  }, [open, testOnly])
 
   /* --------------------------------- voice ------------------------------- */
   const ready = open && cameraState === 'ready' && !loadingModels

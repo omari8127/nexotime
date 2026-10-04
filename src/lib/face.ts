@@ -222,9 +222,13 @@ export async function readFace(
     vw = sw
     vh = sh
   }
-  const detectOn = (input: HTMLVideoElement | HTMLCanvasElement, detection: Parameters<FaceApi['detectAllFaces']>[1]) => {
+  const detectOn = (
+    input: HTMLVideoElement | HTMLCanvasElement,
+    detection: Parameters<FaceApi['detectAllFaces']>[1],
+    descriptor = withDescriptor,
+  ) => {
     const task = api.detectAllFaces(input, detection).withFaceLandmarks()
-    return withDescriptor ? task.withFaceDescriptors() : task
+    return descriptor ? task.withFaceDescriptors() : task
   }
   const ssdOptions = () =>
     new api.SsdMobilenetv1Options({ minConfidence: options.minConfidence ?? 0.5, maxResults: 3 })
@@ -255,7 +259,9 @@ export async function readFace(
       g.fillStyle = '#808080'
       g.fillRect(0, 0, ww, wh)
       g.drawImage(source, (vw / 2) * scale, (vh / 2) * scale, vw * scale, vh * scale)
-      const found = await detectOn(wideCanvas, ssdOptions())
+      // Guidance only: the margin copy is downscaled, so it never yields a descriptor (nothing is
+      // compared or saved from it — the person is told to step back and a normal read follows).
+      const found = await detectOn(wideCanvas, ssdOptions(), false)
       if (found.length === 1) {
         faces = found
         wide = { x: vw / 2, y: vh / 2, scale }

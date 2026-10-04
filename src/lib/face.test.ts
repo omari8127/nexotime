@@ -10,7 +10,7 @@ import {
   TUNING,
   type FaceReading,
 } from '@/lib/face'
-import { resolveKiosk } from '@/lib/kiosk'
+import { kioskDevice, pickKioskBranch, punchableEmployees, resolveKiosk } from '@/lib/kiosk'
 import type { Employee } from '@/types'
 
 /** A 128-number "face": the base plus a small offset moves it a known distance. */
@@ -75,6 +75,34 @@ describe('calidad de imagen', () => {
     expect(qualityIssues({ ...ok, brightness: 250 })).toContain('bright')
     expect(qualityIssues({ ...ok, sharpness: 0.2 }, { blur: true })).toContain('blurry')
     expect(qualityIssues({ ...ok, sharpness: 0.2 })).not.toContain('blurry') // en el reloj no bloquea
+  })
+})
+
+describe('sucursal, equipo y personal del reloj', () => {
+  const branches = [{ id: 'rosal' }, { id: 'matriz' }]
+  it('elige la sucursal en orden: la del reloj, la del panel, la última del dispositivo, la primera', () => {
+    expect(pickKioskBranch(branches, 'matriz', 'rosal', 'rosal')).toBe('matriz')
+    expect(pickKioskBranch(branches, '', 'all', 'matriz')).toBe('matriz') // "all" no es una sucursal
+    expect(pickKioskBranch(branches, '', '', 'borrada')).toBe('rosal') // una guardada que ya no existe
+    expect(pickKioskBranch([], 'x')).toBe('')
+  })
+  it('el equipo del reloj nunca es el de otra sucursal', () => {
+    const devices = [
+      { id: 'd1', branchId: 'matriz', status: 'online' },
+      { id: 'd2', branchId: 'rosal', status: 'offline' },
+    ]
+    expect(kioskDevice(devices, 'rosal')?.id).toBe('d2')
+    expect(kioskDevice(devices, 'matriz')?.id).toBe('d1')
+    expect(kioskDevice([devices[0]], 'rosal')).toBeUndefined() // antes se prestaba el de otra sucursal
+  })
+  it('número + PIN sirve a toda la empresa, con los de la sucursal primero', () => {
+    const emps = [
+      { id: 'a', branchId: 'matriz', status: 'active' },
+      { id: 'b', branchId: 'rosal', status: 'active' },
+      { id: 'c', branchId: 'rosal', status: 'inactive' },
+      { id: 'd', branchId: 'matriz', status: 'active' },
+    ]
+    expect(punchableEmployees(emps, 'rosal').map((e) => e.id)).toEqual(['b', 'a', 'd'])
   })
 })
 

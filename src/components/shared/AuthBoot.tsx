@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { isSupabaseConfigured, supabase } from '@/lib/supabaseClient'
 import { restoreSession } from '@/services/live/liveApi'
+import { syncServerClock } from '@/services/live/serverClock'
 import {
   flushQueue,
   isNetworkError,
@@ -35,9 +36,30 @@ export function AuthBoot() {
 
     const sync = async () => {
       if (useDataStore.getState().mode !== 'live') return
-      const { sent, remaining } = await flushQueue()
+      const { sent, remaining, rejected } = await flushQueue()
       if (sent > 0 && remaining === 0) {
         toast.success('Sincronizado', `${sent} ${sent === 1 ? 'cambio enviado' : 'cambios enviados'} al servidor.`)
+      }
+      if (rejected > 0) {
+        toast.error(
+          'No se pudieron enviar algunos registros',
+          `El servidor rechazó ${rejected} ${rejected === 1 ? 'cambio' : 'cambios'}. Quedaron guardados en este equipo: avisa a soporte.`,
+        )
+      }
+    }
+
+    // The server's clock is the reference for every punch; tell the person once if this device is far off.
+    let warnedAboutClock = false
+    const checkClock = async () => {
+      if (useDataStore.getState().mode !== 'live') return
+      const offset = await syncServerClock()
+      if (offset != null && Math.abs(offset) >= 120_000 && !warnedAboutClock) {
+        warnedAboutClock = true
+        const minutes = Math.round(Math.abs(offset) / 60_000)
+        toast.info(
+          'La hora de este equipo está desajustada',
+          `Difiere ${minutes} min de la del servidor. NEXOTIME usa la hora correcta, pero conviene activar la hora automática del equipo.`,
+        )
       }
     }
 
@@ -47,6 +69,7 @@ export function AuthBoot() {
           hydrateLive(bundle)
           setStatus('authenticated')
           void sync()
+          void checkClock()
         } else {
           setStatus('anonymous')
         }
@@ -65,11 +88,17 @@ export function AuthBoot() {
         setStatus('anonymous')
       })
 
-    const onOnline = () => void sync()
+    const onOnline = () => {
+      void sync()
+      void checkClock()
+    }
     window.addEventListener('online', onOnline)
-    // Safety net: retry on a timer in case the browser missed an 'online' event.
+    // Safety net: retry on a timer in case the browser missed an 'online' event; also re-measure the clock.
     const timer = window.setInterval(() => {
-      if (navigator.onLine) void sync()
+      if (navigator.onLine) {
+        void sync()
+        void checkClock()
+      }
     }, 600_000)
 
     const { data } = client.auth.onAuthStateChange((event) => {
