@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { FaceViewport } from '@/components/clock/FaceViewport'
 import { captureVideoFrame } from '@/lib/camera'
+import { VoiceToggle } from '@/components/shared/VoiceToggle'
 import { useCameraStream } from '@/hooks/useCameraStream'
+import { useVoice } from '@/lib/speech'
 import { useDataStore } from '@/store/dataStore'
 import { usePermissions } from '@/hooks/useScopedData'
 import {
@@ -67,6 +69,7 @@ export function FaceScanFlow({
   const [who, setWho] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
   const [reading, setReading] = useState('')
+  const { say } = useVoice('kiosk')
   const logAudit = useDataStore((s) => s.logAudit)
   const currentUser = useDataStore((s) => s.currentUser)
   const { can } = usePermissions()
@@ -93,6 +96,13 @@ export function FaceScanFlow({
     settingsRef.current = settings
     confirmRef.current = onConfirmed
   })
+
+  // Spoken instructions (off unless switched on at this device): the blink prompt always, other
+  // hints only when they change, and never the same sentence twice in a row.
+  useEffect(() => {
+    if (stage === 'liveness' && who) say(`Hola ${who}. Parpadea una vez`, { important: true, repeatAfterMs: 4000 })
+    else if (stage === 'searching' && hint) say(hint, { repeatAfterMs: 12_000 })
+  }, [stage, who, hint, say])
 
   useEffect(() => {
     if (candidatesRef.current.length === 0 || cameraState !== 'ready') return
@@ -349,6 +359,7 @@ export function FaceScanFlow({
             Reintentar
           </Button>
         ) : null}
+        <VoiceToggle scope="kiosk" compact />
         <Button variant="secondary" size="lg" className="flex-1" onClick={onCancel}>
           Cancelar
         </Button>

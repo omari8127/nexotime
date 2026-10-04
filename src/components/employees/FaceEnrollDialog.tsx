@@ -13,7 +13,9 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/switch'
 import { toast } from '@/components/ui/toast'
 import { EnrollCircle } from '@/components/employees/EnrollCircle'
+import { VoiceToggle } from '@/components/shared/VoiceToggle'
 import { useCameraStream } from '@/hooks/useCameraStream'
+import { useVoice } from '@/lib/speech'
 import { useDataStore } from '@/store/dataStore'
 import {
   QUALITY_TEXT,
@@ -30,28 +32,50 @@ import {
 import { resolveKiosk } from '@/lib/kiosk'
 import type { Employee } from '@/types'
 
-/** Each sample must show a specific pose, so the set covers small natural variations. */
+/** Each sample must show a specific pose, so the set covers small natural variations.
+ *  `say` is what the voice reads when the step starts. */
 const STEPS = [
-  { pose: 'front', title: 'Mira de frente a la cámara', nudge: 'Mira directo a la cámara' },
-  { pose: 'front', title: 'Sonríe ligeramente', nudge: 'Mira de frente y sonríe un poco' },
-  { pose: 'turn', title: 'Gira la cabeza un poco hacia un lado', nudge: 'Gira despacio, solo un poco más' },
-  { pose: 'opposite', title: 'Ahora hacia el lado contrario', nudge: 'Gira hacia el otro lado' },
-  { pose: 'front', title: 'Vuelve a mirar de frente', nudge: 'Mira directo a la cámara' },
+  { pose: 'front', title: 'Mira de frente a la cámara', say: 'Mira de frente a la cámara y quédate quieto', nudge: 'Mira directo a la cámara' },
+  { pose: 'front', title: 'Sonríe ligeramente', say: 'Sonríe ligeramente', nudge: 'Mira de frente y sonríe un poco' },
+  { pose: 'turn', title: 'Gira la cabeza un poco hacia un lado', say: 'Gira la cabeza un poco hacia un lado', nudge: 'Gira despacio, solo un poco más' },
+  { pose: 'opposite', title: 'Ahora hacia el lado contrario', say: 'Ahora gira hacia el lado contrario', nudge: 'Gira hacia el otro lado' },
+  { pose: 'front', title: 'Vuelve a mirar de frente', say: 'Vuelve a mirar de frente', nudge: 'Mira directo a la cámara' },
 ] as const
 
-const SAMPLE_GAP_MS = 250
-/** Good frames in a row before a sample is taken: this is the visible "hold still" moment. */
+/** Each step lasts at least this long before its sample is taken, so the instruction (read aloud or on
+ *  screen) can be heard, understood and followed instead of flashing by. */
+const STEP_DWELL_MS = 1600
+/** Good frames before a sample is taken: this is the visible "hold still" moment. */
 const STABLE_FRAMES = 4
 /** Frames averaged into each saved sample (averages out frame-to-frame noise). */
 const SAMPLE_FRAMES = 2
-/** Bad frames in a row tolerated before the hold progress restarts, so one flicker doesn't reset it. */
-const MISS_TOLERANCE = 3
+/**
+ * A wrong frame (a blink, a small sway) only freezes the hold ring. It starts walking back — one
+ * tick at a time, never snapping to zero — after the problem has lasted this long.
+ */
+const BAD_GRACE_MS = 900
+const DECAY_MS = 300
+/** The voice only repeats a problem once it has lasted this long (not on every flicker). */
+const SPEAK_AFTER_MS = 1200
+/** Pause before retrying a sample that did not come out clean; the ring stays almost full meanwhile. */
+const RETRY_MS = 400
+/** Stuck on one step this long: assisted mode — the pose and sharpness gates are dropped for it, so a
+ *  person who cannot (or does not manage to) do the exact movement still finishes. The final
+ *  recognition test is the real check. */
+const ASSIST_AFTER_MS = 10_000
 /** Head-turn gates are relative to the person's own straight-ahead yaw (learned on step 1):
  *  natural faces are not symmetric, so an absolute "yaw ≈ 1" can never be met by some people. */
 const TURN_MIN = 0.13
-const FIRST_FRONT_TOL = 0.35
-const SAME_PERSON_FRONT = 0.42
-const SAME_PERSON_TURNED = 0.5
+/** Turning further than this stops being a usable sample (the face is mostly in profile). */
+const TURN_MAX = 0.65
+/** Step 1 only has to rule out a face in profile: it defines the person's own "straight ahead" (a laptop
+ *  camera below the eyes, or an off-axis tablet, makes a perfectly normal face read as slightly turned). */
+const FIRST_FRONT_TOL = 0.5
+const FIRST_FRONT_TOL_ASSISTED = 0.7
+/** The sample must be this close to at least one already saved (same person). Turned faces differ more. */
+const SAME_PERSON_FRONT = 0.45
+const SAME_PERSON_TURNED = 0.6
+const IDENTITY_MISSES_BEFORE_RELAX = 3
 const DUPLICATE_DISTANCE = 0.42
 const TEST_TIMEOUT_MS = 9000
 
@@ -67,6 +91,7 @@ const TIPS = [
  * Guided face enrollment: consent → 5 posed samples around a Face-ID style dial →
  * an immediate recognition test. Stores descriptors only (never photos). Biometric
  * data is sensitive under Mexican privacy law, so consent is recorded in the audit log.
+ * Every instruction is also spoken (switchable), for people who can't read and hold still.
  */
 export function FaceEnrollDialog({
   open,
@@ -85,6 +110,7 @@ export function FaceEnrollDialog({
   const enroll = useDataStore((s) => s.enrollFace)
   const remove = useDataStore((s) => s.removeFace)
   const settings = useDataStore((s) => s.company.attendanceSettings)
+  const { say, beep } = useVoice('enroll')
 
   const hasFace = !!employee.identifications.find((i) => i.method === 'face')?.descriptors?.length
 
@@ -132,6 +158,39 @@ export function FaceEnrollDialog({
     }
   }, [open])
 
+  /* --------------------------------- voice ------------------------------- */
+  const ready = open && cameraState === 'ready' && !loadingModels
+  // What was last announced, so a screen that briefly flips to "preparing" and back doesn't repeat itself.
+  const announced = useRef('')
+  const announce = (key: string, text: string) => {
+    if (announced.current === key) return
+    announced.current = key
+    say(text, { important: true, repeatAfterMs: 0 })
+  }
+  useEffect(() => {
+    announced.current = '' // a new screen (or reopening the dialog) announces itself again
+  }, [open, stage])
+  useEffect(() => {
+    if (!ready || stage !== 'capture') return
+    announce(`capture:${count}`, count >= STEPS.length ? 'Listo. Tu rostro quedó guardado' : STEPS[count].say)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, stage, count])
+  useEffect(() => {
+    if (!ready || stage !== 'test') return
+    announce(
+      `test:${testResult === null ? 'wait' : testResult.ok ? 'ok' : 'fail'}`,
+      testResult === null
+        ? 'Mira a la cámara para comprobar que te reconoce'
+        : testResult.ok
+          ? 'Te reconocí. Todo listo'
+          : 'No se reconoció con claridad. Repite el registro con mejor luz de frente',
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, stage, testResult])
+  useEffect(() => {
+    if (error) say(error, { important: true, repeatAfterMs: 0 })
+  }, [error, say])
+
   /* ------------------------------- capture ------------------------------- */
   useEffect(() => {
     if (stage !== 'capture' || cameraState !== 'ready') return
@@ -143,15 +202,38 @@ export function FaceEnrollDialog({
     const samples: number[][] = []
     let lastAccepted = 0
     let stable = 0
-    let misses = 0
+    let badSince = 0
+    let lastDecay = 0
+    let retryAt = 0
+    let stepStart = Date.now()
+    let assisted = false
+    let holdAnnounced = false
+    let identityMisses = 0
     let firstTurnSide = 0
     let baseLogYaw = 0
     const yawLog: number[] = []
 
-    const restartHold = () => {
-      stable = 0
-      misses = 0
-      setHold(0)
+    /** A frame that can't be used: freeze the ring, and only walk it back gently if this keeps up. */
+    const bad = (msg: string) => {
+      const now = Date.now()
+      if (!badSince) badSince = now
+      const lasting = now - badSince
+      if (lasting > BAD_GRACE_MS && now - lastDecay > DECAY_MS && stable > 0) {
+        stable -= 1
+        lastDecay = now
+        setHold(stable / STABLE_FRAMES)
+      }
+      if (stable === 0) holdAnnounced = false
+      setHint(msg)
+      if (lasting > SPEAK_AFTER_MS) say(msg)
+    }
+    /** A sample that did not come out clean: keep the ring nearly full and just try again. */
+    const retry = (msg: string) => {
+      stable = Math.max(0, STABLE_FRAMES - 1)
+      retryAt = Date.now() + RETRY_MS
+      setHold(stable / STABLE_FRAMES)
+      setHint(msg)
+      say(msg)
     }
     const fail = (msg: string) => {
       setError(msg)
@@ -170,6 +252,8 @@ export function FaceEnrollDialog({
       if (!alive) return
       setLoadingModels(false)
       setHint('')
+      stepStart = Date.now()
+      lastAccepted = stepStart // the first step also waits its dwell time
 
       const loop = async () => {
         if (!alive) return
@@ -180,39 +264,56 @@ export function FaceEnrollDialog({
           const result = await readFace(api, video, false, 'fast')
           if (!alive) return
           const step = STEPS[samples.length]
+
+          if (!assisted && Date.now() - stepStart > ASSIST_AFTER_MS) {
+            assisted = true
+            setHint('Sin problema, solo mira a la cámara')
+            say('Sin problema. Solo mira a la cámara', { important: true, repeatAfterMs: 0 })
+          }
+
           if (result.kind !== 'face') {
-            if (++misses >= MISS_TOLERANCE) {
-              stable = 0
-              setHold(0)
-            }
-            setHint(result.kind === 'none' ? 'Coloca tu rostro dentro del círculo' : 'Debe aparecer una sola persona')
+            bad(result.kind === 'none' ? 'Coloca tu rostro dentro del círculo' : 'Debe aparecer una sola persona')
           } else {
             const r = result.reading
-            const issues = qualityIssues(r, { blur: true })
+            const issues = qualityIssues(r, { blur: !assisted })
             const rel = Math.log(r.yaw) - baseLogYaw
             const side = Math.abs(rel) < TURN_MIN ? 0 : rel < 0 ? -1 : 1
-            const poseOk =
-              samples.length === 0
-                ? Math.abs(rel) < FIRST_FRONT_TOL
-                : step.pose === 'front'
-                  ? side === 0
-                  : step.pose === 'turn'
-                    ? side !== 0
-                    : side !== 0 && side === -firstTurnSide
+            const first = samples.length === 0
+            const tooTurned = !first && Math.abs(rel) > TURN_MAX
+            const poseOk = first
+              ? Math.abs(rel) < (assisted ? FIRST_FRONT_TOL_ASSISTED : FIRST_FRONT_TOL)
+              : tooTurned
+                ? false
+                : assisted
+                  ? true
+                  : step.pose === 'front'
+                    ? side === 0
+                    : step.pose === 'turn'
+                      ? side !== 0
+                      : side !== 0 && (firstTurnSide === 0 || side === -firstTurnSide)
+
             if (issues.length > 0 || !poseOk) {
-              if (++misses >= MISS_TOLERANCE) {
-                stable = 0
-                setHold(0)
-              }
-              setHint(issues.length > 0 ? QUALITY_TEXT[issues[0]] : step.nudge)
+              bad(
+                issues.length > 0
+                  ? QUALITY_TEXT[issues[0]]
+                  : tooTurned
+                    ? 'Gira un poco menos'
+                    : step.pose === 'opposite' && side === firstTurnSide
+                      ? 'Gira hacia el lado contrario'
+                      : step.nudge,
+              )
             } else {
-              misses = 0
+              badSince = 0
               stable += 1
               yawLog.push(Math.log(r.yaw))
               setHold(Math.min(1, stable / STABLE_FRAMES))
               setHint('Perfecto, no te muevas…')
+              if (!holdAnnounced) {
+                holdAnnounced = true
+                say('Perfecto, no te muevas', { repeatAfterMs: 0 })
+              }
 
-              if (stable >= STABLE_FRAMES && Date.now() - lastAccepted >= SAMPLE_GAP_MS) {
+              if (stable >= STABLE_FRAMES && Date.now() >= retryAt && Date.now() - lastAccepted >= STEP_DWELL_MS) {
                 // Hold complete: read a few frames with descriptors and average them.
                 const frames: number[][] = []
                 // Saved samples use the accurate detector, same as the reloj; one spare attempt for a bad frame.
@@ -221,21 +322,28 @@ export function FaceEnrollDialog({
                   if (
                     again.kind === 'face' &&
                     again.reading.descriptor &&
-                    qualityIssues(again.reading, { blur: true }).length === 0
+                    qualityIssues(again.reading, { blur: !assisted }).length === 0
                   ) {
                     frames.push(again.reading.descriptor)
                   }
                 }
                 if (!alive) return
                 if (frames.length < SAMPLE_FRAMES) {
-                  restartHold()
-                  setHint('No alcanzamos a verte bien. Mantén la posición.')
+                  retry('No alcanzamos a verte bien. Mantén la posición.')
                 } else {
                   const d = meanDescriptor(frames)
-                  const limit = step.pose === 'front' ? SAME_PERSON_FRONT : SAME_PERSON_TURNED
-                  if (samples.length > 0 && descriptorDistance(samples[0], d) > limit) {
-                    restartHold()
-                    setHint('Mantén el mismo rostro frente a la cámara')
+                  // After a few misses the limit loosens a little: some faces vary more with the angle.
+                  const limit =
+                    (step.pose === 'front' ? SAME_PERSON_FRONT : SAME_PERSON_TURNED) +
+                    (identityMisses >= IDENTITY_MISSES_BEFORE_RELAX ? 0.1 : 0)
+                  const nearest = samples.length ? Math.min(...samples.map((s) => descriptorDistance(s, d))) : 0
+                  if (samples.length > 0 && nearest > limit) {
+                    identityMisses += 1
+                    retry(
+                      step.pose === 'front'
+                        ? 'Mantén el mismo rostro frente a la cámara'
+                        : 'Gira un poco menos y mira hacia la cámara',
+                    )
                   } else {
                     const twin = othersRef.current.find((c) =>
                       c.descriptors.some((x) => descriptorDistance(x, d) < DUPLICATE_DISTANCE),
@@ -252,10 +360,15 @@ export function FaceEnrollDialog({
                     samples.push(d)
                     lastAccepted = Date.now()
                     stable = 0
-                    misses = 0
+                    badSince = 0
+                    stepStart = Date.now()
+                    assisted = false
+                    holdAnnounced = false
+                    identityMisses = 0
                     setHold(0)
                     setCount(samples.length)
                     setFlashKey((n) => n + 1)
+                    beep()
                     if (samples.length >= STEPS.length) {
                       saved.current = samples
                       enroll(employee.id, samples, currentUser)
@@ -395,6 +508,10 @@ export function FaceEnrollDialog({
               <Checkbox checked={consent} onCheckedChange={setConsent} className="mt-0.5" />
               <span>El empleado da su consentimiento para registrar su rostro con fines de control de asistencia.</span>
             </label>
+            <div className="flex items-center justify-between gap-3 text-[13px] text-muted-foreground">
+              <span>Las indicaciones también se dicen en voz alta.</span>
+              <VoiceToggle scope="enroll" />
+            </div>
             {error ? (
               <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                 {error}
@@ -467,6 +584,7 @@ export function FaceEnrollDialog({
                 )}
               </div>
             )}
+            <VoiceToggle scope="enroll" />
           </div>
         )}
 
