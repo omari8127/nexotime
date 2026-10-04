@@ -15,10 +15,12 @@ import {
   meanDescriptor,
   nearestFace,
   qualityIssues,
+  readEyes,
   readFace,
   tuningFor,
   turnSide,
   type FaceApi,
+  type FaceBox,
   type FaceMatch,
 } from '@/lib/face'
 import type { ResolvedKioskSettings } from '@/lib/kiosk'
@@ -34,6 +36,9 @@ const REJECT_LOG_COOLDOWN_MS = 30_000
 /** A blink seen while the face was being matched counts if it happened this recently, so people
  *  who blink naturally while looking at the camera don't have to wait to blink again. */
 const BLINK_GRACE_MS = 3500
+/** Pause between eye samples, and how long a face position stays trustworthy for them. */
+const EYE_GAP_MS = 20
+const FACE_FRESH_MS = 800
 
 /**
  * Identify by face, hands-free:
@@ -124,9 +129,37 @@ export function FaceScanFlow({
         lastRejectLog = Date.now()
         logRef.current(reason)
       }
-      const blink = new BlinkDetector()
-      let blinksSeen = 0
+      // Blinks are sampled by their own fast loop (landmarks only, on the last known face box),
+      // independent of the slow recognition loop: a blink lasts ≈100–150 ms, shorter than one
+      // recognition pass on a tablet. The recognition loop's own eye reading is a fallback.
+      const eyes = new BlinkDetector()
+      const eyesFallback = new BlinkDetector()
+      let eyesSeen = 0
+      let fallbackSeen = 0
+      let blinkTotal = 0
       let lastBlinkAt = 0
+      let lastFace: { box: FaceBox; at: number } | null = null
+      const markBlink = () => {
+        blinkTotal += 1
+        lastBlinkAt = Date.now()
+      }
+
+      const eyeLoop = async () => {
+        if (!alive) return
+        if (lastFace && Date.now() - lastFace.at < FACE_FRESH_MS) {
+          try {
+            const r = await readEyes(api, video, lastFace.box)
+            if (!alive) return
+            if (r && eyes.update(r.ear) > eyesSeen) {
+              eyesSeen = eyes.blinks
+              markBlink()
+            }
+          } catch {
+            /* a dropped sample is not worth surfacing */
+          }
+        }
+        window.setTimeout(eyeLoop, EYE_GAP_MS)
+      }
 
       const restart = (message: string) => {
         identified = null
@@ -135,8 +168,9 @@ export function FaceScanFlow({
         streakId = ''
         unknownFrames = 0
         step = 'blink'
-        blink.blinks = 0
-        blinksSeen = 0
+        eyes.blinks = eyesSeen = 0
+        eyesFallback.blinks = fallbackSeen = 0
+        blinkTotal = 0
         lastBlinkAt = 0
         setWho(null)
         setStage('searching')
@@ -153,8 +187,19 @@ export function FaceScanFlow({
         try {
           const { faceStrictness, faceThreshold, faceRequireBlink, faceChallenge } = settingsRef.current
           const tuning = tuningFor(faceStrictness, faceThreshold)
-          const result = await readFace(api, video, !identified)
+          // Once identified only the pose and a single face are needed: the quick detector is enough.
+          const result = await readFace(api, video, !identified, identified ? 'fast' : 'accurate')
           if (!alive) return
+
+          if (result.kind === 'face') {
+            lastFace = { box: result.reading.box, at: Date.now() }
+            if (eyesFallback.update(result.reading.ear) > fallbackSeen) {
+              fallbackSeen = eyesFallback.blinks
+              markBlink()
+            }
+          } else {
+            lastFace = null
+          }
 
           if (result.kind === 'none') {
             recent = []
@@ -165,11 +210,6 @@ export function FaceScanFlow({
             streak = 0
             setHint('Debe haber una sola persona frente a la cámara')
           } else if (!identified) {
-            // Watch for blinks from the very first frame, in parallel with the match.
-            if (blink.update(result.reading.ear) > blinksSeen) {
-              blinksSeen = blink.blinks
-              lastBlinkAt = Date.now()
-            }
             const issues = qualityIssues(result.reading)
             if (issues.length > 0 || !result.reading.descriptor) {
               recent = []
@@ -192,8 +232,8 @@ export function FaceScanFlow({
                   identified = m
                   livenessStart = Date.now()
                   setWho(m.employee.firstName)
-                  const blinkedJustNow = blink.blinks > 0 && Date.now() - lastBlinkAt <= BLINK_GRACE_MS
-                  if (!blinkedJustNow) blink.blinks = 0
+                  const blinkedJustNow = blinkTotal > 0 && Date.now() - lastBlinkAt <= BLINK_GRACE_MS
+                  if (!blinkedJustNow) blinkTotal = 0
                   // Already blinked while matching: the next pass finishes the liveness check at
                   // once (skip flashing the "blink" prompt for a split second).
                   if (!(blinkedJustNow && !faceChallenge)) {
@@ -219,7 +259,7 @@ export function FaceScanFlow({
             // Liveness: the eyes must close and reopen; optionally also turn the head and come back.
             let passed = false
             if (step === 'blink') {
-              if (blink.update(result.reading.ear) >= 1) {
+              if (blinkTotal >= 1) {
                 if (faceChallenge) {
                   step = 'turn'
                   setHint('Bien. Ahora gira la cabeza hacia un lado')
@@ -257,6 +297,7 @@ export function FaceScanFlow({
         timer = window.setTimeout(loop, identified ? 30 : 40)
       }
       loop()
+      eyeLoop()
     }
     run()
 

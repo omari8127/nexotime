@@ -112,6 +112,15 @@ export interface FaceReading {
   sharpness: number
   /** Smallest gap between the face box and any frame edge, as a fraction of the frame (negative = clipped). */
   edgeGap: number
+  /** Where the face was found, in video pixels (lets `readEyes` follow it cheaply). */
+  box: FaceBox
+}
+
+export interface FaceBox {
+  x: number
+  y: number
+  width: number
+  height: number
 }
 
 export type ReadResult = { kind: 'none' } | { kind: 'multiple' } | { kind: 'face'; reading: FaceReading }
@@ -209,8 +218,48 @@ export async function readFace(
       yaw,
       sharpness: faceSharpness(video, box),
       edgeGap: Math.min(box.x / vw, box.y / vh, 1 - (box.x + box.width) / vw, 1 - (box.y + box.height) / vh),
+      box: { x: box.x, y: box.y, width: box.width, height: box.height },
     },
   }
+}
+
+let eyeCrop: HTMLCanvasElement | null = null
+const EYE_CROP = 112
+
+/**
+ * Eye openness and head turn of a face already located at `box`, using only the landmark
+ * network on a square crop (≈10× cheaper than a full detection). This is what lets a blink
+ * (≈100–150 ms) be sampled many times, instead of falling between two slow recognition passes.
+ * Returns null when the crop has no usable face (the caller then re-detects).
+ */
+export async function readEyes(
+  api: FaceApi,
+  video: HTMLVideoElement,
+  box: FaceBox,
+): Promise<{ ear: number; yaw: number } | null> {
+  eyeCrop ??= Object.assign(document.createElement('canvas'), { width: EYE_CROP, height: EYE_CROP })
+  const ctx = eyeCrop.getContext('2d', { willReadFrequently: true })
+  if (!ctx) return null
+  const side = Math.max(box.width, box.height)
+  const sx = box.x + box.width / 2 - side / 2
+  const sy = box.y + box.height / 2 - side / 2
+  ctx.fillStyle = '#000'
+  ctx.fillRect(0, 0, EYE_CROP, EYE_CROP)
+  // Clip the source to the frame and shrink the destination to match (a square crop may overhang).
+  const vw = video.videoWidth
+  const vh = video.videoHeight
+  const cx0 = Math.max(0, sx)
+  const cy0 = Math.max(0, sy)
+  const cx1 = Math.min(vw, sx + side)
+  const cy1 = Math.min(vh, sy + side)
+  if (cx1 - cx0 < 8 || cy1 - cy0 < 8) return null
+  const k = EYE_CROP / side
+  ctx.drawImage(video, cx0, cy0, cx1 - cx0, cy1 - cy0, (cx0 - sx) * k, (cy0 - sy) * k, (cx1 - cx0) * k, (cy1 - cy0) * k)
+  const lm = await api.nets.faceLandmark68Net.detectLandmarks(eyeCrop)
+  const pts = (Array.isArray(lm) ? lm[0] : lm).positions
+  const ear = (eyeRatio(pts.slice(36, 42)) + eyeRatio(pts.slice(42, 48))) / 2
+  const yaw = dist(pts[30], pts[0]) / Math.max(1, dist(pts[30], pts[16]))
+  return Number.isFinite(ear) && ear > 0 ? { ear, yaw } : null
 }
 
 /* -------------------------------------------------------------------------- */
@@ -319,16 +368,37 @@ export function matchPercent(distance: number): number {
  */
 export class BlinkDetector {
   private openLevel = 0
+  private lastAt = 0
   private closed = false
+  private closedAt = 0
+  private lowRun = 0
   blinks = 0
 
-  update(ear: number): number {
-    this.openLevel = Math.max(ear, this.openLevel * 0.97) // slow decay adapts to lighting
-    if (!this.closed && ear < this.openLevel * 0.85) this.closed = true
-    else if (this.closed && ear > this.openLevel * 0.93) {
+  /**
+   * Feed one eye-aspect-ratio sample. Works at any sampling rate (the open level decays with
+   * real time, not per sample). Closed = clearly shut (<70% of open) or a lower dip (<82%) on
+   * two samples in a row; it counts as a blink when the eyes reopen within `MAX_BLINK_MS`
+   * — longer is eyes shut / looking down. A lone noisy dip never counts.
+   */
+  update(ear: number, now = Date.now()): number {
+    const dt = this.lastAt ? Math.min(now - this.lastAt, 500) : 0
+    this.lastAt = now
+    // Slow decay adapts to lighting, but not while the eyes are shut (it would lower the bar).
+    this.openLevel = Math.max(ear, this.closed ? this.openLevel : this.openLevel * 0.97 ** (dt / 150))
+    const ratio = this.openLevel > 0 ? ear / this.openLevel : 1
+    if (!this.closed) {
+      this.lowRun = ratio < 0.82 ? this.lowRun + 1 : 0
+      if (ratio < 0.7 || this.lowRun >= 2) {
+        this.closed = true
+        this.closedAt = now
+      }
+    } else if (ratio > 0.93) {
       this.closed = false
-      this.blinks += 1
+      this.lowRun = 0
+      if (now - this.closedAt <= MAX_BLINK_MS) this.blinks += 1
     }
     return this.blinks
   }
 }
+
+const MAX_BLINK_MS = 900

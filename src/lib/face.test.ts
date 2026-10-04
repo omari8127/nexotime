@@ -63,7 +63,7 @@ describe('coincidencia facial', () => {
 })
 
 describe('calidad de imagen', () => {
-  const ok: FaceReading = { ear: 0.3, size: 0.3, brightness: 130, offset: { x: 0, y: 0 }, yaw: 1, sharpness: 5, edgeGap: 0.2 }
+  const ok: FaceReading = { ear: 0.3, size: 0.3, brightness: 130, offset: { x: 0, y: 0 }, yaw: 1, sharpness: 5, edgeGap: 0.2, box: { x: 0, y: 0, width: 100, height: 100 } }
   it('acepta una imagen buena', () => {
     expect(qualityIssues(ok, { blur: true })).toEqual([])
   })
@@ -95,6 +95,29 @@ describe('giro de cabeza y parpadeo', () => {
     const b = new BlinkDetector()
     for (let i = 0; i < 100; i++) b.update(0.3 + (i % 2) * 0.005)
     expect(b.blinks).toBe(0)
+  })
+  /** Feeds samples at a fixed rate; returns the blink count. */
+  const feed = (ears: number[], gapMs: number) => {
+    const b = new BlinkDetector()
+    ears.forEach((ear, i) => b.update(ear, 1000 + i * gapMs))
+    return b.blinks
+  }
+  const open = (n: number) => Array<number>(n).fill(0.3)
+  it('detecta un parpadeo real aunque solo se vea en una muestra (equipo lento)', () => {
+    expect(feed([...open(10), 0.12, ...open(4)], 250)).toBe(1)
+  })
+  it('detecta un parpadeo rápido muestreado a ~40 fps', () => {
+    expect(feed([...open(30), 0.24, 0.15, 0.13, 0.2, 0.28, ...open(10)], 25)).toBe(1)
+  })
+  it('un solo valor ruidoso y leve no cuenta como parpadeo', () => {
+    expect(feed([...open(20), 0.25, ...open(20)], 25)).toBe(0)
+  })
+  it('ojos cerrados mucho rato (mirar abajo) no cuenta', () => {
+    expect(feed([...open(10), ...Array<number>(60).fill(0.1), ...open(5)], 25)).toBe(0)
+  })
+  it('el ritmo de muestreo alto no desgasta la referencia de ojos abiertos', () => {
+    // 3 s de ojos casi iguales a 40 fps, luego un parpadeo.
+    expect(feed([...Array<number>(120).fill(0.27), 0.14, 0.13, 0.27, 0.28], 25)).toBe(1)
   })
 })
 
