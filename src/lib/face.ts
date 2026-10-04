@@ -65,14 +65,24 @@ export interface Tuning {
   margin: number
   /** Consecutive agreeing frames required before the match is trusted. */
   streak: number
+  /** Smallest face (width ÷ frame width) worth reading: a simple camera needs the person nearer, or this lower. */
+  minFace: number
+  /** Minimum confidence of the face detector (lower finds smaller, noisier faces). */
+  minConfidence: number
 }
 
+/**
+ * The three levels are presented to the administrator as the camera they have:
+ * strict = a good camera (8 MP or more), balanced = a normal one (≈5 MP), relaxed = a basic
+ * tablet camera (≈2 MP or less), which sees smaller, softer, noisier faces and so needs a more
+ * tolerant match and a lower size / detector bar. The margin against the second most similar
+ * person keeps protecting against look-alikes at every level.
+ */
 export const TUNING: Record<FaceStrictness, Tuning> = {
-  strict: { threshold: 0.5, margin: 0.07, streak: 3 },
-  // Default level: ≈25% de coincidencia mínima (antes ≈28% y, antes, ≈40%) — reconoce más rápido, con más
-  // margen de tolerancia. El margen contra el segundo más parecido sigue protegiendo contra gemelos/parecidos.
-  balanced: { threshold: 0.675, margin: 0.04, streak: 2 },
-  relaxed: { threshold: 0.72, margin: 0.03, streak: 2 },
+  strict: { threshold: 0.5, margin: 0.07, streak: 3, minFace: 0.15, minConfidence: 0.5 },
+  // ≈25% de coincidencia mínima (antes ≈28% y, antes, ≈40%) — reconoce más rápido, con más tolerancia.
+  balanced: { threshold: 0.675, margin: 0.04, streak: 2, minFace: 0.15, minConfidence: 0.5 },
+  relaxed: { threshold: 0.72, margin: 0.03, streak: 2, minFace: 0.1, minConfidence: 0.4 },
 }
 
 /** Strictness level, optionally with an explicit distance limit set by the administrator. */
@@ -122,7 +132,7 @@ let focusSampler: HTMLCanvasElement | null = null
 const FOCUS = 64
 
 /** Average luminance of the face box, from a tiny downscaled copy of the frame. */
-function faceBrightness(video: HTMLVideoElement, box: { x: number; y: number; width: number; height: number }) {
+function faceBrightness(video: HTMLVideoElement | HTMLCanvasElement, box: { x: number; y: number; width: number; height: number }) {
   sampler ??= Object.assign(document.createElement('canvas'), { width: 24, height: 24 })
   const ctx = sampler.getContext('2d', { willReadFrequently: true })
   if (!ctx) return 128
@@ -137,7 +147,7 @@ function faceBrightness(video: HTMLVideoElement, box: { x: number; y: number; wi
  * Focus of the face: a central crop of the face taken at (almost) native resolution,
  * so blur is not averaged away by downscaling; mean absolute Laplacian of its luminance.
  */
-function faceSharpness(video: HTMLVideoElement, box: { x: number; y: number; width: number; height: number }) {
+function faceSharpness(video: HTMLVideoElement | HTMLCanvasElement, box: { x: number; y: number; width: number; height: number }) {
   focusSampler ??= Object.assign(document.createElement('canvas'), { width: FOCUS, height: FOCUS })
   const ctx = focusSampler.getContext('2d', { willReadFrequently: true })
   if (!ctx) return MIN_SHARPNESS * 4
@@ -167,17 +177,48 @@ function faceSharpness(video: HTMLVideoElement, box: { x: number; y: number; wid
  */
 export type DetectorKind = 'fast' | 'accurate'
 
+export interface ReadOptions {
+  /**
+   * Digital zoom (≥ 1): read only the central 1/zoom of the frame, copied at its native pixels. Lets a
+   * person who stands back from a wide-angle tablet camera count as "near", without losing detail
+   * (the descriptor is computed from the same native pixels either way).
+   */
+  zoom?: number
+  /** SSD minimum confidence (default 0.5). Lower finds smaller or noisier faces. */
+  minConfidence?: number
+}
+
+let zoomCanvas: HTMLCanvasElement | null = null
+
 export async function readFace(
   api: FaceApi,
   video: HTMLVideoElement,
   withDescriptor: boolean,
   detector: DetectorKind = 'accurate',
+  options: ReadOptions = {},
 ): Promise<ReadResult> {
-  const run = (options: Parameters<FaceApi['detectAllFaces']>[1]) => {
-    const task = api.detectAllFaces(video, options).withFaceLandmarks()
+  let source: HTMLVideoElement | HTMLCanvasElement = video
+  let vw = video.videoWidth || 1
+  let vh = video.videoHeight || 1
+  const zoom = options.zoom && options.zoom > 1 ? options.zoom : 1
+  if (zoom > 1 && vw > 1) {
+    const sw = Math.round(vw / zoom)
+    const sh = Math.round(vh / zoom)
+    zoomCanvas ??= document.createElement('canvas')
+    if (zoomCanvas.width !== sw || zoomCanvas.height !== sh) {
+      zoomCanvas.width = sw
+      zoomCanvas.height = sh
+    }
+    zoomCanvas.getContext('2d')?.drawImage(video, (vw - sw) / 2, (vh - sh) / 2, sw, sh, 0, 0, sw, sh)
+    source = zoomCanvas
+    vw = sw
+    vh = sh
+  }
+  const run = (detection: Parameters<FaceApi['detectAllFaces']>[1]) => {
+    const task = api.detectAllFaces(source, detection).withFaceLandmarks()
     return withDescriptor ? task.withFaceDescriptors() : task
   }
-  const ssd = () => run(new api.SsdMobilenetv1Options({ minConfidence: 0.5, maxResults: 3 }))
+  const ssd = () => run(new api.SsdMobilenetv1Options({ minConfidence: options.minConfidence ?? 0.5, maxResults: 3 }))
   let faces =
     detector === 'accurate'
       ? await ssd()
@@ -187,8 +228,6 @@ export async function readFace(
   if (faces.length > 1) return { kind: 'multiple' }
   const f = faces[0]
   const box = f.detection.box
-  const vw = video.videoWidth || 1
-  const vh = video.videoHeight || 1
   const pts = f.landmarks.positions
   const yaw = dist(pts[30], pts[0]) / Math.max(1, dist(pts[30], pts[16]))
   const descriptor =
@@ -198,10 +237,10 @@ export async function readFace(
     reading: {
       descriptor,
       size: box.width / vw,
-      brightness: faceBrightness(video, box),
+      brightness: faceBrightness(source, box),
       offset: { x: (box.x + box.width / 2) / vw - 0.5, y: (box.y + box.height / 2) / vh - 0.5 },
       yaw,
-      sharpness: faceSharpness(video, box),
+      sharpness: faceSharpness(source, box),
       edgeGap: Math.min(box.x / vw, box.y / vh, 1 - (box.x + box.width) / vw, 1 - (box.y + box.height) / vh),
     },
   }
@@ -224,9 +263,9 @@ export const QUALITY_TEXT: Record<QualityIssue, string> = {
 }
 
 /** What is wrong with this frame for recognition, most important first. */
-export function qualityIssues(r: FaceReading, opts: { blur?: boolean } = {}): QualityIssue[] {
+export function qualityIssues(r: FaceReading, opts: { blur?: boolean; minFace?: number } = {}): QualityIssue[] {
   const issues: QualityIssue[] = []
-  if (r.size < MIN_FACE_RATIO) issues.push('small')
+  if (r.size < (opts.minFace ?? MIN_FACE_RATIO)) issues.push('small')
   if (r.size > MAX_FACE_RATIO) issues.push('close')
   else if (r.edgeGap < -0.02) issues.push('cut_off')
   if (Math.abs(r.offset.x) > 0.3 || Math.abs(r.offset.y) > 0.3) issues.push('off_center')

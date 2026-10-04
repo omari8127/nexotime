@@ -17,11 +17,23 @@ import { TUNING, matchPercent } from '@/lib/face'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import type { Employee, FaceStrictness } from '@/types'
 
+/** The three levels are described by the camera the reloj has (see TUNING in lib/face.ts). */
 const STRICTNESS: Record<FaceStrictness, { label: string; text: string }> = {
-  strict: { label: 'Estricto', text: 'Máxima seguridad. Puede pedir repetir con más frecuencia.' },
-  balanced: { label: 'Equilibrado', text: 'Recomendado para la mayoría de los casos.' },
-  relaxed: { label: 'Flexible', text: 'Reconoce con más facilidad; algo menos seguro con rostros parecidos.' },
+  relaxed: {
+    label: 'Baja (2 MP)',
+    text: 'Tablets y cámaras sencillas de 2 MP o menos: acepta rostros más pequeños, con menos detalle o luz, y es más tolerante al comparar.',
+  },
+  balanced: { label: 'Normal (5 MP)', text: 'Cámaras de unos 5 MP. Recomendado para la mayoría de los casos.' },
+  strict: {
+    label: 'Alta (8 MP o más)',
+    text: 'Cámaras buenas: más exigente, máxima seguridad. Puede pedir repetir con más frecuencia.',
+  },
 }
+
+const ZOOM_OPTIONS = [1, 1.3, 1.5, 1.7, 2, 2.5].map((z) => ({
+  value: String(z),
+  label: z === 1 ? 'Sin zoom (1×)' : `${z.toString().replace('.', ',')}×`,
+}))
 
 const fmt = (iso: string) => new Date(iso).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' })
 
@@ -50,6 +62,7 @@ export function KioskSettingsPanel() {
   const [seconds, setSeconds] = useState(String(saved.autoRegisterSeconds))
   const [strictness, setStrictness] = useState<FaceStrictness>(saved.faceStrictness)
   const [threshold, setThreshold] = useState<number | null>(saved.faceThreshold)
+  const [zoom, setZoom] = useState(String(saved.faceZoom))
   const [gap, setGap] = useState(String(saved.minGapMinutes))
   const [exitPin, setExitPin] = useState(saved.exitPin)
   const exitPinValid = /^\d{4,8}$/.test(exitPin)
@@ -63,6 +76,7 @@ export function KioskSettingsPanel() {
     Number(seconds) !== saved.autoRegisterSeconds ||
     strictness !== saved.faceStrictness ||
     threshold !== saved.faceThreshold ||
+    Number(zoom) !== saved.faceZoom ||
     Number(gap) !== saved.minGapMinutes ||
     (exitPin !== saved.exitPin && exitPinValid)
 
@@ -83,6 +97,7 @@ export function KioskSettingsPanel() {
           autoRegisterSeconds: Number(seconds),
           faceStrictness: strictness,
           faceThreshold: threshold ?? undefined,
+          faceZoom: Number(zoom),
           minGapMinutes: Number(gap),
           exitPin: exitPinValid ? exitPin : saved.exitPin,
         },
@@ -130,16 +145,28 @@ export function KioskSettingsPanel() {
 
           <div className="flex items-center justify-between gap-4 border-t border-border pt-5">
             <div>
-              <Label>Exigencia del reconocimiento</Label>
+              <Label>Calidad de la cámara del reloj</Label>
               <p className="mt-1 text-sm text-muted-foreground">{STRICTNESS[strictness].text}</p>
             </div>
             <Select
-              className="w-40"
+              className="w-44"
               value={strictness}
               onValueChange={(v) => setStrictness(v as FaceStrictness)}
               disabled={!canManage}
-              options={(Object.keys(STRICTNESS) as FaceStrictness[]).map((k) => ({ value: k, label: STRICTNESS[k].label }))}
+              options={(['relaxed', 'balanced', 'strict'] as FaceStrictness[]).map((k) => ({ value: k, label: STRICTNESS[k].label }))}
             />
+          </div>
+
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <Label>Zoom del reconocimiento facial</Label>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Acerca la imagen al centro, para que quien se para lejos de una cámara de tablet sea reconocido sin
+                acercarse. Lo que ves en pantalla es justo lo que se lee. Con zoom se usa la máxima resolución de la
+                cámara.
+              </p>
+            </div>
+            <Select className="w-36" value={zoom} onValueChange={setZoom} disabled={!canManage} options={ZOOM_OPTIONS} />
           </div>
 
           <div className="space-y-2">
@@ -147,8 +174,9 @@ export function KioskSettingsPanel() {
               <div>
                 <Label>Umbral de coincidencia</Label>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Porcentaje mínimo de parecido para aceptar un rostro: menos exige más rapidez, más exige más
-                  seguridad. Si no lo fijas, se usa el del nivel de exigencia ({matchPercent(TUNING[strictness].threshold)}%).
+                  Ajuste fino. Porcentaje mínimo de parecido para aceptar un rostro: menos es más tolerante (útil con
+                  cámaras de baja calidad), más es más seguro. Si no lo fijas, se usa el de la calidad de cámara elegida
+                  ({matchPercent(TUNING[strictness].threshold)}%).
                 </p>
               </div>
               <span className="w-14 text-right font-mono text-sm tabular-nums">
@@ -170,7 +198,7 @@ export function KioskSettingsPanel() {
               <span>Más estricto</span>
               {threshold !== null ? (
                 <button type="button" className="underline" onClick={() => setThreshold(null)}>
-                  Usar el nivel de exigencia
+                  Usar el de la cámara elegida
                 </button>
               ) : null}
               <span>Más permisivo</span>

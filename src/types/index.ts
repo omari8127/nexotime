@@ -87,6 +87,8 @@ export interface KioskSettings {
   faceStrictness?: FaceStrictness
   /** Exact match distance (0.35–0.75, lower = stricter). Overrides the strictness level when set. */
   faceThreshold?: number
+  /** Digital zoom on the face camera at the reloj (1–2.5×): for tablets with a wide, basic camera. */
+  faceZoom?: number
   /** Minimum minutes between two punches of the same person (avoids double punches). */
   minGapMinutes?: number
   /** Code (4–8 digits) that unlocks leaving the reloj checador back to the admin panel. */

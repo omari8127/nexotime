@@ -10,12 +10,15 @@ export function FaceViewport({
   cameraMessage,
   loadingModels,
   ok,
+  zoom = 1,
 }: {
   videoRef: RefObject<HTMLVideoElement | null>
   cameraState: CameraState
   cameraMessage: string
   loadingModels?: boolean
   ok?: boolean
+  /** Digital zoom, so what the person sees is exactly the central part that is being read. */
+  zoom?: number
 }) {
   const ready = cameraState === 'ready'
   return (
@@ -25,6 +28,8 @@ export function FaceViewport({
         muted
         playsInline
         className={cn('h-full w-full -scale-x-100 object-cover', !ready && 'invisible')}
+        // Mirrored like a selfie view; the inline transform replaces the class one to add the zoom.
+        style={zoom > 1 ? { transform: `scale(${-zoom}, ${zoom})` } : undefined}
       />
       {ready ? (
         <svg viewBox="0 0 100 100" className="pointer-events-none absolute inset-0 h-full w-full" preserveAspectRatio="none">

@@ -50,7 +50,10 @@ export function FaceScanFlow({
   onCancel: () => void
 }) {
   const candidates = useMemo(() => faceCandidates(employees), [employees])
-  const { videoRef, state: cameraState, message: cameraMessage } = useCameraStream(candidates.length > 0)
+  // A basic (2 MP) camera or a zoomed-in view needs every pixel the camera has.
+  const { videoRef, state: cameraState, message: cameraMessage } = useCameraStream(candidates.length > 0, {
+    hd: settings.faceZoom > 1 || settings.faceStrictness === 'relaxed',
+  })
   const [stage, setStage] = useState<Stage>(candidates.length === 0 ? 'no_faces' : 'loading')
   const [hint, setHint] = useState('')
   const [attempt, setAttempt] = useState(0)
@@ -130,9 +133,12 @@ export function FaceScanFlow({
       const loop = async () => {
         if (!alive) return
         try {
-          const { faceStrictness, faceThreshold } = settingsRef.current
+          const { faceStrictness, faceThreshold, faceZoom } = settingsRef.current
           const tuning = tuningFor(faceStrictness, faceThreshold)
-          const result = await readFace(api, video, true)
+          const result = await readFace(api, video, true, 'accurate', {
+            zoom: faceZoom,
+            minConfidence: tuning.minConfidence,
+          })
           if (!alive) return
 
           if (result.kind === 'none') {
@@ -144,7 +150,7 @@ export function FaceScanFlow({
             streak = 0
             setHint('Debe haber una sola persona frente a la cámara')
           } else {
-            const issues = qualityIssues(result.reading)
+            const issues = qualityIssues(result.reading, { minFace: tuning.minFace })
             if (issues.length > 0 || !result.reading.descriptor) {
               recent = []
               streak = 0
@@ -209,6 +215,7 @@ export function FaceScanFlow({
             cameraState={cameraState}
             cameraMessage={cameraMessage}
             loadingModels={stage === 'loading'}
+            zoom={settings.faceZoom}
           />
           <div className="space-y-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Reconocimiento facial</p>

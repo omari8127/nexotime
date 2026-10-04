@@ -7,6 +7,7 @@ import {
   nearestFace,
   qualityIssues,
   tuningFor,
+  TUNING,
   type FaceReading,
 } from '@/lib/face'
 import { resolveKiosk } from '@/lib/kiosk'
@@ -67,6 +68,7 @@ describe('calidad de imagen', () => {
   })
   it('avisa lejos, cerca, cortado, oscuro, con contraluz y borroso', () => {
     expect(qualityIssues({ ...ok, size: 0.1 })).toContain('small')
+    expect(qualityIssues({ ...ok, size: 0.1 }, { minFace: TUNING.relaxed.minFace })).not.toContain('small') // cámara de 2 MP
     expect(qualityIssues({ ...ok, size: 0.9 })).toContain('close')
     expect(qualityIssues({ ...ok, edgeGap: -0.1 })).toContain('cut_off')
     expect(qualityIssues({ ...ok, brightness: 20 })).toContain('dark')
@@ -85,5 +87,20 @@ describe('ajustes del reloj', () => {
     expect(k.autoRegisterSeconds).toBe(10)
     expect(k.faceThreshold).toBe(0.75)
     expect(k.minGapMinutes).toBe(0)
+  })
+  it('el zoom va de 1× a 2,5×', () => {
+    expect(resolveKiosk(undefined).faceZoom).toBe(1)
+    expect(resolveKiosk({ kiosk: { faceZoom: 1.7 } } as never).faceZoom).toBe(1.7)
+    expect(resolveKiosk({ kiosk: { faceZoom: 9 } } as never).faceZoom).toBe(2.5)
+    expect(resolveKiosk({ kiosk: { faceZoom: 0.2 } } as never).faceZoom).toBe(1)
+  })
+  it('una cámara más sencilla es más tolerante, nunca más exigente', () => {
+    const [low, normal, high] = [TUNING.relaxed, TUNING.balanced, TUNING.strict]
+    expect(low.threshold).toBeGreaterThan(normal.threshold)
+    expect(normal.threshold).toBeGreaterThan(high.threshold)
+    expect(low.minFace).toBeLessThan(normal.minFace)
+    expect(low.minConfidence).toBeLessThan(normal.minConfidence)
+    // Aun en el nivel más tolerante se exige distancia contra el segundo más parecido.
+    expect(low.margin).toBeGreaterThan(0)
   })
 })

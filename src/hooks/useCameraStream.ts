@@ -15,8 +15,12 @@ export function describeCameraError(err: unknown): string {
   return 'No se pudo iniciar la cámara.'
 }
 
-/** Opens the front camera into a <video> and always releases it on unmount. */
-export function useCameraStream(active = true) {
+/**
+ * Opens the front camera into a <video> and always releases it on unmount.
+ * `hd` asks for 1080p instead of 720p: a simple tablet camera tops out there, and asking for less
+ * throws away detail that a small or zoomed-in face needs.
+ */
+export function useCameraStream(active = true, { hd = false } = {}) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [state, setState] = useState<CameraState>('starting')
   const [message, setMessage] = useState('')
@@ -30,7 +34,11 @@ export function useCameraStream(active = true) {
     navigator.mediaDevices
       ?.getUserMedia({
         audio: false,
-        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: {
+          facingMode: 'user',
+          width: { ideal: hd ? 1920 : 1280 },
+          height: { ideal: hd ? 1080 : 720 },
+        },
       })
       .then(async (s) => {
         if (cancelled) {
@@ -58,7 +66,7 @@ export function useCameraStream(active = true) {
       cancelled = true
       stream?.getTracks().forEach((t) => t.stop())
     }
-  }, [active])
+  }, [active, hd])
 
   return { videoRef, state, message }
 }
