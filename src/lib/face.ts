@@ -189,6 +189,14 @@ export interface ReadOptions {
 }
 
 let zoomCanvas: HTMLCanvasElement | null = null
+let wideCanvas: HTMLCanvasElement | null = null
+/** Consecutive frames where no face was found; the wide-margin retry runs every few of them. */
+let emptyFrames = 0
+const WIDE_RETRY_EVERY = 3
+let lastWideAt = 0
+const WIDE_STICKY_MS = 3000
+/** The margin copy is never larger than this on its long side (the detector shrinks it anyway). */
+const WIDE_MAX_SIDE = 640
 
 export async function readFace(
   api: FaceApi,
@@ -214,20 +222,56 @@ export async function readFace(
     vw = sw
     vh = sh
   }
-  const run = (detection: Parameters<FaceApi['detectAllFaces']>[1]) => {
-    const task = api.detectAllFaces(source, detection).withFaceLandmarks()
+  const detectOn = (input: HTMLVideoElement | HTMLCanvasElement, detection: Parameters<FaceApi['detectAllFaces']>[1]) => {
+    const task = api.detectAllFaces(input, detection).withFaceLandmarks()
     return withDescriptor ? task.withFaceDescriptors() : task
   }
-  const ssd = () => run(new api.SsdMobilenetv1Options({ minConfidence: options.minConfidence ?? 0.5, maxResults: 3 }))
+  const ssdOptions = () =>
+    new api.SsdMobilenetv1Options({ minConfidence: options.minConfidence ?? 0.5, maxResults: 3 })
   let faces =
     detector === 'accurate'
-      ? await ssd()
-      : await run(new api.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.45 }))
-  if (faces.length === 0 && detector === 'fast') faces = await ssd()
+      ? await detectOn(source, ssdOptions())
+      : await detectOn(source, new api.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.45 }))
+  if (faces.length === 0 && detector === 'fast') faces = await detectOn(source, ssdOptions())
+
+  // The detectors cannot find a face that fills (or overflows) the frame: the person is simply too close,
+  // and the screen used to say "place your face in the oval" while it was already filling it. Every few
+  // empty frames look again on a copy with a wide margin; a face found that way is reported with its real
+  // (oversized) measures, so the quality check can say "aléjate" instead.
+  let wide: { x: number; y: number; scale: number } | null = null
+  // Once someone was found too close, keep looking on every frame (so "aléjate" doesn't flicker).
+  const retryWide = ++emptyFrames % WIDE_RETRY_EVERY === 0 || Date.now() - lastWideAt < WIDE_STICKY_MS
+  if (faces.length === 0 && retryWide) {
+    const scale = Math.min(1, WIDE_MAX_SIDE / (vw * 2))
+    const ww = Math.max(1, Math.round(vw * 2 * scale))
+    const wh = Math.max(1, Math.round(vh * 2 * scale))
+    wideCanvas ??= document.createElement('canvas')
+    if (wideCanvas.width !== ww || wideCanvas.height !== wh) {
+      wideCanvas.width = ww
+      wideCanvas.height = wh
+    }
+    const g = wideCanvas.getContext('2d')
+    if (g) {
+      g.fillStyle = '#808080'
+      g.fillRect(0, 0, ww, wh)
+      g.drawImage(source, (vw / 2) * scale, (vh / 2) * scale, vw * scale, vh * scale)
+      const found = await detectOn(wideCanvas, ssdOptions())
+      if (found.length === 1) {
+        faces = found
+        wide = { x: vw / 2, y: vh / 2, scale }
+        lastWideAt = Date.now()
+      }
+    }
+  }
+  if (faces.length > 0) emptyFrames = 0
   if (faces.length === 0) return { kind: 'none' }
   if (faces.length > 1) return { kind: 'multiple' }
   const f = faces[0]
-  const box = f.detection.box
+  const raw = f.detection.box
+  // Back to the original frame's coordinates (the margin copy is scaled and shifted).
+  const box = wide
+    ? { x: raw.x / wide.scale - wide.x, y: raw.y / wide.scale - wide.y, width: raw.width / wide.scale, height: raw.height / wide.scale }
+    : raw
   const pts = f.landmarks.positions
   const yaw = dist(pts[30], pts[0]) / Math.max(1, dist(pts[30], pts[16]))
   const descriptor =
