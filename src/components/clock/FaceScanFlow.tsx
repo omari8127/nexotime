@@ -10,23 +10,19 @@ import { usePermissions } from '@/hooks/useScopedData'
 import {
   QUALITY_TEXT,
   faceCandidates,
-  isConfidentMatch,
   loadFaceApi,
-  matchPercent,
-  meanDescriptor,
-  nearestFace,
   qualityIssues,
   readFace,
   tuningFor,
   type FaceApi,
   type FaceMatch,
 } from '@/lib/face'
+import { FaceSession } from '@/lib/faceSession'
 import type { ResolvedKioskSettings } from '@/lib/kiosk'
 import type { Employee } from '@/types'
 
-type Stage = 'loading' | 'searching' | 'no_faces' | 'failed'
+type Stage = 'loading' | 'searching' | 'failed'
 
-const SMOOTHING_FRAMES = 3
 /** Frames of a clear, well-lit face with no trustworthy match before it is logged as rejected. */
 const REJECT_FRAMES = 14
 const REJECT_LOG_COOLDOWN_MS = 30_000
@@ -50,11 +46,11 @@ export function FaceScanFlow({
   onCancel: () => void
 }) {
   const candidates = useMemo(() => faceCandidates(employees), [employees])
-  // A basic (2 MP) camera or a zoomed-in view needs every pixel the camera has.
-  const { videoRef, state: cameraState, message: cameraMessage } = useCameraStream(candidates.length > 0, {
-    hd: settings.faceZoom > 1 || settings.faceStrictness === 'relaxed',
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user')
+  const { videoRef, state: cameraState, message: cameraMessage, resolution, restart } = useCameraStream(candidates.length > 0, {
+    hd: true, facingMode,
   })
-  const [stage, setStage] = useState<Stage>(candidates.length === 0 ? 'no_faces' : 'loading')
+  const [stage, setStage] = useState<Stage>('loading')
   const [hint, setHint] = useState('')
   const [attempt, setAttempt] = useState(0)
   const [reading, setReading] = useState('')
@@ -112,11 +108,11 @@ export function FaceScanFlow({
       }
       if (!alive) return
       setStage('searching')
+      setReading('')
       setHint('Mira a la cámara')
 
-      let recent: number[][] = []
-      let streak = 0
-      let streakId = ''
+      const session = new FaceSession()
+      let errors = 0
       let unknownFrames = 0
       let lastRejectLog = 0
       const reject = (reason: string) => {
@@ -140,51 +136,59 @@ export function FaceScanFlow({
             minConfidence: tuning.minConfidence,
           })
           if (!alive) return
+          errors = 0
 
           if (result.kind === 'none') {
-            recent = []
-            streak = 0
+            session.reset()
+            unknownFrames = 0
+            setReading('')
             setHint('Coloca tu rostro dentro del óvalo')
           } else if (result.kind === 'multiple') {
-            recent = []
-            streak = 0
+            session.reset()
+            unknownFrames = 0
+            setReading('')
             setHint('Debe haber una sola persona frente a la cámara')
           } else {
-            const issues = qualityIssues(result.reading, { minFace: tuning.minFace })
+            const issues = qualityIssues(result.reading, { blur: true, minFace: tuning.minFace })
             if (issues.length > 0 || !result.reading.descriptor) {
-              recent = []
-              streak = 0
+              session.reset()
+              unknownFrames = 0
+              setReading('')
               setHint(issues.length ? QUALITY_TEXT[issues[0]] : 'Mira a la cámara')
             } else {
-              recent = [...recent, result.reading.descriptor].slice(-SMOOTHING_FRAMES)
-              const m = nearestFace(candidatesRef.current, meanDescriptor(recent))
-              if (m) setReading(`Coincidencia ${matchPercent(m.distance)}% · distancia ${m.distance.toFixed(2)} (límite ${tuning.threshold})`)
-              const near: FaceMatch | null = m // `m` is narrowed to never in the else branch below
-              if (isConfidentMatch(m, tuning)) {
+              const evidence = session.push(candidatesRef.current, result.reading.descriptor, tuning)
+              const near = evidence.match
+              if (near) setReading(`Distancia ${near.distance.toFixed(3)} · límite ${tuning.threshold.toFixed(3)} · ${evidence.progress}/${evidence.required} lecturas`)
+              if (evidence.accepted) {
+                accept(evidence.accepted)
+                return
+              }
+              if (evidence.progress > 0) {
                 unknownFrames = 0
-                streak = streakId === m.employee.id ? streak + 1 : 1
-                streakId = m.employee.id
-                if (streak >= tuning.streak) {
-                  accept(m)
-                  return
-                }
+                setHint(`Mantente quieto · verificando ${evidence.progress}/${evidence.required}`)
               } else {
-                streak = 0
-                streakId = ''
-                if (recent.length >= SMOOTHING_FRAMES) recent = recent.slice(1)
-                setHint('Mira a la cámara')
-                if (near && ++unknownFrames >= REJECT_FRAMES) {
+                unknownFrames += 1
+                setHint(unknownFrames >= 5
+                  ? 'No hay una coincidencia clara. Mira de frente, mejora la luz o usa otro método.'
+                  : 'Mira a la cámara')
+                if (near && unknownFrames >= REJECT_FRAMES) {
                   unknownFrames = 0
-                  reject(
-                    `Rostro no reconocido: mejor coincidencia ${near.distance.toFixed(2)} (límite ${tuning.threshold.toFixed(2)}, ` +
-                      `separación ${Number.isFinite(near.runnerUp) ? (near.runnerUp - near.distance).toFixed(2) : 'n/a'}).`,
-                  )
+                  reject(`Rostro no reconocido: distancia ${near.distance.toFixed(2)} (límite ${tuning.threshold.toFixed(2)}).`)
                 }
               }
             }
           }
         } catch {
-          /* a dropped frame is not worth surfacing */
+          session.reset()
+          unknownFrames = 0
+          if (!alive) return
+          setReading('')
+          if (++errors >= 3) {
+            setHint('No se pueden analizar imágenes de la cámara. Reintenta o usa QR, código de barras o número + PIN.')
+            setStage('failed')
+            return
+          }
+          setHint('No se pudo leer la imagen. Mantente frente a la cámara.')
         }
         timer = window.setTimeout(loop, 40)
       }
@@ -200,7 +204,7 @@ export function FaceScanFlow({
 
   return (
     <div className="flex flex-col items-center gap-5 text-center">
-      {stage === 'no_faces' ? (
+      {candidates.length === 0 ? (
         <div className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-6 text-left">
           <p className="text-[15px] font-semibold text-slate-900">Aún no hay rostros registrados</p>
           <p className="mt-1 text-sm text-slate-500">
@@ -220,20 +224,26 @@ export function FaceScanFlow({
           <div className="space-y-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Reconocimiento facial</p>
             <p className="text-lg font-semibold text-slate-900">
-              {stage === 'loading' ? 'Preparando…' : hint || 'Mira a la cámara'}
+              {cameraState === 'error' ? 'Revisa la cámara' : stage === 'loading' ? 'Preparando…' : hint || 'Mira a la cámara'}
             </p>
             <p className="text-sm text-slate-500">
               Se procesa en este equipo. Al identificarte verás una foto de verificación que no se guarda.
             </p>
+            {resolution ? <p className="text-xs text-slate-500">Cámara: {resolution}</p> : null}
             {reading && stage === 'searching' && can('biometrics.manage') ? <p className="font-mono text-[11px] text-slate-400">{reading}</p> : null}
           </div>
         </>
       )}
 
-      <div className="flex w-full gap-3">
-        {stage === 'failed' ? (
-          <Button variant="secondary" size="lg" className="flex-1" onClick={() => setAttempt((n) => n + 1)}>
-            Reintentar
+      {candidates.length > 0 ? (
+        <Button variant="secondary" onClick={() => { setStage('loading'); setFacingMode((v) => v === 'user' ? 'environment' : 'user') }}>
+          Cambiar a cámara {facingMode === 'user' ? 'trasera' : 'frontal'}
+        </Button>
+      ) : null}
+      <div className="flex w-full flex-wrap gap-3">
+        {stage === 'failed' || cameraState === 'error' ? (
+          <Button variant="secondary" size="lg" className="flex-1" onClick={() => { setStage('loading'); setAttempt((n) => n + 1); restart() }}>
+            Reintentar cámara
           </Button>
         ) : null}
         <VoiceToggle scope="kiosk" compact />

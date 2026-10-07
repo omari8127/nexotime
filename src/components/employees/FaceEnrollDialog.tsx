@@ -23,12 +23,11 @@ import {
   descriptorDistance,
   faceCandidates,
   loadFaceApi,
-  matchPercent,
   meanDescriptor,
-  nearestFace,
   qualityIssues,
   readFace,
 } from '@/lib/face'
+import { FaceSession } from '@/lib/faceSession'
 import { resolveKiosk } from '@/lib/kiosk'
 import type { Employee } from '@/types'
 
@@ -48,7 +47,7 @@ const STEP_DWELL_MS = 1600
 /** Good frames before a sample is taken: this is the visible "hold still" moment. */
 const STABLE_FRAMES = 4
 /** Frames averaged into each saved sample (averages out frame-to-frame noise). */
-const SAMPLE_FRAMES = 2
+const SAMPLE_FRAMES = 3
 /**
  * A wrong frame (a blink, a small sway) only freezes the hold ring. It starts walking back — one
  * tick at a time, never snapping to zero — after the problem has lasted this long.
@@ -59,7 +58,7 @@ const DECAY_MS = 300
 const SPEAK_AFTER_MS = 1200
 /** Pause before retrying a sample that did not come out clean; the ring stays almost full meanwhile. */
 const RETRY_MS = 400
-/** Stuck on one step this long: assisted mode — the pose and sharpness gates are dropped for it, so a
+/** Stuck on one step this long: assisted mode — the pose gates are relaxed for it, so a
  *  person who cannot (or does not manage to) do the exact movement still finishes. The final
  *  recognition test is the real check. */
 const ASSIST_AFTER_MS = 10_000
@@ -75,9 +74,8 @@ const FIRST_FRONT_TOL_ASSISTED = 0.7
 /** The sample must be this close to at least one already saved (same person). Turned faces differ more. */
 const SAME_PERSON_FRONT = 0.45
 const SAME_PERSON_TURNED = 0.6
-const IDENTITY_MISSES_BEFORE_RELAX = 3
 const DUPLICATE_DISTANCE = 0.42
-const TEST_TIMEOUT_MS = 9000
+const TEST_TIMEOUT_MS = 30_000
 
 type Stage = 'intro' | 'capture' | 'test'
 
@@ -122,13 +120,15 @@ export function FaceEnrollDialog({
   const [loadingModels, setLoadingModels] = useState(false)
   const [hint, setHint] = useState('')
   const [error, setError] = useState('')
-  const [testResult, setTestResult] = useState<{ ok: boolean; percent?: number } | null>(null)
+  const [testResult, setTestResult] = useState<{ ok: boolean } | null>(null)
+  const [testAttempt, setTestAttempt] = useState(0)
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user')
   const saved = useRef<number[][]>(
     testOnly ? (employee.identifications.find((i) => i.method === 'face')?.descriptors ?? []) : [],
   )
 
   const cameraOn = open && stage !== 'intro'
-  const { videoRef, state: cameraState, message } = useCameraStream(cameraOn)
+  const { videoRef, state: cameraState, message, resolution, restart } = useCameraStream(cameraOn, { hd: true, facingMode })
 
   const others = useMemo(
     () => faceCandidates(allEmployees.filter((e) => e.id !== employee.id)),
@@ -172,7 +172,7 @@ export function FaceEnrollDialog({
   }, [open, stage])
   useEffect(() => {
     if (!ready || stage !== 'capture') return
-    announce(`capture:${count}`, count >= STEPS.length ? 'Listo. Tu rostro quedó guardado' : STEPS[count].say)
+    announce(`capture:${count}`, count >= STEPS.length ? 'Listo. Vamos a comprobar tu rostro' : STEPS[count].say)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, stage, count])
   useEffect(() => {
@@ -193,13 +193,16 @@ export function FaceEnrollDialog({
 
   /* ------------------------------- capture ------------------------------- */
   useEffect(() => {
-    if (stage !== 'capture' || cameraState !== 'ready') return
+    if (!open || stage !== 'capture' || cameraState !== 'ready') return
     let alive = true
     let timer: number | undefined
     let stageTimer: number | undefined
     const video = videoRef.current
     if (!video) return
     const samples: number[][] = []
+    setCount(0)
+    setHold(0)
+    setTestResult(null)
     let lastAccepted = 0
     let stable = 0
     let badSince = 0
@@ -208,7 +211,7 @@ export function FaceEnrollDialog({
     let stepStart = Date.now()
     let assisted = false
     let holdAnnounced = false
-    let identityMisses = 0
+    let errors = 0
     let firstTurnSide = 0
     let baseLogYaw = 0
     const yawLog: number[] = []
@@ -261,7 +264,10 @@ export function FaceEnrollDialog({
         try {
           // Cheap pass first (no descriptor): is there one clear face in the right pose?
           // 'fast' is fine here: this reading only guides the pose and is never saved.
-          const result = await readFace(api, video, false, 'fast')
+          const kiosk = resolveKiosk(settings)
+          const tuning = tuningFor(kiosk.faceStrictness, kiosk.faceThreshold)
+          const result = await readFace(api, video, false, 'fast', { minConfidence: tuning.minConfidence })
+          errors = 0
           if (!alive) return
           const step = STEPS[samples.length]
 
@@ -275,7 +281,7 @@ export function FaceEnrollDialog({
             bad(result.kind === 'none' ? 'Coloca tu rostro dentro del círculo' : 'Debe aparecer una sola persona')
           } else {
             const r = result.reading
-            const issues = qualityIssues(r, { blur: !assisted })
+            const issues = qualityIssues(r, { blur: true, minFace: tuning.minFace })
             const rel = Math.log(r.yaw) - baseLogYaw
             const side = Math.abs(rel) < TURN_MIN ? 0 : rel < 0 ? -1 : 1
             const first = samples.length === 0
@@ -318,27 +324,23 @@ export function FaceEnrollDialog({
                 const frames: number[][] = []
                 // Saved samples use the accurate detector, same as the reloj; one spare attempt for a bad frame.
                 for (let i = 0; i < SAMPLE_FRAMES + 1 && frames.length < SAMPLE_FRAMES && alive; i++) {
-                  const again = await readFace(api, video, true, 'accurate')
+                  const again = await readFace(api, video, true, 'accurate', { minConfidence: tuning.minConfidence })
                   if (
                     again.kind === 'face' &&
                     again.reading.descriptor &&
-                    qualityIssues(again.reading, { blur: !assisted }).length === 0
+                    qualityIssues(again.reading, { blur: true, minFace: tuning.minFace }).length === 0
                   ) {
                     frames.push(again.reading.descriptor)
                   }
                 }
                 if (!alive) return
-                if (frames.length < SAMPLE_FRAMES) {
+                if (frames.length < SAMPLE_FRAMES || frames.some((d) => descriptorDistance(d, frames[0]) > 0.35)) {
                   retry('No alcanzamos a verte bien. Mantén la posición.')
                 } else {
                   const d = meanDescriptor(frames)
-                  // After a few misses the limit loosens a little: some faces vary more with the angle.
-                  const limit =
-                    (step.pose === 'front' ? SAME_PERSON_FRONT : SAME_PERSON_TURNED) +
-                    (identityMisses >= IDENTITY_MISSES_BEFORE_RELAX ? 0.1 : 0)
+                  const limit = step.pose === 'front' ? SAME_PERSON_FRONT : SAME_PERSON_TURNED
                   const nearest = samples.length ? Math.min(...samples.map((s) => descriptorDistance(s, d))) : 0
                   if (samples.length > 0 && nearest > limit) {
-                    identityMisses += 1
                     retry(
                       step.pose === 'front'
                         ? 'Mantén el mismo rostro frente a la cámara'
@@ -364,14 +366,12 @@ export function FaceEnrollDialog({
                     stepStart = Date.now()
                     assisted = false
                     holdAnnounced = false
-                    identityMisses = 0
                     setHold(0)
                     setCount(samples.length)
                     setFlashKey((n) => n + 1)
                     beep()
                     if (samples.length >= STEPS.length) {
                       saved.current = samples
-                      enroll(employee.id, samples, currentUser)
                       setTestResult(null)
                       setHint('')
                       finished = true
@@ -388,7 +388,10 @@ export function FaceEnrollDialog({
             }
           }
         } catch {
-          /* skip a bad frame */
+          stable = 0
+          if (!alive) return
+          if (++errors >= 3) { fail('No se puede analizar el video. Reintenta la cámara o usa otro dispositivo.'); return }
+          bad('No se pudo leer la imagen. Mantén la posición.')
         }
         if (!finished && alive) timer = window.setTimeout(loop, 30)
       }
@@ -402,39 +405,69 @@ export function FaceEnrollDialog({
       if (stageTimer) clearTimeout(stageTimer)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, cameraState])
+  }, [stage, cameraState, open])
 
   /* --------------------------------- test -------------------------------- */
   useEffect(() => {
-    if (stage !== 'test' || cameraState !== 'ready') return
+    if (!open || stage !== 'test' || cameraState !== 'ready') return
     let alive = true
     let timer: number | undefined
     const video = videoRef.current
     if (!video) return
-    const started = Date.now()
-    const candidate = [{ employee, descriptors: saved.current }]
-
+    const session = new FaceSession()
     const run = async () => {
+      setTestResult(null)
       setLoadingModels(true)
       const api = await loadFaceApi().catch(() => null)
       if (!alive) return
       setLoadingModels(false)
-      if (!api) return
+      if (!api) {
+        setHint('No se pudieron cargar los modelos. Revisa la conexión y reintenta.')
+        setTestResult({ ok: false })
+        return
+      }
+      // Model loading is not counted against slow tablets' test window.
+      const started = Date.now()
+      let errors = 0
       const loop = async () => {
         if (!alive) return
         try {
-          const result = await readFace(api, video, true)
+          const kiosk = resolveKiosk(settings)
+          const tuning = tuningFor(kiosk.faceStrictness, kiosk.faceThreshold)
+          const result = await readFace(api, video, true, 'accurate', {
+            minConfidence: tuning.minConfidence,
+          })
           if (!alive) return
+          errors = 0
           if (result.kind === 'face' && result.reading.descriptor) {
-            const m = nearestFace(candidate, result.reading.descriptor)
-            const kiosk = resolveKiosk(settings)
-            if (m && m.distance < tuningFor(kiosk.faceStrictness, kiosk.faceThreshold).threshold) {
-              setTestResult({ ok: true, percent: matchPercent(m.distance) })
-              return
+            const issues = qualityIssues(result.reading, { blur: true, minFace: tuning.minFace })
+            if (issues.length) {
+              session.reset()
+              setHint(QUALITY_TEXT[issues[0]])
+            } else {
+              const descriptors = testOnly
+                ? (employee.identifications.find((i) => i.method === 'face')?.descriptors ?? [])
+                : saved.current
+              const evidence = session.push([
+                { employee, descriptors }, ...othersRef.current,
+              ], result.reading.descriptor, tuning)
+              if (evidence.accepted?.employee.id === employee.id) {
+                if (!testOnly) enroll(employee.id, descriptors, currentUser)
+                setTestResult({ ok: true })
+                setHint('')
+                return
+              }
+              setHint(evidence.progress ? `Verificando ${evidence.progress}/${evidence.required}` : 'Mira de frente; todavía no hay una coincidencia clara.')
             }
+          } else {
+            session.reset()
+            setHint(result.kind === 'multiple' ? 'Debe aparecer una sola persona' : 'Coloca tu rostro dentro del círculo')
           }
         } catch {
-          /* ignore */
+          session.reset()
+          if (!alive) return
+          setHint('No se pudo analizar el video. Reintenta la cámara.')
+          if (++errors >= 3) { setTestResult({ ok: false }); return }
         }
         if (Date.now() - started > TEST_TIMEOUT_MS) {
           setTestResult({ ok: false })
@@ -442,15 +475,12 @@ export function FaceEnrollDialog({
         }
         timer = window.setTimeout(loop, 60)
       }
-      loop()
+      void loop()
     }
-    run()
-    return () => {
-      alive = false
-      if (timer) clearTimeout(timer)
-    }
+    void run()
+    return () => { alive = false; if (timer) clearTimeout(timer) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, cameraState])
+  }, [stage, cameraState, open, testAttempt])
 
   const currentStep = STEPS[Math.min(count, STEPS.length - 1)]
   const turning =
@@ -467,7 +497,7 @@ export function FaceEnrollDialog({
             {stage === 'test'
               ? testOnly
                 ? 'Mira a la cámara para comprobar que el rostro guardado se reconoce.'
-                : 'Rostro guardado. Comprobemos que se reconoce bien.'
+                : testResult?.ok ? 'Registro facial guardado y verificado.' : 'Comprobemos tu rostro antes de guardar el registro.'
               : stage === 'capture'
                 ? 'Sigue las indicaciones. No hace falta tocar nada.'
                 : hasFace
@@ -510,7 +540,12 @@ export function FaceEnrollDialog({
             </label>
             <div className="flex items-center justify-between gap-3 text-[13px] text-muted-foreground">
               <span>Las indicaciones también se dicen en voz alta.</span>
-              <VoiceToggle scope="enroll" />
+              {resolution ? <p className="text-xs text-muted-foreground">Cámara: {resolution}</p> : null}
+            {cameraState === 'error' ? <Button variant="secondary" onClick={restart}>Reintentar cámara</Button> : null}
+            <Button variant="secondary" disabled={!!testResult?.ok} onClick={() => setFacingMode((v) => v === 'user' ? 'environment' : 'user')}>
+              Cambiar a cámara {facingMode === 'user' ? 'trasera' : 'frontal'}
+            </Button>
+            <VoiceToggle scope="enroll" />
             </div>
             {error ? (
               <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -556,7 +591,7 @@ export function FaceEnrollDialog({
                 </AnimatePresence>
                 <p className="mt-1.5 h-5 text-sm text-muted-foreground">{hint}</p>
                 <p className="mt-2 text-xs text-muted-foreground/70">
-                  {count >= STEPS.length ? 'Guardando tu rostro…' : `Paso ${count + 1} de ${STEPS.length}`}
+                  {count >= STEPS.length ? 'Preparando la prueba…' : `Paso ${count + 1} de ${STEPS.length}`}
                 </p>
               </div>
             ) : (
@@ -564,12 +599,12 @@ export function FaceEnrollDialog({
                 {testResult === null ? (
                   <>
                     <p className="text-xl font-semibold tracking-tight">Mira a la cámara</p>
-                    <p className="mt-1.5 text-sm text-muted-foreground">Probando el reconocimiento…</p>
+                    <p className="mt-1.5 text-sm text-muted-foreground">{hint || 'Probando el reconocimiento…'}</p>
                   </>
                 ) : testResult.ok ? (
                   <>
                     <p className="text-xl font-semibold tracking-tight text-success">Te reconocí</p>
-                    <p className="mt-1.5 text-sm text-muted-foreground">{testResult.percent}% de coincidencia</p>
+                    <p className="mt-1.5 text-sm text-muted-foreground">Coincidencia verificada en varias imágenes</p>
                   </>
                 ) : (
                   <div className="space-y-1.5">
@@ -578,12 +613,17 @@ export function FaceEnrollDialog({
                       No se reconoció con claridad
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      Repite el registro con mejor luz de frente y sin objetos que tapen el rostro.
+                      {hint || 'Repite el registro con mejor luz de frente y sin objetos que tapen el rostro.'}
                     </p>
                   </div>
                 )}
               </div>
             )}
+            {resolution ? <p className="text-xs text-muted-foreground">Cámara: {resolution}</p> : null}
+            {cameraState === 'error' ? <Button variant="secondary" onClick={restart}>Reintentar cámara</Button> : null}
+            <Button variant="secondary" disabled={!!testResult?.ok} onClick={() => setFacingMode((v) => v === 'user' ? 'environment' : 'user')}>
+              Cambiar a cámara {facingMode === 'user' ? 'trasera' : 'frontal'}
+            </Button>
             <VoiceToggle scope="enroll" />
           </div>
         )}
@@ -621,7 +661,10 @@ export function FaceEnrollDialog({
                   Repetir registro
                 </Button>
               ) : null}
-              <Button onClick={() => onOpenChange(false)}>{testResult ? 'Listo' : 'Omitir prueba'}</Button>
+              {testResult && !testResult.ok ? (
+                <Button variant="secondary" onClick={() => setTestAttempt((n) => n + 1)}>Reintentar prueba</Button>
+              ) : null}
+              <Button onClick={() => onOpenChange(false)}>{testResult?.ok || testOnly ? 'Listo' : 'Cerrar sin guardar'}</Button>
             </>
           ) : null}
           {stage === 'intro' ? (

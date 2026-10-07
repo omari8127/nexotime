@@ -22,12 +22,12 @@ export function FaceViewport({
 }) {
   const ready = cameraState === 'ready'
   return (
-    <div className="relative h-72 w-72 overflow-hidden rounded-lg border border-slate-300 bg-slate-900">
+    <div className="relative aspect-video w-full max-w-md overflow-hidden rounded-lg border border-slate-300 bg-slate-900">
       <video
         ref={videoRef}
         muted
         playsInline
-        className={cn('h-full w-full -scale-x-100 object-cover', !ready && 'invisible')}
+        className={cn('h-full w-full -scale-x-100 object-contain', !ready && 'invisible')}
         // Mirrored like a selfie view; the inline transform replaces the class one to add the zoom.
         style={zoom > 1 ? { transform: `scale(${-zoom}, ${zoom})` } : undefined}
       />

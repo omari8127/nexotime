@@ -3,6 +3,8 @@
  * outside `src/services/live` and `src/store/dataStore.ts` should import
  * `@/lib/supabaseClient` directly — that keeps the swap-in seam narrow.
  */
+import { getLocalPhoto, removeLocalPhoto } from '@/services/evidence/localPhotos'
+import type { AttendancePhoto } from '@/lib/photoEvidence'
 import { createClient } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabaseClient'
 import { clearSnapshot, saveSnapshot } from '@/services/live/snapshot'
@@ -282,13 +284,39 @@ export async function liveUpdateEmployee(id: string, patch: Partial<Employee>) {
 /** Insert or update the one attendance row for (employeeId, date). */
 export async function liveUpsertAttendance(record: AttendanceRecord) {
   const db = client()
-  const { error } = await db
-    .from('attendance_records')
-    .upsert(
-      { id: record.id, ...attendanceToRow(record) },
-      { onConflict: 'employee_id,date' },
-    )
+  const pending: AttendancePhoto[] = []
+  for (const punch of record.punches) {
+    if (!punch.photoEvidence) continue
+    const local = await getLocalPhoto(punch.photoEvidence.id)
+    if (local) {
+      if (local.companyId !== record.companyId || local.employeeId !== record.employeeId || local.date !== record.date) {
+        throw new Error('La foto no corresponde al empleado y fecha de la entrada.')
+      }
+      pending.push(local)
+    }
+  }
+  if (pending.length) {
+    // One database transaction: evidence and attendance commit together, or neither does.
+    check(await db.rpc('save_attendance_with_photos', {
+      p_record: { id: record.id, ...attendanceToRow(record) }, p_photos: pending,
+    }))
+    // Remote evidence is now durable. Failure to clean a local copy is harmless and retryable.
+    for (const photo of pending) await removeLocalPhoto(photo.id).catch(() => undefined)
+    return
+  }
+  const { error } = await db.from('attendance_records').upsert(
+    { id: record.id, ...attendanceToRow(record) }, { onConflict: 'employee_id,date' },
+  )
   if (error) throw new Error(error.message)
+}
+
+export async function liveReadAttendancePhoto(id: string, companyId: string, employeeId: string): Promise<AttendancePhoto | undefined> {
+  const row = check<{ id: string; company_id: string; employee_id: string; attendance_date: string;
+    captured_at: string; data_url: string; width: number; height: number } | null>(await client().from('attendance_photos').select('*')
+    .eq('id', id).eq('company_id', companyId).eq('employee_id', employeeId).maybeSingle())
+  if (!row) return undefined
+  return { id: row.id, companyId: row.company_id, employeeId: row.employee_id, date: row.attendance_date,
+    capturedAt: row.captured_at, dataUrl: row.data_url, width: row.width, height: row.height }
 }
 
 export async function liveInsertDevice(device: Device) {

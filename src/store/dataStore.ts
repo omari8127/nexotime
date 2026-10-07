@@ -13,6 +13,8 @@
  * either way. That seam is what let the whole panel + reloj checador ship
  * before the database existed, and now connects without rewriting a single page.
  */
+import { needsEntryPhoto, validatePhotoCapture, type PhotoCapture } from '@/lib/photoEvidence'
+import { putLocalPhoto, removeLocalPhoto } from '@/services/evidence/localPhotos'
 import { resolveKiosk } from '@/lib/kiosk'
 import { create } from 'zustand'
 import type {
@@ -70,7 +72,7 @@ import {
   liveUpsertCorrection,
   liveUpsertIncidencia,
 } from '@/services/live/liveApi'
-import { applyPendingWrites, enqueue, isNetworkError, type NewQueueItem } from '@/services/live/syncQueue'
+import { applyPendingWrites, enqueue, flushQueue, isNetworkError, type NewQueueItem } from '@/services/live/syncQueue'
 
 export type BackendMode = 'demo' | 'live'
 
@@ -120,6 +122,8 @@ export interface PunchInput {
   deviceId?: string
   date?: string
   location?: PunchLocation
+  /** Supplied only after a durable local photo write. */
+  photoEvidence?: Punch['photoEvidence']
 }
 
 export interface CorrectionInput {
@@ -196,6 +200,7 @@ interface DataState {
   updateSchedule: (id: string, patch: Partial<Schedule>, actor: User) => void
 
   registerPunch: (input: PunchInput) => { record: AttendanceRecord; punch: Punch }
+  registerPunchWithPhoto: (input: PunchInput, photo: PhotoCapture) => Promise<{ record: AttendanceRecord; punch: Punch }>
   /** Applies a correction directly (RH/admin). Returns an error message, or null when applied. */
   applyCorrection: (input: CorrectionInput) => string | null
   /** Bulk corrections from an imported spreadsheet. Skips rows with an error, applies the rest. */
@@ -276,6 +281,11 @@ function saveCurrentUserId(id: string) {
  *  being lost — the reloj checador must survive an internet outage. */
 function persist(mode: BackendMode, fn: () => Promise<unknown>, queueItem?: NewQueueItem) {
   if (mode !== 'live') return
+  if (queueItem?.kind === 'attendance') {
+    enqueue(queueItem, true)
+    if (typeof navigator === 'undefined' || navigator.onLine) void flushQueue().catch(() => undefined)
+    return
+  }
   if (queueItem && typeof navigator !== 'undefined' && navigator.onLine === false) {
     enqueue(queueItem)
     return
@@ -293,6 +303,8 @@ function persist(mode: BackendMode, fn: () => Promise<unknown>, queueItem?: NewQ
 }
 
 export const useDataStore = create<DataState>((set, get) => {
+  let photoWriteInFlight = false
+  let preparedPhotoId: string | null = null
   const seed = buildMockDatabase()
   const savedUserId = loadCurrentUserId()
   const initialUser = seed.users.find((u) => u.id === savedUserId) ?? seed.users[0]
@@ -349,7 +361,7 @@ export const useDataStore = create<DataState>((set, get) => {
 
     const punches = [
       ...(existing?.punches.filter((p) => p.type !== type) ?? []),
-      { type, time, method: 'manual' as const, edited: true },
+      { type, time, method: 'manual' as const, edited: true, photoEvidence: existing?.punches.find((p) => p.type === type)?.photoEvidence },
     ].sort((a, b) => a.time.localeCompare(b.time))
 
     const invalid = validatePunchSequence(punches)
@@ -715,9 +727,36 @@ export const useDataStore = create<DataState>((set, get) => {
       )
     },
 
+    registerPunchWithPhoto: async (input, photo) => {
+      if (photoWriteInFlight) throw new PunchError('Ya se está guardando una entrada. Espera un momento.')
+      photoWriteInFlight = true
+      let written = false
+      try {
+        if (!needsEntryPhoto(input.method, input.type)) throw new PunchError('La foto corresponde a una entrada por número.')
+        validatePhotoCapture(photo)
+        const state = get()
+        const companyId = state.company.id
+        const userId = state.currentUser.id
+        const date = input.date ?? getToday(state.mode)
+        const target = state.employees.find((e) => e.id === input.employeeId)
+        if (!target || !canAccessEmployee(state.currentUser, target)) throw new PermissionError()
+        await putLocalPhoto({ ...photo, companyId, employeeId: input.employeeId, date })
+        written = true
+        if (get().company.id !== companyId || get().currentUser.id !== userId) throw new PermissionError('La sesión cambió. Reintenta la entrada.')
+        preparedPhotoId = photo.id
+        return get().registerPunch({ ...input, date, photoEvidence: { id: photo.id, capturedAt: photo.capturedAt } })
+      } catch (error) {
+        if (written) await removeLocalPhoto(photo.id).catch(() => undefined)
+        throw error
+      } finally { preparedPhotoId = null; photoWriteInFlight = false }
+    },
+
     registerPunch: (input) => {
       const date = input.date ?? getToday(get().mode)
       const state = get()
+      if (needsEntryPhoto(input.method, input.type) && (!input.photoEvidence || input.photoEvidence.id !== preparedPhotoId)) {
+        throw new PunchError('Esta entrada requiere tomar y guardar una foto desde la cámara.')
+      }
       const employee = state.employees.find((e) => e.id === input.employeeId)
       if (!employee) throw new PunchError('Empleado no encontrado.')
       if (employee.status !== 'active') {
@@ -745,6 +784,7 @@ export const useDataStore = create<DataState>((set, get) => {
         method: input.method,
         deviceId: input.deviceId,
         location: input.location,
+        photoEvidence: input.photoEvidence,
       }
 
       const nextPunches = [...(record?.punches.filter((p) => p.type !== input.type) ?? []), punch].sort(
@@ -770,7 +810,7 @@ export const useDataStore = create<DataState>((set, get) => {
           missingMinutes: 0,
         }
         record = recomputeRecord(base, schedule, state.company.attendanceSettings, getToday(state.mode))
-        set((s) => ({ attendance: [record as AttendanceRecord, ...s.attendance] }))
+
       } else {
         const updated = recomputeRecord(
           { ...record, punches: nextPunches },
@@ -779,13 +819,21 @@ export const useDataStore = create<DataState>((set, get) => {
           getToday(state.mode),
         )
         record = updated
-        set((s) => ({
-          attendance: s.attendance.map((r) => (r.id === updated.id ? updated : r)),
-        }))
+
       }
 
       const saved = record as AttendanceRecord
-      persist(get().mode, () => liveUpsertAttendance(saved), { kind: 'attendance', payload: saved })
+      if (state.mode === 'live') {
+        // Queue metadata must be durable BEFORE claiming success. The JPEG is already in IndexedDB.
+        enqueue({ kind: 'attendance', payload: saved }, true)
+      }
+      set((s) => ({ attendance: s.attendance.some((r) => r.id === saved.id)
+        ? s.attendance.map((r) => r.id === saved.id ? saved : r) : [saved, ...s.attendance] }))
+      if (state.mode === 'live') {
+        if (typeof navigator === 'undefined' || navigator.onLine) void flushQueue().catch(() => undefined)
+      } else {
+        persist(state.mode, () => liveUpsertAttendance(saved), { kind: 'attendance', payload: saved })
+      }
       return { record: saved, punch }
     },
 

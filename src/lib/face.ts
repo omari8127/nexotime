@@ -6,21 +6,23 @@
  * a photo. The models are served from /models and cached by the browser.
  */
 import type { Employee, FaceStrictness } from '@/types'
+import { waitForFreshFrame } from './camera'
 
 export type FaceApi = typeof import('@vladmandic/face-api')
 
 let apiPromise: Promise<FaceApi> | null = null
 
-/** Lazy-loads the library (≈1.3 MB) and the three models (≈12 MB) once. */
+/** Lazy-loads the library (≈1.3 MB) and the four models (≈12 MB) once. */
 export function loadFaceApi(): Promise<FaceApi> {
   if (!apiPromise) {
     apiPromise = (async () => {
       const api = await import('@vladmandic/face-api')
       const tf = api.tf as unknown as { setBackend(name: string): Promise<boolean>; ready(): Promise<void> }
       try {
-        await tf.setBackend('webgl')
+        if (!(await tf.setBackend('webgl'))) throw new Error('WebGL no disponible')
+        await tf.ready()
       } catch {
-        await tf.setBackend('cpu')
+        if (!(await tf.setBackend('cpu'))) throw new Error('No hay un motor facial compatible')
       }
       await tf.ready()
       const base = `${import.meta.env.BASE_URL}models`
@@ -36,14 +38,20 @@ export function loadFaceApi(): Promise<FaceApi> {
       // The first inference of each network compiles its GPU shaders (seconds on a tablet).
       // Pay that here, in the background / on the "Preparando…" screen, instead of on the
       // first real camera frame: run every network once on blank input.
-      try {
+      const warmup = async () => {
         const canvas = (size: number) => Object.assign(document.createElement('canvas'), { width: size, height: size })
         await api.detectAllFaces(canvas(160), new api.TinyFaceDetectorOptions({ inputSize: 320 }))
         await api.detectAllFaces(canvas(160), new api.SsdMobilenetv1Options({ minConfidence: 0.5 }))
         await api.nets.faceLandmark68Net.detectLandmarks(canvas(112))
         await api.nets.faceRecognitionNet.computeFaceDescriptor(canvas(150))
+      }
+      try {
+        await warmup()
       } catch {
-        /* warm-up is best effort */
+        // Some mobile GPUs initialize but fail while compiling/running the networks.
+        if (!(await tf.setBackend('cpu'))) throw new Error('No se pudo iniciar el motor facial')
+        await tf.ready()
+        await warmup()
       }
       return api
     })().catch((err) => {
@@ -71,24 +79,18 @@ export interface Tuning {
   minConfidence: number
 }
 
-/**
- * The three levels are presented to the administrator as the camera they have:
- * strict = a good camera (8 MP or more), balanced = a normal one (≈5 MP), relaxed = a basic
- * tablet camera (≈2 MP or less), which sees smaller, softer, noisier faces and so needs a more
- * tolerant match and a lower size / detector bar. The margin against the second most similar
- * person keeps protecting against look-alikes at every level.
- */
+/** Existing distance limits are preserved; basic cameras get more independent confirmations.
+ * Profiles are operating policies, not a guarantee tied to megapixels. */
 export const TUNING: Record<FaceStrictness, Tuning> = {
   strict: { threshold: 0.5, margin: 0.07, streak: 3, minFace: 0.15, minConfidence: 0.5 },
-  // ≈25% de coincidencia mínima (antes ≈28% y, antes, ≈40%) — reconoce más rápido, con más tolerancia.
-  balanced: { threshold: 0.675, margin: 0.04, streak: 2, minFace: 0.15, minConfidence: 0.5 },
-  relaxed: { threshold: 0.72, margin: 0.03, streak: 2, minFace: 0.1, minConfidence: 0.4 },
+  balanced: { threshold: 0.675, margin: 0.04, streak: 3, minFace: 0.15, minConfidence: 0.5 },
+  relaxed: { threshold: 0.72, margin: 0.03, streak: 4, minFace: 0.1, minConfidence: 0.4 },
 }
 
 /** Strictness level, optionally with an explicit distance limit set by the administrator. */
 export function tuningFor(strictness: FaceStrictness, threshold: number | null = null): Tuning {
   const base = TUNING[strictness]
-  return threshold == null ? base : { ...base, threshold }
+  return threshold == null || !Number.isFinite(threshold) ? base : { ...base, threshold: Math.max(0.35, Math.min(0.75, threshold)) }
 }
 
 /** Minimum face width as a fraction of the frame, so the descriptor is reliable. */
@@ -97,6 +99,8 @@ export const MIN_FACE_RATIO = 0.15
 export const MAX_FACE_RATIO = 0.8
 /** Mean |Laplacian| below this reads as an out-of-focus image (used at enrollment). */
 export const MIN_SHARPNESS = 1.0
+/** Initial engineering floor, to validate on the actual deployment cameras. */
+export const MIN_FACE_PIXELS = 80
 
 /* -------------------------------------------------------------------------- */
 /*  Reading a frame                                                            */
@@ -107,6 +111,8 @@ export interface FaceReading {
   descriptor?: number[]
   /** Face width relative to the video width. */
   size: number
+  /** Actual sensor pixels, unaffected by digital zoom. */
+  pixelWidth: number
   /** Mean brightness of the face region, 0–255. */
   brightness: number
   /** Face centre offset from the frame centre, −0.5…0.5 on each axis. */
@@ -171,7 +177,7 @@ function faceSharpness(video: HTMLVideoElement | HTMLCanvasElement, box: { x: nu
 /**
  * 'accurate' (default): SSD MobileNet. Every descriptor that is saved or compared (enrollment
  * samples, the reloj, the recognition test) must come from this one: a different detector
- * shifts the descriptor of the same face by ≈0.09, which we avoid paying for matching.
+ * can shift alignment and descriptors, so enrollment and matching use the same detector.
  * 'fast': the tiny detector, with SSD as a fallback when it finds nothing. Only for readings
  * that never leave the screen (enrollment pose guidance), where speed is free.
  */
@@ -188,8 +194,6 @@ export interface ReadOptions {
   minConfidence?: number
 }
 
-let zoomCanvas: HTMLCanvasElement | null = null
-let wideCanvas: HTMLCanvasElement | null = null
 /** Consecutive frames where no face was found; the wide-margin retry runs every few of them. */
 let emptyFrames = 0
 const WIDE_RETRY_EVERY = 3
@@ -200,24 +204,32 @@ const WIDE_MAX_SIDE = 640
 
 export async function readFace(
   api: FaceApi,
-  video: HTMLVideoElement,
+  video: HTMLVideoElement | HTMLCanvasElement,
   withDescriptor: boolean,
   detector: DetectorKind = 'accurate',
   options: ReadOptions = {},
 ): Promise<ReadResult> {
-  let source: HTMLVideoElement | HTMLCanvasElement = video
-  let vw = video.videoWidth || 1
-  let vh = video.videoHeight || 1
+  if ('videoWidth' in video) await waitForFreshFrame(video)
+  // Freeze once: detector, landmarks, descriptor and quality all see the SAME frame.
+  const snapshot = document.createElement('canvas')
+  snapshot.width = 'videoWidth' in video ? video.videoWidth : video.width
+  snapshot.height = 'videoHeight' in video ? video.videoHeight : video.height
+  const ctx = snapshot.getContext('2d')
+  if (!ctx) throw new Error('No se pudo leer la cámara')
+  ctx.drawImage(video, 0, 0)
+  let source = snapshot
+  let vw = snapshot.width
+  let vh = snapshot.height
   const zoom = options.zoom && options.zoom > 1 ? options.zoom : 1
   if (zoom > 1 && vw > 1) {
     const sw = Math.round(vw / zoom)
     const sh = Math.round(vh / zoom)
-    zoomCanvas ??= document.createElement('canvas')
+    const zoomCanvas = document.createElement('canvas')
     if (zoomCanvas.width !== sw || zoomCanvas.height !== sh) {
       zoomCanvas.width = sw
       zoomCanvas.height = sh
     }
-    zoomCanvas.getContext('2d')?.drawImage(video, (vw - sw) / 2, (vh - sh) / 2, sw, sh, 0, 0, sw, sh)
+    zoomCanvas.getContext('2d')?.drawImage(snapshot, (vw - sw) / 2, (vh - sh) / 2, sw, sh, 0, 0, sw, sh)
     source = zoomCanvas
     vw = sw
     vh = sh
@@ -249,7 +261,7 @@ export async function readFace(
     const scale = Math.min(1, WIDE_MAX_SIDE / (vw * 2))
     const ww = Math.max(1, Math.round(vw * 2 * scale))
     const wh = Math.max(1, Math.round(vh * 2 * scale))
-    wideCanvas ??= document.createElement('canvas')
+    const wideCanvas = document.createElement('canvas')
     if (wideCanvas.width !== ww || wideCanvas.height !== wh) {
       wideCanvas.width = ww
       wideCanvas.height = wh
@@ -287,6 +299,7 @@ export async function readFace(
     reading: {
       descriptor,
       size: box.width / vw,
+      pixelWidth: box.width,
       brightness: faceBrightness(source, box),
       offset: { x: (box.x + box.width / 2) / vw - 0.5, y: (box.y + box.height / 2) / vh - 0.5 },
       yaw,
@@ -300,10 +313,11 @@ export async function readFace(
 /*  Quality                                                                    */
 /* -------------------------------------------------------------------------- */
 
-export type QualityIssue = 'small' | 'close' | 'cut_off' | 'off_center' | 'dark' | 'bright' | 'blurry'
+export type QualityIssue = 'small' | 'low_detail' | 'close' | 'cut_off' | 'off_center' | 'dark' | 'bright' | 'blurry'
 
 export const QUALITY_TEXT: Record<QualityIssue, string> = {
   small: 'Acércate un poco más',
+  low_detail: 'Acércate: faltan detalles reales del rostro; el zoom no mejora la nitidez',
   close: 'Aléjate un poco de la cámara',
   cut_off: 'Tu rostro debe verse completo dentro de la imagen',
   blurry: 'La imagen está borrosa: mantente quieto y limpia el lente',
@@ -315,6 +329,7 @@ export const QUALITY_TEXT: Record<QualityIssue, string> = {
 /** What is wrong with this frame for recognition, most important first. */
 export function qualityIssues(r: FaceReading, opts: { blur?: boolean; minFace?: number } = {}): QualityIssue[] {
   const issues: QualityIssue[] = []
+  if (!Number.isFinite(r.pixelWidth) || r.pixelWidth < MIN_FACE_PIXELS) issues.push('low_detail')
   if (r.size < (opts.minFace ?? MIN_FACE_RATIO)) issues.push('small')
   if (r.size > MAX_FACE_RATIO) issues.push('close')
   else if (r.edgeGap < -0.02) issues.push('cut_off')
@@ -329,7 +344,12 @@ export function qualityIssues(r: FaceReading, opts: { blur?: boolean; minFace?: 
 /*  Matching                                                                   */
 /* -------------------------------------------------------------------------- */
 
+export function isFaceDescriptor(value: unknown): value is number[] {
+  return Array.isArray(value) && value.length === 128 && value.every((n) => typeof n === 'number' && Number.isFinite(n))
+}
+
 export function descriptorDistance(a: number[], b: number[]): number {
+  if (!isFaceDescriptor(a) || !isFaceDescriptor(b)) return Infinity
   let sum = 0
   for (let i = 0; i < a.length; i++) sum += (a[i] - b[i]) ** 2
   return Math.sqrt(sum)
@@ -337,6 +357,7 @@ export function descriptorDistance(a: number[], b: number[]): number {
 
 /** Component-wise mean of several descriptors: averages out frame-to-frame noise. */
 export function meanDescriptor(list: number[][]): number[] {
+  if (!list.length) return []
   const out = new Array<number>(list[0].length).fill(0)
   for (const d of list) for (let i = 0; i < d.length; i++) out[i] += d[i] / list.length
   return out
@@ -353,7 +374,7 @@ export function faceCandidates(employees: Employee[]): FaceCandidate[] {
     .filter((e) => e.status === 'active')
     .map((employee) => {
       const id = employee.identifications.find((i) => i.method === 'face')
-      return { employee, descriptors: id?.enabled ? (id.descriptors ?? []) : [] }
+      return { employee, descriptors: id?.enabled ? (id.descriptors ?? []).filter(isFaceDescriptor) : [] }
     })
     .filter((c) => c.descriptors.length > 0)
 }
@@ -366,12 +387,14 @@ export interface FaceMatch {
 }
 
 export function nearestFace(candidates: FaceCandidate[], descriptor: number[]): FaceMatch | null {
+  if (!isFaceDescriptor(descriptor)) return null
   const scored = candidates
     .map((c) => {
       // Mean of the two closest samples: robust to one bad sample, harder to fool than "best of all".
-      const d = c.descriptors.map((s) => descriptorDistance(s, descriptor)).sort((a, b) => a - b)
+      const d = c.descriptors.filter(isFaceDescriptor).map((s) => descriptorDistance(s, descriptor)).sort((a, b) => a - b)
       return { employee: c.employee, distance: d.length > 1 ? d[0] * 0.7 + d[1] * 0.3 : d[0] }
     })
+    .filter((c) => Number.isFinite(c.distance))
     .sort((a, b) => a.distance - b.distance)
   if (scored.length === 0) return null
   return { ...scored[0], runnerUp: scored[1]?.distance ?? Infinity }
@@ -379,7 +402,7 @@ export function nearestFace(candidates: FaceCandidate[], descriptor: number[]): 
 
 /** A trustworthy match: close enough AND clearly closer than anyone else. */
 export function isConfidentMatch(m: FaceMatch | null, t: Tuning = TUNING.balanced): m is FaceMatch {
-  return !!m && m.distance < t.threshold && m.runnerUp - m.distance >= t.margin
+  return !!m && Number.isFinite(m.distance) && m.distance >= 0 && m.distance < t.threshold && m.runnerUp - m.distance >= t.margin
 }
 
 /** 0–100 for display; only a friendly reading of the distance. */

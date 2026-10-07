@@ -13,20 +13,20 @@ import { useDataStore } from '@/store/dataStore'
 import { usePermissions } from '@/hooks/useScopedData'
 import { resolveKiosk } from '@/lib/kiosk'
 import { useFeature } from '@/lib/license/features'
-import { TUNING, matchPercent } from '@/lib/face'
+import { TUNING } from '@/lib/face'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import type { Employee, FaceStrictness } from '@/types'
 
-/** The three levels are described by the camera the reloj has (see TUNING in lib/face.ts). */
+/** Operating policies: megapixels alone do not determine recognition quality. */
 const STRICTNESS: Record<FaceStrictness, { label: string; text: string }> = {
   relaxed: {
-    label: 'Baja (2 MP)',
-    text: 'Tablets y cámaras sencillas de 2 MP o menos: acepta rostros más pequeños, con menos detalle o luz, y es más tolerante al comparar.',
+    label: 'Cámara básica',
+    text: 'Busca rostros con menor confianza de detección y exige cuatro lecturas coincidentes. Usa buena luz y prueba con personas registradas y no registradas.',
   },
-  balanced: { label: 'Normal (5 MP)', text: 'Cámaras de unos 5 MP. Recomendado para la mayoría de los casos.' },
+  balanced: { label: 'Equilibrado', text: 'Perfil general con tres lecturas coincidentes. Valida su funcionamiento en el equipo donde se checará.' },
   strict: {
-    label: 'Alta (8 MP o más)',
-    text: 'Cámaras buenas: más exigente, máxima seguridad. Puede pedir repetir con más frecuencia.',
+    label: 'Estricto',
+    text: 'Menor tolerancia al comparar rostros. Puede pedir repetir la lectura con más frecuencia.',
   },
 }
 
@@ -145,7 +145,7 @@ export function KioskSettingsPanel() {
 
           <div className="flex items-center justify-between gap-4 border-t border-border pt-5">
             <div>
-              <Label>Calidad de la cámara del reloj</Label>
+              <Label>Perfil del reconocimiento facial</Label>
               <p className="mt-1 text-sm text-muted-foreground">{STRICTNESS[strictness].text}</p>
             </div>
             <Select
@@ -161,9 +161,8 @@ export function KioskSettingsPanel() {
             <div>
               <Label>Zoom del reconocimiento facial</Label>
               <p className="mt-1 text-sm text-muted-foreground">
-                Acerca la imagen al centro, para que quien se para lejos de una cámara de tablet sea reconocido sin
-                acercarse. Lo que ves en pantalla es justo lo que se lee. Con zoom se usa la máxima resolución de la
-                cámara.
+                Recorta el centro de la imagen. No añade detalle real: si la cámara tiene baja resolución,
+                la persona deberá acercarse. Se solicita alta resolución cuando el dispositivo la permite.
               </p>
             </div>
             <Select className="w-36" value={zoom} onValueChange={setZoom} disabled={!canManage} options={ZOOM_OPTIONS} />
@@ -174,13 +173,13 @@ export function KioskSettingsPanel() {
               <div>
                 <Label>Umbral de coincidencia</Label>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Ajuste fino. Porcentaje mínimo de parecido para aceptar un rostro: menos es más tolerante (útil con
-                  cámaras de baja calidad), más es más seguro. Si no lo fijas, se usa el de la calidad de cámara elegida
-                  ({matchPercent(TUNING[strictness].threshold)}%).
+                  Distancia máxima entre las muestras del rostro. Un valor menor es más estricto;
+                  uno mayor puede aceptar personas equivocadas. No es un porcentaje de certeza.
+                  Primero mejora la iluminación y el registro; valida cualquier cambio en el dispositivo.
                 </p>
               </div>
               <span className="w-14 text-right font-mono text-sm tabular-nums">
-                {matchPercent(threshold ?? TUNING[strictness].threshold)}%
+                {(threshold ?? TUNING[strictness].threshold).toFixed(3)}
               </span>
             </div>
             <input
@@ -198,7 +197,7 @@ export function KioskSettingsPanel() {
               <span>Más estricto</span>
               {threshold !== null ? (
                 <button type="button" className="underline" onClick={() => setThreshold(null)}>
-                  Usar el de la cámara elegida
+                  Usar el del perfil elegido
                 </button>
               ) : null}
               <span>Más permisivo</span>

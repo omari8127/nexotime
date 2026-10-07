@@ -41,27 +41,32 @@ function keyOf(item: NewQueueItem): string {
   }
 }
 
-export function readQueue(): QueueItem[] {
+export function readQueue(required = false): QueueItem[] {
   try {
-    return JSON.parse(localStorage.getItem(KEY) ?? '[]') as QueueItem[]
+    const parsed: unknown = JSON.parse(localStorage.getItem(KEY) ?? '[]')
+    if (!Array.isArray(parsed)) throw new Error('Cola inválida')
+    return parsed as QueueItem[]
   } catch {
+    if (required) throw new Error('No se puede leer la cola de checadas. Pide a soporte revisarla antes de continuar.')
     return []
   }
 }
 
-function writeQueue(items: QueueItem[]) {
+function writeQueue(items: QueueItem[], required = false) {
   try {
     localStorage.setItem(KEY, JSON.stringify(items))
   } catch {
-    /* storage full / blocked: nothing else we can do */
+    if (required) throw new Error('No se pudo guardar la entrada pendiente. Libera espacio o permite el almacenamiento y reintenta.')
+    return
   }
   useSyncStore.getState().setPending(items.length)
 }
 
-export function enqueue(item: NewQueueItem) {
+export function enqueue(item: NewQueueItem, required = false) {
   const key = keyOf(item)
-  const rest = readQueue().filter((q) => q.key !== key) // the latest version wins
-  writeQueue([...rest, { ...item, key, queuedAt: Date.now() } as QueueItem])
+  const queue = readQueue(required)
+  const rest = queue.filter((q) => q.key !== key) // the latest version wins
+  writeQueue([...rest, { ...item, key, queuedAt: Math.max(Date.now(), ...queue.map((q) => q.queuedAt + 1)) } as QueueItem], required)
 }
 
 export function clearQueue() {
@@ -131,11 +136,13 @@ export async function flushQueue(): Promise<{ sent: number; remaining: number; r
       } catch (err) {
         if (isNetworkError(err)) break
         const failures = (item.failures ?? 0) + 1
-        const next = readQueue().map((q) => (q.key === item.key ? ({ ...q, failures } as QueueItem) : q))
-        const dead = next.filter((q) => (q.failures ?? 0) >= MAX_FAILURES)
+        const next = readQueue().map((q) => (q.key === item.key && q.queuedAt === item.queuedAt ? ({ ...q, failures } as QueueItem) : q))
+        const hasPhoto = (q: QueueItem) => q.kind === 'attendance' && q.payload.punches.some((p) => p.photoEvidence)
+        if (item.kind === 'attendance' && hasPhoto(item) && failures === MAX_FAILURES) rejected += 1
+        const dead = next.filter((q) => (q.failures ?? 0) >= MAX_FAILURES && !hasPhoto(q))
         keepRejected(dead)
         rejected += dead.length
-        writeQueue(next.filter((q) => (q.failures ?? 0) < MAX_FAILURES))
+        writeQueue(next.filter((q) => (q.failures ?? 0) < MAX_FAILURES || hasPhoto(q)))
       }
     }
   } finally {

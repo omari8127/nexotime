@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { AttendancePhotoPanel } from '@/components/attendance/AttendancePhotoPanel'
 import { AttendanceTimeline } from '@/components/attendance/AttendanceTimeline'
 import { CorrectionDialog } from '@/components/attendance/CorrectionDialog'
 import { usePermissions } from '@/hooks/useScopedData'
@@ -55,6 +56,7 @@ export function AttendanceDetailDialog({
           </DialogHeader>
 
           <AttendanceTimeline record={current} schedule={schedule} />
+          <AttendancePhotoPanel record={current} open={open} />
 
           <div className="flex flex-wrap gap-1.5">
             {current.lateMinutes > 0 ? <Badge variant="warning">Retardo {current.lateMinutes} min</Badge> : null}

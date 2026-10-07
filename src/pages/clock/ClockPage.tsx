@@ -29,6 +29,8 @@ import { Dropdown, DropdownItem, DropdownLabel } from '@/components/ui/dropdown'
 import { AnalogClock } from '@/components/clock/AnalogClock'
 import { FaceScanFlow } from '@/components/clock/FaceScanFlow'
 import { ScanFlow } from '@/components/clock/ScanFlow'
+import { EntryPhotoFlow } from '@/components/clock/EntryPhotoFlow'
+import { needsEntryPhoto, type PhotoCapture } from '@/lib/photoEvidence'
 import { NumberPinFlow } from '@/components/clock/NumberPinFlow'
 import { KioskExitGate } from '@/components/clock/KioskExitGate'
 import { METHOD_META } from '@/components/shared/badges'
@@ -58,7 +60,7 @@ import { weekDates } from '@/lib/week'
 import { formatClock24, formatDuration, formatLongDate, formatTime12 } from '@/lib/utils'
 import type { CaptureMethod, Employee, Punch, PunchLocation, PunchType } from '@/types'
 
-type Phase = 'idle' | 'method' | 'face' | 'qr' | 'barcode' | 'number' | 'confirm' | 'punch' | 'success'
+type Phase = 'idle' | 'method' | 'face' | 'qr' | 'barcode' | 'number' | 'entry_photo' | 'confirm' | 'punch' | 'success'
 
 const METHODS: Array<{ key: Phase; method: CaptureMethod; title: string; text: string; Icon: typeof QrCode; soon?: boolean }> = [
   { key: 'face', method: 'face', title: 'Reconocimiento facial', text: 'Mira a la cámara', Icon: ScanFace, soon: true },
@@ -112,6 +114,8 @@ export function ClockPage() {
   const attendance = useDataStore((s) => s.attendance)
   const schedules = useDataStore((s) => s.schedules)
   const registerPunch = useDataStore((s) => s.registerPunch)
+  const registerPunchWithPhoto = useDataStore((s) => s.registerPunchWithPhoto)
+  const punchBusy = useRef(false)
   const now = useLiveClock()
   const faceAllowed = useFeature('face')
   const today = useToday()
@@ -141,8 +145,7 @@ export function ClockPage() {
   const [lastPunch, setLastPunch] = useState<
     { type: PunchType; time: string; location?: PunchLocation; photo?: string } | null
   >(null)
-  // Fleeting face-verification snapshot: lives only in memory from the moment someone
-  // is recognized until the success screen closes — never persisted or sent anywhere.
+  // Other methods keep a fleeting preview. Number/PIN entries persist evidence separately.
   const [pendingPhoto, setPendingPhoto] = useState<string | undefined>(undefined)
   const [showWeekSummary, setShowWeekSummary] = useState(false)
   const [notices, setNotices] = useState<Array<{ title: string; detail: string }>>([])
@@ -266,8 +269,7 @@ export function ClockPage() {
   /**
    * Once someone is identified: validate the movement they picked on the first screen
    * against today's record, then go to a short confirmation before registering it.
-   * `photo` only ever comes from face recognition — a fleeting snapshot for the
-   * success screen, never stored.
+   * Photos here are fleeting previews. Number/PIN entry evidence is captured immediately before saving.
    */
   function identify(emp: Employee, capture: CaptureMethod, photo?: string) {
     setEmployee(emp)
@@ -289,11 +291,13 @@ export function ClockPage() {
     setPhase(kiosk.autoRegister && type ? 'confirm' : 'punch')
   }
 
-  function doPunch(type: PunchType) {
-    if (!employee) return
+  async function doPunch(type: PunchType, evidence?: PhotoCapture) {
+    if (!employee || punchBusy.current) return
+    if (needsEntryPhoto(method, type) && !evidence) { setPhase('entry_photo'); return }
+    punchBusy.current = true
     const time = formatClock24(now)
     try {
-      const { record } = registerPunch({
+      const input = {
         employeeId: employee.id,
         type,
         time,
@@ -301,7 +305,8 @@ export function ClockPage() {
         deviceId: device?.id,
         date: today,
         location: effectiveLocation,
-      })
+      }
+      const { record } = evidence ? await registerPunchWithPhoto(input, evidence) : registerPunch(input)
       // Friendly heads-up when the punch reveals something worth knowing.
       const found: Array<{ title: string; detail: string }> = []
       const schedule = schedules.find((s) => s.id === record.scheduleId)
@@ -328,12 +333,13 @@ export function ClockPage() {
     } catch (e) {
       // Impossible sequences (doble entrada, regreso sin comida…) are refused with a clear reason.
       toast.error('No se pudo registrar', e instanceof Error ? e.message : undefined)
+      if (evidence) throw e
       setPhase('punch')
       return
-    }
+    } finally { punchBusy.current = false }
     // El registro siempre queda guardado localmente de inmediato; si no hay
     // conexión se encola en este dispositivo y se sincroniza al reconectar.
-    setLastPunch({ type, time, location: effectiveLocation, photo: pendingPhoto })
+    setLastPunch({ type, time, location: effectiveLocation, photo: evidence?.dataUrl ?? pendingPhoto })
     setPhase('success')
   }
 
@@ -591,10 +597,17 @@ export function ClockPage() {
                 <NumberPinFlow
                   employees={punchable}
                   onCancel={backToMethod}
-                  onIdentified={(emp, photo) => identify(emp, 'employee_number', photo)}
+                  onIdentified={(emp) => identify(emp, 'employee_number')}
                 />
               </FlowCard>
             )}
+
+            {phase === 'entry_photo' && employee ? (
+              <motion.div key="entry-photo" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full max-w-md">
+                <EntryPhotoFlow name={employee.firstName} onCancel={reset}
+                  onCaptured={async (photo) => { await doPunch('entry', photo) }} />
+              </motion.div>
+            ) : null}
 
             {phase === 'confirm' && employee && confirmPunch && (
               <FlowCard key="confirm" onBack={reset} title="Confirmar registro">
@@ -863,12 +876,18 @@ export function ClockPage() {
                     <div className="mt-3.5 overflow-hidden rounded-xl border border-slate-200">
                       <div className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-medium text-slate-500">
                         <Camera className="h-3.5 w-3.5" />
-                        Foto de verificación
+                        {needsEntryPhoto(method, lastPunch.type) ? 'Foto de evidencia de entrada' : 'Foto de verificación'}
                       </div>
                       <img src={lastPunch.photo} alt="Foto de verificación" className="h-40 w-full object-cover" />
                     </div>
                   ) : null}
 
+                  {needsEntryPhoto(method, lastPunch.type) ? (
+                    <p className="mt-3 text-sm text-slate-600">
+                      {mode === 'demo' ? 'Foto guardada en este dispositivo de demostración.' :
+                        pendingSync > 0 ? 'Entrada y foto guardadas en este equipo; sincronización pendiente.' : 'Foto vinculada a la entrada para revisión.'}
+                    </p>
+                  ) : null}
                   {notices.length > 0 ? (
                     <div className="mt-3.5 space-y-2">
                       {notices.map((n) => (

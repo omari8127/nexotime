@@ -62,7 +62,7 @@ describe('coincidencia facial', () => {
 })
 
 describe('calidad de imagen', () => {
-  const ok: FaceReading = { size: 0.3, brightness: 130, offset: { x: 0, y: 0 }, yaw: 1, sharpness: 5, edgeGap: 0.2 }
+  const ok: FaceReading = { pixelWidth: 180, size: 0.3, brightness: 130, offset: { x: 0, y: 0 }, yaw: 1, sharpness: 5, edgeGap: 0.2 }
   it('acepta una imagen buena', () => {
     expect(qualityIssues(ok, { blur: true })).toEqual([])
   })

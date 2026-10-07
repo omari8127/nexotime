@@ -261,6 +261,8 @@ export interface Punch {
   deviceId?: ID
   /** True when an admin added or edited this punch. */
   edited?: boolean
+  /** Reference only; JPEG evidence is loaded on demand. Captured time stays original after corrections. */
+  photoEvidence?: { id: string; capturedAt: string }
   /** Where the device sat when it registered this punch (browser geolocation). */
   location?: PunchLocation
 }

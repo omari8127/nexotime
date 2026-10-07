@@ -217,11 +217,13 @@ export function PrivacidadPage() {
         <List>
           <li>
             El reconocimiento facial se procesa <strong>en el propio dispositivo</strong>. Solo se conserva una
-            representación numérica (un conjunto de 128 valores), nunca una foto del rostro.
+            representación numérica (un conjunto de 128 valores) para identificar el rostro; la evidencia de entrada descrita abajo se guarda por separado.
           </li>
           <li>
-            Al registrar asistencia, con cualquier método, el reloj toma una foto momentánea que se muestra en pantalla
-            para confirmar quién checa. <strong>No se guarda ni se envía a ningún servidor.</strong>
+            Al registrar una entrada por número de empleado o PIN, se toma y conserva una fotografía de evidencia
+            vinculada al empleado, fecha y hora. Se guarda en el dispositivo mientras se sincroniza y en el servidor
+            de la empresa para consulta con los permisos de asistencia. La foto permite revisar quién checó;
+            no demuestra por sí sola la identidad. Las vistas previas de otros métodos siguen siendo temporales.
           </li>
           <li>
             La ubicación se toma con el permiso del navegador, solo al registrar la asistencia, para validar la
