@@ -49,7 +49,7 @@ export function FaceViewport({
   return (
     <div
       className={cn(
-        'relative mx-auto overflow-hidden rounded-lg border border-slate-300 bg-slate-900 [--cam-h:56dvh] landscape:[--cam-h:70dvh]',
+        'relative mx-auto overflow-hidden rounded-lg border border-slate-300 bg-slate-900 [--cam-h:60dvh] landscape:[--cam-h:70dvh]',
         className,
       )}
       style={{ aspectRatio: String(aspect), width: `min(100%, calc(var(--cam-h) * ${aspect}))` }}
@@ -58,7 +58,7 @@ export function FaceViewport({
         ref={videoRef}
         muted
         playsInline
-        className={cn('absolute left-1/2 top-1/2 max-w-none object-contain', !ready && 'invisible')}
+        className={cn('absolute left-1/2 top-1/2 max-w-none object-cover', !ready && 'invisible')}
         // Mirrored like a selfie view, after the quarter turn, with the zoom of what is being read.
         style={{
           ...videoStyle,

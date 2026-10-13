@@ -213,6 +213,11 @@ export interface ReadOptions {
   sharpness?: boolean
   /** Quarter turns that make the picture upright (a sideways or upside-down camera); see cameraView. */
   rotation?: Rotation
+  /**
+   * Width ÷ height of the part of the (upright) picture that the screen shows. A tablet held upright shows
+   * a tall window cut from the middle of the camera's wide picture, and that same part is what is read.
+   */
+  fitAspect?: number
 }
 
 /** Consecutive frames where no face was found; the wide-margin retry runs every few of them. */
@@ -275,20 +280,30 @@ export function findFaceRotation(api: FaceApi, video: HTMLVideoElement, current:
     const side = Math.min(1, 480 / Math.max(w, h))
     const dw = Math.round(w * side)
     const dh = Math.round(h * side)
-    for (const rot of rotationCandidates(screenOrientation(), streamOrientation(w, h), current)) {
+    // Score of the best face at each rotation, the current one included: another rotation must show a
+    // clearly better face, otherwise a person standing off to the side (outside the window the screen
+    // shows) would get the picture turned on its side.
+    const scoreAt = async (rot: Rotation) => {
       const quarter = rot === 90 || rot === 270
       const canvas = document.createElement('canvas')
       canvas.width = quarter ? dh : dw
       canvas.height = quarter ? dw : dh
       const g = canvas.getContext('2d')
-      if (!g) continue
+      if (!g) return 0
       g.translate(canvas.width / 2, canvas.height / 2)
       g.rotate((rot * Math.PI) / 180)
       g.drawImage(video, -dw / 2, -dh / 2, dw, dh)
-      const found = await api.detectAllFaces(canvas, new api.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 }))
-      if (found.length === 1) return rot
+      const found = await api.detectAllFaces(canvas, new api.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.35 }))
+      return found.length === 1 ? found[0].score : 0
     }
-    return null
+    const here = await scoreAt(current)
+    if (here >= 0.35) return null
+    let best: { rot: Rotation; score: number } | null = null
+    for (const rot of rotationCandidates(screenOrientation(), streamOrientation(w, h), current)) {
+      const score = await scoreAt(rot)
+      if (score >= 0.7 && (!best || score > best.score)) best = { rot, score }
+    }
+    return best ? best.rot : null
   })
   readQueue = run.then(() => undefined, () => undefined)
   return run
@@ -323,15 +338,24 @@ async function readFaceNow(
   // Freeze once, straight from the camera: the central 1/zoom of the frame, at no more than
   // MAX_WORK_SIDE. Detector, landmarks, descriptor and quality all see this SAME image.
   const zoom = options.zoom && options.zoom > 1 ? options.zoom : 1
-  const cw = Math.max(1, Math.round(sw / zoom))
-  const ch = Math.max(1, Math.round(sh / zoom))
-  const k = Math.min(1, (ssdMs > SLOW_SSD_MS ? SLOW_WORK_SIDE : MAX_WORK_SIDE) / Math.max(cw, ch))
-  const dw = Math.max(1, Math.round(cw * k))
-  const dh = Math.max(1, Math.round(ch * k))
   // A sideways picture is turned upright here, so the networks (which only know upright faces) see
   // the same thing the person sees on the screen.
   const rotation = options.rotation ?? 0
   const quarter = rotation === 90 || rotation === 270
+  // The central part the screen shows, in the upright picture (then the zoom), converted back to the
+  // camera's own axes: the crop is centred, so a quarter turn only swaps its sides.
+  const uw = quarter ? sh : sw
+  const uh = quarter ? sw : sh
+  const fit = options.fitAspect && options.fitAspect > 0 ? options.fitAspect : uw / uh
+  let upW = uw
+  let upH = uh
+  if (uw / uh > fit) upW = uh * fit
+  else if (uw / uh < fit) upH = uw / fit
+  const cw = Math.max(1, Math.round((quarter ? upH : upW) / zoom))
+  const ch = Math.max(1, Math.round((quarter ? upW : upH) / zoom))
+  const k = Math.min(1, (ssdMs > SLOW_SSD_MS ? SLOW_WORK_SIDE : MAX_WORK_SIDE) / Math.max(cw, ch))
+  const dw = Math.max(1, Math.round(cw * k))
+  const dh = Math.max(1, Math.round(ch * k))
   const vw = quarter ? dh : dw
   const vh = quarter ? dw : dh
   workCanvas = sized(workCanvas, vw, vh)

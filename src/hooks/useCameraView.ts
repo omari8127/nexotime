@@ -7,6 +7,7 @@ import {
   streamOrientation,
   uprightAspect,
   viewKey,
+  windowAspect,
   type Orientation,
   type Rotation,
 } from '@/lib/cameraView'
@@ -51,8 +52,8 @@ export function useCameraView(size: { width: number; height: number }) {
     rotate,
     screen,
     stream,
-    /** Width ÷ height of the picture once upright (16:9 until the first frame arrives). */
-    aspect: uprightAspect(size.width, size.height, rotation),
+    /** Width ÷ height of the window that shows (and is read from) the picture: the device's shape. */
+    aspect: windowAspect(uprightAspect(size.width, size.height, rotation), screen),
   }
 }
 

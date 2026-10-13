@@ -21,6 +21,7 @@ import {
   saveRotation,
   uprightAspect,
   viewKey,
+  windowAspect,
 } from '@/lib/cameraView'
 import { photoIsFresh, type PhotoCapture } from '@/lib/photoEvidence'
 import { kioskDevice, pickKioskBranch, punchableEmployees, resolveKiosk } from '@/lib/kiosk'
@@ -222,6 +223,16 @@ describe('cámara según cómo esté la tablet', () => {
     expect(uprightAspect(720, 1280, 270)).toBeCloseTo(16 / 9)
     expect(uprightAspect(720, 1280, 0)).toBeCloseTo(9 / 16)
     expect(uprightAspect(0, 0, 0)).toBeCloseTo(16 / 9) // todavía sin imagen
+  })
+
+  it('la ventana tiene la forma del equipo: alta en vertical, ancha en horizontal', () => {
+    // Imagen ancha (16:9) con la tablet parada: ventana vertical 3:4 cortada del centro.
+    expect(windowAspect(16 / 9, 'portrait')).toBeCloseTo(0.75)
+    // Misma forma que la pantalla: se muestra entera.
+    expect(windowAspect(16 / 9, 'landscape')).toBeCloseTo(16 / 9)
+    expect(windowAspect(9 / 16, 'portrait')).toBeCloseTo(9 / 16)
+    // Imagen alta con la tablet acostada: ventana horizontal 4:3.
+    expect(windowAspect(9 / 16, 'landscape')).toBeCloseTo(4 / 3)
   })
 
   it('prueba primero un cuarto de vuelta cuando la imagen no coincide con la pantalla', () => {

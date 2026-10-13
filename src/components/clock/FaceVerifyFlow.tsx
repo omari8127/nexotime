@@ -90,9 +90,11 @@ export function FaceVerifyFlow({
   // The picture as it must be shown and read on this device, held this way (sideways cameras included).
   const view = useCameraView(size)
   const rotationRef = useRef(view.rotation)
+  const aspectRef = useRef(view.aspect)
   const apiRef = useRef<FaceApi | null>(null)
   useEffect(() => {
     rotationRef.current = view.rotation
+    aspectRef.current = view.aspect
   })
   const noteReading = useRotationSearch({
     enabled: stage === 'searching' && ready,
@@ -211,6 +213,7 @@ export function FaceVerifyFlow({
             minConfidence: tuning.minConfidence,
             sharpness: true,
             rotation: rotationRef.current,
+            fitAspect: aspectRef.current,
           })
           if (!alive) return
           errors = 0
