@@ -1,6 +1,7 @@
 -- NexoTime NX01. SQL de instalación incremental para SQL Editor.
 -- Requiere schema.sql y migración 002 (roles/alcance) ya aplicados.
--- No modifica registros históricos. Ejecutar ANTES de publicar el frontend.
+-- No modifica registros históricos. Ejecutar ANTES de publicar el frontend (si el frontend ya está
+-- publicado, ejecutarlo YA: mientras tanto las entradas por número/PIN con foto quedan pendientes).
 -- CLI no disponible en el entorno de entrega; este parche no añade historial al CLI.
 begin;
 
@@ -117,15 +118,35 @@ $$;
 revoke all on function public.save_attendance_with_photos(jsonb,jsonb) from public, anon;
 grant execute on function public.save_attendance_with_photos(jsonb,jsonb) to authenticated;
 
--- Enforces evidence even when a caller bypasses the UI. Existing identical punches stay valid.
+-- Enforces evidence even when a caller bypasses the UI.
+--
+-- CORREGIDO (revisión): la app guarda con "insert ... on conflict do update". En Postgres, un
+-- trigger BEFORE INSERT se dispara con tg_op = 'INSERT' (y OLD vacío) aun cuando la fila ya existe,
+-- así que la versión original rechazaba CUALQUIER guardado de un día que ya tuviera una entrada por
+-- número/PIN sin foto (todas las históricas): no se podía registrar la salida, ni corregir, ni
+-- cambiar la configuración (que recalcula todos los registros). Ahora se lee la fila guardada y se
+-- respeta lo que ya estaba; solo se exige foto a entradas NUEVAS por número/PIN.
 create or replace function public.check_attendance_photo()
 returns trigger language plpgsql security invoker set search_path = '' as $$
-declare p jsonb;
+declare
+  p jsonb;
+  prev jsonb;
 begin
+  select a.punches into prev
+  from public.attendance_records a
+  where a.employee_id = new.employee_id and a.date = new.date;
+
   for p in select value from jsonb_array_elements(new.punches) loop
     if p->>'type' = 'entry' and p->>'method' in ('employee_number','pin') then
-      if tg_op = 'UPDATE' and old.employee_id = new.employee_id and old.company_id = new.company_id
-        and old.date = new.date and old.punches @> jsonb_build_array(p) then continue; end if;
+      -- Ya estaba guardada tal cual, o el día ya tenía una entrada anterior a esta regla (sin
+      -- referencia de foto): se conserva (permite salidas y correcciones de horarios históricos).
+      if prev is not null and (
+           prev @> jsonb_build_array(p)
+           or exists (select 1 from jsonb_array_elements(prev) q
+                      where q->>'type' = 'entry' and q->'photoEvidence' is null)
+         ) then
+        continue;
+      end if;
       if not exists (select 1 from public.attendance_photos f
         where f.id::text = p->'photoEvidence'->>'id' and f.company_id = new.company_id
           and f.employee_id = new.employee_id and f.attendance_date = new.date
