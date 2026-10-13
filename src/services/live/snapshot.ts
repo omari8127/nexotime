@@ -31,7 +31,31 @@ export function trimForSnapshot(bundle: LiveBundle, tier: { days: number; audit:
   }
 }
 
+let pending: LiveBundle | null = null
+let scheduled = false
+
+/**
+ * Serialising a whole company into localStorage is synchronous and, on a weak tablet, a visible
+ * stall. Do it when the browser is idle (and only the newest data if several arrive meanwhile),
+ * never in the middle of the frame that just received it.
+ */
 export function saveSnapshot(bundle: LiveBundle) {
+  pending = bundle
+  if (scheduled) return
+  scheduled = true
+  const run = () => {
+    scheduled = false
+    const next = pending
+    pending = null
+    if (next) writeSnapshot(next)
+  }
+  const ric = (globalThis as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number })
+    .requestIdleCallback
+  if (ric) ric(run, { timeout: 4000 })
+  else setTimeout(run, 250)
+}
+
+export function writeSnapshot(bundle: LiveBundle) {
   // Try the fullest copy that fits. Only if even the smallest does not, drop the (now stale) copy
   // rather than keep old data that would show wrong numbers offline.
   for (const tier of SNAPSHOT_TIERS) {
@@ -59,6 +83,7 @@ export function loadSnapshot(): LiveBundle | null {
 }
 
 export function clearSnapshot() {
+  pending = null // a write still waiting for an idle moment must not bring the data back after sign-out
   try {
     localStorage.removeItem(KEY)
   } catch {

@@ -192,6 +192,11 @@ export interface ReadOptions {
   zoom?: number
   /** SSD minimum confidence (default 0.5). Lower finds smaller or noisier faces. */
   minConfidence?: number
+  /**
+   * Measure focus (default true). It costs an extra read of the frame, so the reloj, which does not
+   * gate on blur, turns it off; enrollment (which does) keeps it.
+   */
+  sharpness?: boolean
 }
 
 /** Consecutive frames where no face was found; the wide-margin retry runs every few of them. */
@@ -303,7 +308,7 @@ export async function readFace(
       brightness: faceBrightness(source, box),
       offset: { x: (box.x + box.width / 2) / vw - 0.5, y: (box.y + box.height / 2) / vh - 0.5 },
       yaw,
-      sharpness: faceSharpness(source, box),
+      sharpness: options.sharpness === false ? MIN_SHARPNESS * 4 : faceSharpness(source, box),
       edgeGap: Math.min(box.x / vw, box.y / vh, 1 - (box.x + box.width) / vw, 1 - (box.y + box.height) / vh),
     },
   }

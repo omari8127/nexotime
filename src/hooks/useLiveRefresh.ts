@@ -1,22 +1,45 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { restoreSession } from '@/services/live/liveApi'
 import { useDataStore } from '@/store/dataStore'
 import { toast } from '@/components/ui/toast'
+
+/** A window "focus" fires for lots of harmless reasons on a tablet (fullscreen, keyboard, camera
+ *  prompts). Reloading the whole company each time was a visible stall, so: at most this often. */
+const MIN_REFRESH_GAP_MS = 60_000
 
 /**
  * Re-fetches this company's data from Supabase so a long-lived screen (the
  * kiosk clock, a dashboard tab left open for hours) picks up changes made
  * elsewhere — a new employee, an edited branch — without a manual reload.
- * Runs when the screen mounts and again whenever its tab regains focus.
+ * Runs when the screen mounts and again when its tab regains focus (not more than once a minute).
+ *
+ * `paused`: don't refresh now (someone is in the middle of clocking in — the reload would compete
+ * for the tablet's CPU right then). A refresh that was due runs as soon as it resumes.
  * Silent no-op in demo mode or while offline.
  */
-export function useLiveRefresh() {
+export function useLiveRefresh(paused = false) {
   const mode = useDataStore((s) => s.mode)
   const hydrateLive = useDataStore((s) => s.hydrateLive)
+  const pausedRef = useRef(paused)
+  const dueRef = useRef(false)
+  const lastRef = useRef(0)
+  const runRef = useRef<() => void>(() => undefined)
+
+  useEffect(() => {
+    pausedRef.current = paused
+    if (!paused && dueRef.current) runRef.current()
+  }, [paused])
 
   useEffect(() => {
     if (mode !== 'live') return
-    const refresh = () => {
+    const refresh = (force = false) => {
+      if (pausedRef.current) {
+        dueRef.current = true
+        return
+      }
+      if (!force && Date.now() - lastRef.current < MIN_REFRESH_GAP_MS) return
+      dueRef.current = false
+      lastRef.current = Date.now()
       restoreSession()
         .then((bundle) => {
           if (!bundle) return
@@ -32,15 +55,17 @@ export function useLiveRefresh() {
           // Best-effort: offline or a transient hiccup just keeps showing the last known data.
         })
     }
-    refresh()
+    runRef.current = () => refresh()
+    refresh(true)
     const onVisible = () => {
       if (document.visibilityState === 'visible') refresh()
     }
+    const onFocus = () => refresh()
     document.addEventListener('visibilitychange', onVisible)
-    window.addEventListener('focus', refresh)
+    window.addEventListener('focus', onFocus)
     return () => {
       document.removeEventListener('visibilitychange', onVisible)
-      window.removeEventListener('focus', refresh)
+      window.removeEventListener('focus', onFocus)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode])

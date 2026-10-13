@@ -26,6 +26,9 @@ type Stage = 'loading' | 'searching' | 'failed'
 /** Frames of a clear, well-lit face with no trustworthy match before it is logged as rejected. */
 const REJECT_FRAMES = 14
 const REJECT_LOG_COOLDOWN_MS = 30_000
+/** Pause between readings while someone is being matched / while nobody is in front of the camera. */
+const ACTIVE_DELAY_MS = 40
+const IDLE_DELAY_MS = 160
 
 /**
  * Identify by face, hands-free: find the closest enrolled face on a short average of frames
@@ -126,6 +129,7 @@ export function FaceScanFlow({
         confirmRef.current(m.employee, captureVideoFrame(video))
       }
 
+      let nextDelay = ACTIVE_DELAY_MS
       const loop = async () => {
         if (!alive) return
         try {
@@ -137,6 +141,9 @@ export function FaceScanFlow({
           })
           if (!alive) return
           errors = 0
+          // Nobody in front of the camera: look less often (saves the tablet's CPU/battery); the
+          // moment a face appears, the loop runs at full speed again.
+          nextDelay = result.kind === 'none' ? IDLE_DELAY_MS : ACTIVE_DELAY_MS
 
           if (result.kind === 'none') {
             session.reset()
@@ -190,7 +197,7 @@ export function FaceScanFlow({
           }
           setHint('No se pudo leer la imagen. Mantente frente a la cámara.')
         }
-        timer = window.setTimeout(loop, 40)
+        timer = window.setTimeout(loop, nextDelay)
       }
       loop()
     }

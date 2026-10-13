@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Delete, TriangleAlert } from 'lucide-react'
+import { Delete } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { KioskAlert } from '@/components/clock/KioskAlert'
 import { cn } from '@/lib/utils'
 import type { Employee } from '@/types'
 
@@ -175,16 +176,9 @@ export function NumberPinFlow({
       </div>
 
       {error ? (
-        <motion.div
-          key={errorTick}
-          initial={{ x: 0 }}
-          animate={{ x: [0, -6, 6, -4, 4, 0] }}
-          transition={{ duration: 0.35 }}
-          className="flex items-center gap-2 rounded-full border border-destructive/30 bg-destructive/10 px-4 py-2 text-[13px] font-medium text-destructive"
-        >
-          <TriangleAlert className="h-4 w-4 shrink-0" />
-          {error}
-        </motion.div>
+        <div className="w-full max-w-md">
+          <KioskAlert message={error} shakeKey={errorTick} />
+        </div>
       ) : null}
 
       <div className="grid w-full max-w-xs grid-cols-3 gap-2.5">

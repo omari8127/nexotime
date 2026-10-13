@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Keyboard } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { CameraScanner, type CameraScannerHandle } from '@/components/clock/CameraScanner'
+import { KioskAlert } from '@/components/clock/KioskAlert'
 
 /**
  * Reads a QR or barcode credential from the camera, a USB scanner
@@ -29,6 +30,7 @@ export function ScanFlow({
   const [manual, setManual] = useState('')
   const isQr = mode === 'qr'
   const [error, setError] = useState<string | null>(null)
+  const [errorTick, setErrorTick] = useState(0)
   const lastRead = useRef<{ code: string; at: number }>({ code: '', at: 0 })
   const scannerRef = useRef<CameraScannerHandle>(null)
 
@@ -40,6 +42,7 @@ export function ScanFlow({
     if (lastRead.current.code === code && now - lastRead.current.at < 3000) return
     lastRead.current = { code, at: now }
     setError(onCode(code, scannerRef.current?.capture()))
+    setErrorTick((t) => t + 1)
   }
 
   useEffect(() => {
@@ -67,14 +70,7 @@ export function ScanFlow({
         <p className="text-xs text-slate-400">Se toma una foto de verificación que no se guarda.</p>
       </div>
 
-      {error ? (
-        <p
-          role="alert"
-          className="w-full rounded-lg border border-red-200 border-l-4 border-l-red-500 bg-red-50/70 px-3.5 py-2.5 text-left text-[13px] text-red-800"
-        >
-          {error}
-        </p>
-      ) : null}
+      {error ? <KioskAlert message={error} shakeKey={errorTick} /> : null}
 
       <form
         className="flex w-full items-center gap-2"

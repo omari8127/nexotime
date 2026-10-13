@@ -36,7 +36,8 @@ import { KioskExitGate } from '@/components/clock/KioskExitGate'
 import { METHOD_META } from '@/components/shared/badges'
 import { useFeature } from '@/lib/license/features'
 import { copyrightLine } from '@/data/legal'
-import { toast } from '@/components/ui/toast'
+import { PunchBlockedCard } from '@/components/clock/PunchBlockedCard'
+import { allowedPunchTypes } from '@/lib/kioskFeedback'
 import { useDataStore } from '@/store/dataStore'
 import { useSyncStore } from '@/store/syncStore'
 import { applyTheme, useUIStore } from '@/store/uiStore'
@@ -60,10 +61,21 @@ import { weekDates } from '@/lib/week'
 import { formatClock24, formatDuration, formatLongDate, formatTime12 } from '@/lib/utils'
 import type { CaptureMethod, Employee, Punch, PunchLocation, PunchType } from '@/types'
 
-type Phase = 'idle' | 'method' | 'face' | 'qr' | 'barcode' | 'number' | 'entry_photo' | 'confirm' | 'punch' | 'success'
+type Phase =
+  | 'idle'
+  | 'method'
+  | 'face'
+  | 'qr'
+  | 'barcode'
+  | 'number'
+  | 'entry_photo'
+  | 'confirm'
+  | 'punch'
+  | 'success'
+  | 'blocked'
 
 const METHODS: Array<{ key: Phase; method: CaptureMethod; title: string; text: string; Icon: typeof QrCode; soon?: boolean }> = [
-  { key: 'face', method: 'face', title: 'Reconocimiento facial', text: 'Mira a la cámara', Icon: ScanFace, soon: true },
+  { key: 'face', method: 'face', title: 'Reconocimiento facial', text: 'Mira a la cámara', Icon: ScanFace },
   { key: 'qr', method: 'qr', title: 'Escanear código QR', text: 'Muestra tu credencial a la cámara', Icon: QrCode },
   { key: 'barcode', method: 'barcode', title: 'Código de barras', text: 'Acerca tu credencial a la cámara o lector', Icon: Barcode },
   { key: 'number', method: 'employee_number', title: 'Número de empleado', text: 'Escribe tu número y tu PIN', Icon: UserRound },
@@ -78,11 +90,21 @@ const PUNCH_TYPE_ICON: Record<PunchType, typeof LogIn> = {
 
 const PUNCH_TYPE_ORDER: PunchType[] = ['entry', 'lunch_out', 'lunch_in', 'exit']
 
+/** Each movement has its own colour, so it is recognised at a glance from a step away. */
+const PUNCH_TYPE_STYLE: Record<PunchType, { icon: string; card: string }> = {
+  entry: { icon: 'bg-emerald-100 text-emerald-600', card: 'hover:border-emerald-300 active:bg-emerald-50' },
+  lunch_out: { icon: 'bg-amber-100 text-amber-600', card: 'hover:border-amber-300 active:bg-amber-50' },
+  lunch_in: { icon: 'bg-sky-100 text-sky-600', card: 'hover:border-sky-300 active:bg-sky-50' },
+  exit: { icon: 'bg-rose-100 text-rose-600', card: 'hover:border-rose-300 active:bg-rose-50' },
+}
+
 /** How long the success screen stays up before closing itself. Longer when it
  *  has a verification photo on it — there's actually something to look at. */
 const FACE_CONFIRM_SECONDS = 2
 const SUCCESS_SCREEN_MS = 4500
 const SUCCESS_SCREEN_MS_WITH_PHOTO = 8000
+/** The "that can't be registered" screen has to be read and acted on, so it stays longer. */
+const BLOCKED_SCREEN_MS = 10_000
 
 const CLOCK_BRANCH_KEY = 'nexotime.clockBranch'
 
@@ -122,7 +144,6 @@ export function ClockPage() {
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen()
   const isOnline = useOnlineStatus()
   const { location: deviceLocation } = useGeolocation()
-  useLiveRefresh()
 
   // Load and warm up the face models in the background as soon as the kiosk opens (only when
   // someone is actually enrolled), so tapping "Reconocimiento facial" doesn't wait on them.
@@ -139,6 +160,8 @@ export function ClockPage() {
   const panelBranch = useUIStore((s) => s.branchFilter)
   const [branchId, setBranchId] = useState('')
   const [phase, setPhase] = useState<Phase>('idle')
+  // Reload the company's data only while nobody is mid-way through clocking in.
+  useLiveRefresh(phase !== 'idle')
   const [selectedPunchType, setSelectedPunchType] = useState<PunchType | null>(null)
   const [method, setMethod] = useState<CaptureMethod>('qr')
   const [employee, setEmployee] = useState<Employee | null>(null)
@@ -150,6 +173,8 @@ export function ClockPage() {
   const [showWeekSummary, setShowWeekSummary] = useState(false)
   const [notices, setNotices] = useState<Array<{ title: string; detail: string }>>([])
   const [showExitGate, setShowExitGate] = useState(false)
+  // Why a movement could not be registered, shown as a full screen instead of a corner toast.
+  const [blockedMessage, setBlockedMessage] = useState('')
   const pendingSync = useSyncStore((s) => s.pending)
 
   // No hay botón visible para salir del reloj checador (lo debe usar cualquier
@@ -212,7 +237,7 @@ export function ClockPage() {
   const confirmPunch = selectedPunchType
     ? { type: selectedPunchType, label: `Registrar ${PUNCH_TYPE_LABEL[selectedPunchType].toLowerCase()}` }
     : nextPunch
-  const kiosk = resolveKiosk(company.attendanceSettings)
+  const kiosk = useMemo(() => resolveKiosk(company.attendanceSettings), [company.attendanceSettings])
 
   const weekSummary = useMemo(() => {
     if (!employee) return null
@@ -260,6 +285,20 @@ export function ClockPage() {
     setLastPunch(null)
     setNotices([])
     setPendingPhoto(undefined)
+    setBlockedMessage('')
+  }
+
+  // The "can't register" screen closes itself after a while, like the success one.
+  useEffect(() => {
+    if (phase !== 'blocked') return
+    const id = setTimeout(() => reset(), BLOCKED_SCREEN_MS)
+    return () => clearTimeout(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase])
+
+  function showBlocked(message: string) {
+    setBlockedMessage(message)
+    setPhase('blocked')
   }
 
   function backToMethod() {
@@ -283,8 +322,7 @@ export function ClockPage() {
         now: formatClock24(now),
       })
       if (blocked) {
-        toast.error(`${emp.firstName}, no se pudo registrar`, blocked)
-        reset()
+        showBlocked(blocked)
         return
       }
     }
@@ -332,9 +370,9 @@ export function ClockPage() {
       setNotices(found)
     } catch (e) {
       // Impossible sequences (doble entrada, regreso sin comida…) are refused with a clear reason.
-      toast.error('No se pudo registrar', e instanceof Error ? e.message : undefined)
+      // The photo step reports its own failure (upload, camera…); otherwise show the full-screen notice.
       if (evidence) throw e
-      setPhase('punch')
+      showBlocked(e instanceof Error ? e.message : 'No se pudo registrar el movimiento.')
       return
     } finally { punchBusy.current = false }
     // El registro siempre queda guardado localmente de inmediato; si no hay
@@ -362,7 +400,7 @@ export function ClockPage() {
         <div className="flex flex-col items-start gap-6 lg:items-center lg:text-center">
           <AnalogClock now={now} className="hidden h-56 w-56 lg:block xl:h-64 xl:w-64" />
           <div className="lg:text-center">
-            <p className="font-mono text-4xl font-semibold tabular-nums tracking-tight sm:text-5xl xl:text-6xl">
+            <p className="whitespace-nowrap font-mono text-4xl font-semibold tabular-nums tracking-tight sm:text-5xl lg:text-4xl xl:text-5xl 2xl:text-6xl">
               {formatClockTime(now)}
             </p>
             <p className="mt-2 text-sm text-slate-300">{formatLongDate(now)}</p>
@@ -462,7 +500,7 @@ export function ClockPage() {
       ) : null}
 
       <div className="flex flex-1 items-center justify-center p-6">
-        <div className="w-full max-w-lg">
+        <div className="w-full max-w-xl lg:max-w-2xl">
           <AnimatePresence mode="wait">
             {phase === 'idle' && (
               <motion.div
@@ -474,17 +512,18 @@ export function ClockPage() {
                 className="space-y-7"
               >
                 <div>
-                  <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+                  <h1 className="text-3xl font-bold tracking-tight text-slate-900 md:text-4xl">
                     Registra tu asistencia
                   </h1>
-                  <p className="mt-1.5 text-[15px] text-slate-500">¿Qué movimiento quieres registrar?</p>
+                  <p className="mt-2 text-lg text-slate-500">¿Qué movimiento quieres registrar?</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-4">
                   {PUNCH_TYPE_ORDER.filter(
                     (t) => company.attendanceSettings.trackLunch || (t !== 'lunch_out' && t !== 'lunch_in'),
                   ).map((t) => {
                     const Icon = PUNCH_TYPE_ICON[t]
+                    const style = PUNCH_TYPE_STYLE[t]
                     return (
                       <button
                         key={t}
@@ -493,12 +532,12 @@ export function ClockPage() {
                           setSelectedPunchType(t)
                           setPhase('method')
                         }}
-                        className="group flex flex-col items-center gap-3 rounded-xl border border-slate-200 bg-white p-6 text-center shadow-sm transition-colors hover:border-primary/40 hover:bg-slate-50 active:bg-slate-100"
+                        className={`group flex min-h-[10.5rem] flex-col items-center justify-center gap-4 rounded-2xl border-2 border-slate-200 bg-white p-6 text-center shadow-sm transition-colors ${style.card}`}
                       >
-                        <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                          <Icon className="h-7 w-7" />
+                        <span className={`flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center rounded-full ${style.icon}`}>
+                          <Icon className="h-9 w-9" />
                         </span>
-                        <span className="text-base font-semibold text-slate-900">{PUNCH_TYPE_LABEL[t]}</span>
+                        <span className="text-xl font-bold text-slate-900">{PUNCH_TYPE_LABEL[t]}</span>
                       </button>
                     )
                   })}
@@ -525,13 +564,13 @@ export function ClockPage() {
                     Volver
                   </button>
                   <div>
-                    <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+                    <h1 className="text-3xl font-bold tracking-tight text-slate-900 md:text-4xl">
                       Registra tu asistencia
                     </h1>
-                    <p className="mt-1.5 text-[15px] text-slate-500">Elige cómo quieres identificarte.</p>
+                    <p className="mt-2 text-lg text-slate-500">Elige cómo quieres identificarte.</p>
                   </div>
                   {selectedPunchType ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                    <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1.5 text-sm font-bold text-primary">
                       {(() => {
                         const Icon = PUNCH_TYPE_ICON[selectedPunchType]
                         return <Icon className="h-3.5 w-3.5" />
@@ -547,13 +586,13 @@ export function ClockPage() {
                       key={m.key}
                       type="button"
                       onClick={() => setPhase(m.key)}
-                      className="group flex w-full items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-colors hover:border-primary/40 hover:bg-slate-50 active:bg-slate-100"
+                      className="group flex w-full items-center gap-5 rounded-2xl border-2 border-slate-200 bg-white p-5 text-left shadow-sm transition-colors hover:border-primary/40 hover:bg-slate-50 active:bg-slate-100"
                     >
-                      <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                        <m.Icon className="h-7 w-7" />
+                      <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                        <m.Icon className="h-8 w-8" />
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="flex items-center gap-2 text-base font-semibold text-slate-900">
+                        <span className="flex items-center gap-2 text-xl font-bold text-slate-900">
                           {m.title}
                           {m.soon ? (
                             <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
@@ -561,9 +600,9 @@ export function ClockPage() {
                             </span>
                           ) : null}
                         </span>
-                        <span className="mt-0.5 block text-sm text-slate-500">{m.text}</span>
+                        <span className="mt-0.5 block text-base text-slate-500">{m.text}</span>
                       </span>
-                      <ChevronRight className="h-5 w-5 shrink-0 text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-slate-500" />
+                      <ChevronRight className="h-6 w-6 shrink-0 text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-slate-500" />
                     </button>
                   ))}
                 </div>
@@ -822,6 +861,26 @@ export function ClockPage() {
               </FlowCard>
             )}
 
+            {phase === 'blocked' && employee && (
+              <PunchBlockedCard
+                key="blocked"
+                employee={employee}
+                message={blockedMessage}
+                punches={punches}
+                trackLunch={company.attendanceSettings.trackLunch}
+                allowed={allowedPunchTypes(punches, company.attendanceSettings, {
+                  minutes: kiosk.minGapMinutes,
+                  now: formatClock24(now),
+                })}
+                onChoose={(t) => {
+                  setSelectedPunchType(t)
+                  setPhase(kiosk.autoRegister ? 'confirm' : 'punch')
+                }}
+                onClose={reset}
+                closeAfterMs={BLOCKED_SCREEN_MS}
+              />
+            )}
+
             {phase === 'success' && employee && lastPunch && (
               <motion.div
                 key="success"
@@ -831,42 +890,40 @@ export function ClockPage() {
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                 className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/[0.08]"
               >
-                <div className="relative overflow-hidden bg-gradient-to-b from-emerald-50 to-white px-7 pb-7 pt-10 text-center">
-                  <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[radial-gradient(closest-side,rgba(16,185,129,0.18),transparent)]" />
-                  <div className="relative mx-auto flex h-20 w-20 items-center justify-center">
+                <div className="relative overflow-hidden bg-gradient-to-b from-emerald-100 via-emerald-50 to-white px-7 pb-8 pt-10 text-center">
+                  <div className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-[radial-gradient(closest-side,rgba(16,185,129,0.22),transparent)]" />
+                  <div className="relative mx-auto flex h-28 w-28 items-center justify-center">
                     <motion.span
                       initial={{ scale: 0.4, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                       transition={{ delay: 0.05, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-                      className="absolute inset-0 rounded-full bg-emerald-500/12"
+                      className="absolute inset-0 rounded-full bg-emerald-500/15"
                     />
                     <motion.span
                       initial={{ scale: 0.5, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                       transition={{ delay: 0.1, type: 'spring', stiffness: 320, damping: 16 }}
-                      className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 ring-4 ring-white"
+                      className="flex h-20 w-20 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 ring-4 ring-white"
                     >
-                      <Check className="h-7 w-7" strokeWidth={3} />
+                      <Check className="h-11 w-11" strokeWidth={3} />
                     </motion.span>
                   </div>
 
-                  <p className="relative mt-4 text-sm font-semibold uppercase tracking-wider text-emerald-700">
+                  <p className="relative mt-5 text-lg font-bold uppercase tracking-wider text-emerald-700 md:text-xl">
                     {PUNCH_TYPE_LABEL[lastPunch.type]} registrada
                   </p>
-                  <p className="relative mt-1.5 font-mono text-6xl font-bold tabular-nums tracking-tight text-slate-900">
+                  <p className="relative mt-2 font-mono text-6xl font-bold tabular-nums tracking-tight text-slate-900 md:text-7xl">
                     {formatTime12(lastPunch.time)}
                   </p>
-                  <p className="relative mt-1.5 text-[13px] text-slate-400">{formatLongDate(now)}</p>
+                  <p className="relative mt-2 text-base text-slate-500">{formatLongDate(now)}</p>
                 </div>
 
                 <div className="border-t border-slate-100 px-7 pb-7 pt-6">
                   <div className="flex items-center gap-3.5 rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3.5">
-                    <Avatar name={employee.fullName} size="xl" className="h-14 w-14 text-base ring-4 ring-white shadow-sm" />
+                    <Avatar name={employee.fullName} size="xl" className="h-16 w-16 text-lg ring-4 ring-white shadow-sm" />
                     <div className="min-w-0">
-                      <p className="truncate text-base font-semibold text-slate-900">
-                        {employee.fullName}
-                      </p>
-                      <p className="truncate text-[13px] text-slate-500">
+                      <p className="truncate text-xl font-bold text-slate-900">{employee.fullName}</p>
+                      <p className="truncate text-sm text-slate-500">
                         {employee.employeeNumber} · {employee.position}
                       </p>
                     </div>
@@ -931,26 +988,22 @@ export function ClockPage() {
                     </div>
                   </div>
 
+                  {/* A text line, not an embedded map: loading a whole third-party map page at the moment
+                      someone clocks in froze weak tablets (and needs the Internet). */}
                   {lastPunch.location ? (
-                    <div className="mt-3 overflow-hidden rounded-xl border border-slate-200">
-                      <div className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-medium text-slate-500">
-                        <MapPin className="h-3.5 w-3.5" />
-                        {branch?.lat != null && branch?.lng != null ? 'Ubicación de la sucursal' : 'Ubicación del registro'}
+                    <div className="mt-3 flex items-center gap-2.5 rounded-xl border border-slate-200 px-3.5 py-3">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                        <MapPin className="h-4 w-4" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] uppercase tracking-wide text-slate-400">
+                          {branch?.lat != null && branch?.lng != null ? 'Ubicación de la sucursal' : 'Ubicación del registro'}
+                        </p>
+                        <p className="truncate text-sm font-medium text-slate-800">
+                          {branch?.name ?? 'Ubicación registrada'} · {lastPunch.location.lat.toFixed(4)},{' '}
+                          {lastPunch.location.lng.toFixed(4)}
+                        </p>
                       </div>
-                      <iframe
-                        title="Mapa de la ubicación del registro"
-                        className="h-36 w-full border-0 grayscale-[15%]"
-                        loading="lazy"
-                        src={osmEmbedUrl(lastPunch.location)}
-                      />
-                      <a
-                        href={`https://www.google.com/maps?q=${lastPunch.location.lat},${lastPunch.location.lng}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block px-3.5 py-2 text-center text-[12px] font-medium text-primary hover:underline"
-                      >
-                        Ver en el mapa · {lastPunch.location.lat.toFixed(5)}, {lastPunch.location.lng.toFixed(5)}
-                      </a>
                     </div>
                   ) : null}
 
@@ -996,14 +1049,6 @@ function humanMinutes(total: number): string {
   const m = total % 60
   if (h === 0) return `${m} min`
   return m === 0 ? `${h} h` : `${h} h ${m} min`
-}
-
-/** Free OpenStreetMap embed, no API key — close enough zoom to see the street. */
-function osmEmbedUrl({ lat, lng }: PunchLocation): string {
-  const dLng = 0.004
-  const dLat = 0.0028
-  const bbox = [lng - dLng, lat - dLat, lng + dLng, lat + dLat].join('%2C')
-  return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&marker=${lat}%2C${lng}&layer=mapnik`
 }
 
 function FlowCard({

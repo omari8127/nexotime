@@ -1,15 +1,24 @@
-/** A still frame of a live <video>, as a JPEG data URL — used as a fleeting
+/** Longest side of the verification photo. It is shown in a ~160 px box and never stored, so
+ *  encoding the camera's full 1080p frame only froze weak tablets for a few hundred ms at the exact
+ *  moment someone clocks in (and kept a ~0.5 MB base64 string in memory). */
+const PHOTO_MAX_SIDE = 480
+
+/** A still frame of a live <video>, as a small JPEG data URL — used as a fleeting
  *  verification photo (see ClockPage) that is shown once on screen and never
  *  stored or sent anywhere. */
 export function captureVideoFrame(video: HTMLVideoElement): string | undefined {
   try {
+    const sw = video.videoWidth
+    const sh = video.videoHeight
+    if (!sw || !sh) return undefined
+    const scale = Math.min(1, PHOTO_MAX_SIDE / Math.max(sw, sh))
     const canvas = document.createElement('canvas')
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
+    canvas.width = Math.max(1, Math.round(sw * scale))
+    canvas.height = Math.max(1, Math.round(sh * scale))
     const ctx = canvas.getContext('2d')
-    if (!ctx || canvas.width === 0 || canvas.height === 0) return undefined
+    if (!ctx) return undefined
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-    return canvas.toDataURL('image/jpeg', 0.82)
+    return canvas.toDataURL('image/jpeg', 0.78)
   } catch {
     return undefined
   }
