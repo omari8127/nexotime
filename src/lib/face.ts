@@ -7,6 +7,13 @@
  */
 import type { Employee, FaceStrictness } from '@/types'
 import { waitForFreshFrame } from './camera'
+import {
+  gainFor,
+  rotationCandidates,
+  screenOrientation,
+  streamOrientation,
+  type Rotation,
+} from './cameraView'
 
 export type FaceApi = typeof import('@vladmandic/face-api')
 
@@ -204,6 +211,8 @@ export interface ReadOptions {
    * gate on blur, turns it off; enrollment (which does) keeps it.
    */
   sharpness?: boolean
+  /** Quarter turns that make the picture upright (a sideways or upside-down camera); see cameraView. */
+  rotation?: Rotation
 }
 
 /** Consecutive frames where no face was found; the wide-margin retry runs every few of them. */
@@ -216,6 +225,9 @@ const WIDE_MAX_SIDE = 640
 /** Longest side of the image the networks work on. SSD resizes to 512 px internally, so a 1080p frame only
  *  cost memory, upload time and garbage collection (the "stutter every second" on weak tablets). */
 const MAX_WORK_SIDE = 1280
+/** A device whose full detector takes longer than this works on a smaller image (less to copy and upload). */
+const SLOW_SSD_MS = 140
+const SLOW_WORK_SIDE = 800
 /** After a face was seen this recently the cheap "is anyone there?" probe is skipped. */
 const WARM_MS = 1500
 /** With nobody in view, the full detector still runs on every Nth frame (faces the probe misses in dim light). */
@@ -228,6 +240,8 @@ let coldFrames = 0
  *  full detector simply runs every time, as it always did. */
 let probeMs = 0
 let ssdMs = 0
+/** Brightening applied to what the networks see (1 = none): follows how dark the faces seen lately were. */
+let autoGain = 1
 const ema = (previous: number, sample: number) => (previous === 0 ? sample : previous * 0.7 + sample * 0.3)
 const probeIsCheap = () => probeMs > 0 && ssdMs > 0 && probeMs < ssdMs * 0.6
 let workCanvas: HTMLCanvasElement | null = null
@@ -247,6 +261,37 @@ function sized(existing: HTMLCanvasElement | null, width: number, height: number
  */
 export function paceDelay(lastMs: number, minMs: number, maxMs = 400, ratio = 0.8): number {
   return Math.round(Math.min(maxMs, Math.max(minMs, lastMs * ratio)))
+}
+
+/**
+ * Which quarter turn, other than the current one, makes a face visible? Cheap (the light detector on a
+ * small copy), one rotation at a time; null when none does. Run when readings keep finding nobody.
+ */
+export function findFaceRotation(api: FaceApi, video: HTMLVideoElement, current: Rotation): Promise<Rotation | null> {
+  const run = readQueue.then(async () => {
+    const w = video.videoWidth
+    const h = video.videoHeight
+    if (!w || !h) return null
+    const side = Math.min(1, 480 / Math.max(w, h))
+    const dw = Math.round(w * side)
+    const dh = Math.round(h * side)
+    for (const rot of rotationCandidates(screenOrientation(), streamOrientation(w, h), current)) {
+      const quarter = rot === 90 || rot === 270
+      const canvas = document.createElement('canvas')
+      canvas.width = quarter ? dh : dw
+      canvas.height = quarter ? dw : dh
+      const g = canvas.getContext('2d')
+      if (!g) continue
+      g.translate(canvas.width / 2, canvas.height / 2)
+      g.rotate((rot * Math.PI) / 180)
+      g.drawImage(video, -dw / 2, -dh / 2, dw, dh)
+      const found = await api.detectAllFaces(canvas, new api.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 }))
+      if (found.length === 1) return rot
+    }
+    return null
+  })
+  readQueue = run.then(() => undefined, () => undefined)
+  return run
 }
 
 /** Readings run one at a time: they share the work canvases (and the GPU). */
@@ -280,13 +325,25 @@ async function readFaceNow(
   const zoom = options.zoom && options.zoom > 1 ? options.zoom : 1
   const cw = Math.max(1, Math.round(sw / zoom))
   const ch = Math.max(1, Math.round(sh / zoom))
-  const k = Math.min(1, MAX_WORK_SIDE / Math.max(cw, ch))
-  const vw = Math.max(1, Math.round(cw * k))
-  const vh = Math.max(1, Math.round(ch * k))
+  const k = Math.min(1, (ssdMs > SLOW_SSD_MS ? SLOW_WORK_SIDE : MAX_WORK_SIDE) / Math.max(cw, ch))
+  const dw = Math.max(1, Math.round(cw * k))
+  const dh = Math.max(1, Math.round(ch * k))
+  // A sideways picture is turned upright here, so the networks (which only know upright faces) see
+  // the same thing the person sees on the screen.
+  const rotation = options.rotation ?? 0
+  const quarter = rotation === 90 || rotation === 270
+  const vw = quarter ? dh : dw
+  const vh = quarter ? dw : dh
   workCanvas = sized(workCanvas, vw, vh)
   const ctx = workCanvas.getContext('2d', { willReadFrequently: true })
   if (!ctx) throw new Error('No se pudo leer la cámara')
-  ctx.drawImage(video, (sw - cw) / 2, (sh - ch) / 2, cw, ch, 0, 0, vw, vh)
+  const gain = autoGain
+  ctx.save()
+  if (gain > 1.05) ctx.filter = `brightness(${gain.toFixed(2)})`
+  ctx.translate(vw / 2, vh / 2)
+  ctx.rotate((rotation * Math.PI) / 180)
+  ctx.drawImage(video, (sw - cw) / 2, (sh - ch) / 2, cw, ch, -dw / 2, -dh / 2, dw, dh)
+  ctx.restore()
   const source = workCanvas
 
   const detectOn = (input: HTMLCanvasElement, detection: Parameters<FaceApi['detectAllFaces']>[1]) => {
@@ -376,6 +433,9 @@ async function readFaceNow(
   const yaw = dist(pts[30], pts[0]) / Math.max(1, dist(pts[30], pts[16]))
   const descriptor =
     withDescriptor && 'descriptor' in f ? Array.from((f as { descriptor: Float32Array }).descriptor) : undefined
+  const brightness = faceBrightness(source, box)
+  // Follow the light: a face seen darker than ~105 raises the gain for the next frames (smoothly).
+  autoGain = autoGain * 0.6 + gainFor(brightness / gain) * 0.4
   return {
     kind: 'face',
     reading: {
@@ -383,7 +443,7 @@ async function readFaceNow(
       size: box.width / vw,
       // Real sensor pixels: the working image may have been scaled down, the zoom crop never rescales.
       pixelWidth: box.width / k,
-      brightness: faceBrightness(source, box),
+      brightness,
       offset: { x: (box.x + box.width / 2) / vw - 0.5, y: (box.y + box.height / 2) / vh - 0.5 },
       yaw,
       sharpness: options.sharpness === false ? MIN_SHARPNESS * 4 : faceSharpness(source, box),

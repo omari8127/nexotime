@@ -80,8 +80,11 @@ export function LightStage({
           Luz {light ? 'encendida' : 'apagada'}
         </button>
       </header>
+      <p className="px-6 pb-1 text-center text-xs text-slate-500 landscape:hidden">
+        Para que te reconozca mejor: brillo de la pantalla al máximo y la luz de frente, no a tu espalda.
+      </p>
       <div className="flex flex-1 items-center justify-center overflow-y-auto px-4 pb-6">
-        <div className="w-full max-w-2xl">{children}</div>
+        <div className="w-full max-w-2xl landscape:max-w-5xl">{children}</div>
       </div>
     </div>,
     document.body,

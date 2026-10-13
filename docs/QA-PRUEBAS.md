@@ -36,6 +36,8 @@ Marca cada punto; si alguno falla, no se entrega.
 - [ ] Configuración → Reloj checador → "Verificar el rostro con número y PIN" en apagado: vuelve a ser solo número + PIN (la entrada sigue pidiendo foto).
 - [ ] Con la luz de apoyo (pantalla blanca) y con el brillo de la tablet al máximo, en un lugar poco iluminado: debe reconocer. Probar también apagada ("Luz apagada").
 - [ ] Al prender la cámara aparece "Prepárate" con cuenta de 4 s (o "Empezar ya"); no lee ni registra nada antes. Después muestra la foto, un aviso con cuenta regresiva y el botón "Registrar ahora".
+- [ ] Tablet **vertical** y luego **horizontal**: la imagen de la cámara se ve derecha en las dos (vertical = ventana alta; horizontal = cámara a la izquierda y botones a la derecha). Si se ve de lado o de cabeza, debe corregirse sola en unos segundos al ponerse alguien enfrente; si no, usar "Girar imagen" (se recuerda para esa posición).
+- [ ] En un cuarto con poca luz: pantalla blanca al máximo de brillo, la persona a ~40 cm. Debe leerla; si dice "poca luz", acercarse a la pantalla.
 - [ ] La cámara del reloj (rostro, QR y verificación) no se entrecorta ni se congela cada segundo en la tablet real. Si pasa, anotar el modelo de la tablet.
 
 ## 4. Sin conexión

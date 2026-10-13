@@ -4,6 +4,7 @@ import { FaceViewport } from '@/components/clock/FaceViewport'
 import { captureVideoFrame } from '@/lib/camera'
 import { VoiceToggle } from '@/components/shared/VoiceToggle'
 import { useCameraStream } from '@/hooks/useCameraStream'
+import { useCameraView, useRotationSearch } from '@/hooks/useCameraView'
 import { GetReadyOverlay, useGetReady } from '@/hooks/useGetReady'
 import { useVoice } from '@/lib/speech'
 import { useDataStore } from '@/store/dataStore'
@@ -11,6 +12,7 @@ import { usePermissions } from '@/hooks/useScopedData'
 import {
   QUALITY_TEXT,
   faceCandidates,
+  findFaceRotation,
   loadFaceApi,
   paceDelay,
   qualityIssues,
@@ -53,7 +55,7 @@ export function FaceScanFlow({
 }) {
   const candidates = useMemo(() => faceCandidates(employees), [employees])
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user')
-  const { videoRef, state: cameraState, message: cameraMessage, resolution, restart } = useCameraStream(candidates.length > 0, {
+  const { videoRef, state: cameraState, message: cameraMessage, resolution, size, restart } = useCameraStream(candidates.length > 0, {
     hd: true, facingMode,
   })
   const [stage, setStage] = useState<Stage>('loading')
@@ -63,6 +65,27 @@ export function FaceScanFlow({
   const { say } = useVoice('kiosk')
   // The camera shows the person first and only then starts looking: a few seconds to get in place.
   const { left, ready, skip } = useGetReady(cameraState === 'ready', attempt)
+  // The picture as it must be shown and read on this device, held this way (sideways cameras included).
+  const view = useCameraView(size)
+  const rotationRef = useRef(view.rotation)
+  const apiRef = useRef<FaceApi | null>(null)
+  useEffect(() => {
+    rotationRef.current = view.rotation
+  })
+  const noteReading = useRotationSearch({
+    enabled: stage === 'searching' && ready,
+    rotation: view.rotation,
+    setRotation: view.setRotation,
+    probe: async (current) => {
+      const api = apiRef.current
+      const video = videoRef.current
+      return api && video ? findFaceRotation(api, video, current) : null
+    },
+  })
+  const noteReadingRef = useRef(noteReading)
+  useEffect(() => {
+    noteReadingRef.current = noteReading
+  })
   const logAudit = useDataStore((s) => s.logAudit)
   const currentUser = useDataStore((s) => s.currentUser)
   const { can } = usePermissions()
@@ -118,6 +141,7 @@ export function FaceScanFlow({
         return
       }
       if (!alive) return
+      apiRef.current = api
       setStage('searching')
       setReading('')
       setHint('Mira a la cámara')
@@ -134,7 +158,7 @@ export function FaceScanFlow({
 
       const accept = (m: FaceMatch) => {
         alive = false
-        confirmRef.current(m.employee, captureVideoFrame(video))
+        confirmRef.current(m.employee, captureVideoFrame(video, rotationRef.current))
       }
 
       let nextDelay = ACTIVE_DELAY_MS
@@ -147,9 +171,11 @@ export function FaceScanFlow({
           const result = await readFace(api, video, true, 'accurate', {
             zoom: faceZoom,
             minConfidence: tuning.minConfidence,
+            rotation: rotationRef.current,
           })
           if (!alive) return
           errors = 0
+          noteReadingRef.current(result.kind !== 'none')
           // Nobody in front of the camera: look less often (saves the tablet's CPU/battery); the
           // moment a face appears, the loop runs at full speed again.
           nextDelay = paceDelay(performance.now() - startedAt, result.kind === 'none' ? IDLE_DELAY_MS : ACTIVE_DELAY_MS, 600, result.kind === 'none' ? 1.5 : 0.8)
@@ -218,9 +244,11 @@ export function FaceScanFlow({
     }
   }, [cameraState, attempt, videoRef, ready])
 
+  const cameraOn = candidates.length > 0
   return (
-    <div className="flex flex-col items-center gap-5 text-center">
-      {candidates.length === 0 ? (
+    // Held upright: the camera on top, the text and buttons under it. Held sideways: side by side.
+    <div className="flex flex-col items-center gap-5 text-center landscape:flex-row landscape:items-center landscape:gap-8 landscape:text-left">
+      {!cameraOn ? (
         <div className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-6 text-left">
           <p className="text-[15px] font-semibold text-slate-900">Aún no hay rostros registrados</p>
           <p className="mt-1 text-sm text-slate-500">
@@ -229,7 +257,7 @@ export function FaceScanFlow({
           </p>
         </div>
       ) : (
-        <>
+        <div className="w-full landscape:w-[55%] landscape:shrink-0">
           <FaceViewport
             videoRef={videoRef}
             cameraState={cameraState}
@@ -237,11 +265,17 @@ export function FaceScanFlow({
             loadingModels={stage === 'loading' && ready}
             overlay={!ready ? <GetReadyOverlay left={left} /> : undefined}
             zoom={settings.faceZoom}
-            className="max-w-xl"
+            rotation={view.rotation}
+            aspect={view.aspect}
           />
+        </div>
+      )}
+
+      <div className="flex w-full min-w-0 flex-col items-center gap-4 landscape:flex-1 landscape:items-stretch">
+        {cameraOn ? (
           <div className="space-y-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Reconocimiento facial</p>
-            <p className="text-lg font-semibold text-slate-900">
+            <p className="text-lg font-semibold text-slate-900" role="status">
               {cameraState === 'error'
                 ? 'Revisa la cámara'
                 : cameraState === 'ready' && !ready
@@ -254,29 +288,34 @@ export function FaceScanFlow({
             {resolution ? <p className="text-xs text-slate-500">Cámara: {resolution}</p> : null}
             {reading && stage === 'searching' && can('biometrics.manage') ? <p className="font-mono text-[11px] text-slate-400">{reading}</p> : null}
           </div>
-        </>
-      )}
+        ) : null}
 
-      {candidates.length > 0 ? (
-        <Button variant="secondary" onClick={() => { setStage('loading'); setFacingMode((v) => v === 'user' ? 'environment' : 'user') }}>
-          Cambiar a cámara {facingMode === 'user' ? 'trasera' : 'frontal'}
-        </Button>
-      ) : null}
-      <div className="flex w-full flex-wrap gap-3">
-        {stage === 'failed' || cameraState === 'error' ? (
-          <Button variant="secondary" size="lg" className="flex-1" onClick={() => { setStage('loading'); setAttempt((n) => n + 1); restart() }}>
-            Reintentar cámara
-          </Button>
+        {cameraOn ? (
+          <div className="flex flex-wrap justify-center gap-2 landscape:justify-start">
+            <Button variant="secondary" onClick={() => { setStage('loading'); setFacingMode((v) => v === 'user' ? 'environment' : 'user') }}>
+              Cambiar a cámara {facingMode === 'user' ? 'trasera' : 'frontal'}
+            </Button>
+            <Button variant="secondary" onClick={view.rotate} title="Si la imagen se ve de lado o de cabeza">
+              Girar imagen{view.rotation ? ` (${view.rotation}°)` : ''}
+            </Button>
+          </div>
         ) : null}
-        {cameraState === 'ready' && !ready ? (
-          <Button size="lg" className="flex-1" onClick={skip}>
-            Empezar ya
+        <div className="flex w-full flex-wrap gap-3">
+          {stage === 'failed' || cameraState === 'error' ? (
+            <Button variant="secondary" size="lg" className="flex-1" onClick={() => { setStage('loading'); setAttempt((n) => n + 1); restart() }}>
+              Reintentar cámara
+            </Button>
+          ) : null}
+          {cameraState === 'ready' && !ready ? (
+            <Button size="lg" className="flex-1" onClick={skip}>
+              Empezar ya
+            </Button>
+          ) : null}
+          <VoiceToggle scope="kiosk" compact />
+          <Button variant="secondary" size="lg" className="flex-1" onClick={onCancel}>
+            Cancelar
           </Button>
-        ) : null}
-        <VoiceToggle scope="kiosk" compact />
-        <Button variant="secondary" size="lg" className="flex-1" onClick={onCancel}>
-          Cancelar
-        </Button>
+        </div>
       </div>
     </div>
   )

@@ -4,11 +4,13 @@ import { Button } from '@/components/ui/button'
 import { FaceViewport } from '@/components/clock/FaceViewport'
 import { VoiceToggle } from '@/components/shared/VoiceToggle'
 import { useCameraStream } from '@/hooks/useCameraStream'
+import { useCameraView, useRotationSearch } from '@/hooks/useCameraView'
 import { GetReadyOverlay, useGetReady } from '@/hooks/useGetReady'
 import { videoFrameCanvas } from '@/lib/camera'
 import {
   QUALITY_TEXT,
   faceCandidates,
+  findFaceRotation,
   loadFaceApi,
   paceDelay,
   qualityIssues,
@@ -73,7 +75,7 @@ export function FaceVerifyFlow({
 }) {
   const candidates = useMemo(() => faceCandidates(employees), [employees])
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user')
-  const { videoRef, state: cameraState, message: cameraMessage, restart } = useCameraStream(true, {
+  const { videoRef, state: cameraState, message: cameraMessage, size, restart } = useCameraStream(true, {
     hd: true,
     facingMode,
   })
@@ -85,6 +87,27 @@ export function FaceVerifyFlow({
   const { say, beep } = useVoice('kiosk')
   // Time to get in place before anything is read or taken (see useGetReady).
   const { left, ready, skip } = useGetReady(cameraState === 'ready', attempt)
+  // The picture as it must be shown and read on this device, held this way (sideways cameras included).
+  const view = useCameraView(size)
+  const rotationRef = useRef(view.rotation)
+  const apiRef = useRef<FaceApi | null>(null)
+  useEffect(() => {
+    rotationRef.current = view.rotation
+  })
+  const noteReading = useRotationSearch({
+    enabled: stage === 'searching' && ready,
+    rotation: view.rotation,
+    setRotation: view.setRotation,
+    probe: async (current) => {
+      const api = apiRef.current
+      const video = videoRef.current
+      return api && video ? findFaceRotation(api, video, current) : null
+    },
+  })
+  const noteReadingRef = useRef(noteReading)
+  useEffect(() => {
+    noteReadingRef.current = noteReading
+  })
   const logAudit = useDataStore((s) => s.logAudit)
   const currentUser = useDataStore((s) => s.currentUser)
 
@@ -121,7 +144,7 @@ export function FaceVerifyFlow({
     const finish = (distance?: number) => {
       alive = false
       try {
-        const photo = encodePhotoCapture(videoFrameCanvas(video))
+        const photo = encodePhotoCapture(videoFrameCanvas(video, 640, rotationRef.current))
         setStage('verified')
         setHint(mode === 'verify' ? 'Rostro verificado' : 'Foto tomada')
         beep()
@@ -166,6 +189,7 @@ export function FaceVerifyFlow({
         return
       }
       if (!alive) return
+      apiRef.current = api
       setStage('searching')
       setHint('Mira a la cámara')
 
@@ -186,9 +210,11 @@ export function FaceVerifyFlow({
             zoom: faceZoom,
             minConfidence: tuning.minConfidence,
             sharpness: true,
+            rotation: rotationRef.current,
           })
           if (!alive) return
           errors = 0
+          noteReadingRef.current(result.kind !== 'none')
           delay = paceDelay(performance.now() - started, result.kind === 'none' ? IDLE_DELAY_MS : ACTIVE_DELAY_MS, 600, result.kind === 'none' ? 1.5 : 0.8)
 
           if (result.kind === 'none') {
@@ -272,96 +298,107 @@ export function FaceVerifyFlow({
         : mode === 'verify' ? `${first}, mira a la cámara` : `${first}, mira a la cámara para tu foto`
 
   return (
-    <div className="flex flex-col items-center gap-5 text-center">
-      <FaceViewport
-        videoRef={videoRef}
-        cameraState={cameraState}
-        cameraMessage={cameraMessage}
-        loadingModels={stage === 'loading' && ready}
-        overlay={!ready ? <GetReadyOverlay left={left} /> : undefined}
-        ok={stage === 'verified'}
-        zoom={settings.faceZoom}
-        className="max-w-xl"
-      />
-
-      <div className="w-full max-w-xl space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-          {mode === 'verify' ? 'Paso 3 de 3 · Verificación de identidad' : 'Paso 3 de 3 · Foto de entrada'}
-        </p>
-        <p className="text-2xl font-bold tracking-tight text-slate-900">{title}</p>
-
-        {stage === 'verified' ? (
-          <p className="flex items-center justify-center gap-2 text-lg font-semibold text-emerald-700">
-            <CircleCheck className="h-6 w-6" />
-            {mode === 'verify' ? 'Eres tú. Registrando…' : 'Registrando…'}
-          </p>
-        ) : stage === 'rejected' ? (
-          <div className="rounded-2xl border-2 border-rose-200 bg-rose-50 px-4 py-3 text-left">
-            <p className="flex items-center gap-2 text-base font-semibold text-rose-800">
-              <ShieldAlert className="h-5 w-5 shrink-0" />
-              No se registró nada
-            </p>
-            <p className="mt-1 text-sm text-rose-900/90">
-              {rejectedAsOther
-                ? 'Cada persona debe registrar su propia asistencia con su número y PIN.'
-                : 'Mira de frente, con buena luz y sin gorra ni lentes oscuros, e inténtalo de nuevo.'}
-              {rejections >= 2 ? ' Si sigue sin reconocerte, avisa a tu supervisor para que vuelva a registrar tu rostro.' : ''}
-            </p>
-          </div>
-        ) : (
-          <p className="min-h-7 text-lg font-medium text-slate-700" role="status">
-            {cameraState === 'error'
-              ? 'Revisa la cámara'
-              : cameraState === 'ready' && !ready
-                ? 'Acomódate: en unos segundos te leemos'
-                : stage === 'loading' ? 'Preparando…' : hint}
-          </p>
-        )}
-
-        <p className="text-sm text-slate-500">
-          {keepPhoto
-            ? 'Esta foto se guarda con tu entrada como evidencia.'
-            : 'La foto solo sirve para comprobar que eres tú y no se guarda.'}
-        </p>
+    // Held upright: the camera on top, the text and buttons under it. Held sideways: side by side.
+    <div className="flex flex-col items-center gap-5 text-center landscape:flex-row landscape:items-center landscape:gap-8 landscape:text-left">
+      <div className="w-full landscape:w-[55%] landscape:shrink-0">
+        <FaceViewport
+          videoRef={videoRef}
+          cameraState={cameraState}
+          cameraMessage={cameraMessage}
+          loadingModels={stage === 'loading' && ready}
+          overlay={!ready ? <GetReadyOverlay left={left} /> : undefined}
+          ok={stage === 'verified'}
+          zoom={settings.faceZoom}
+          rotation={view.rotation}
+          aspect={view.aspect}
+        />
       </div>
 
-      <div className="flex w-full max-w-xl flex-wrap justify-center gap-3">
-        {stage === 'rejected' || stage === 'failed' || cameraState === 'error' ? (
-          <Button
-            size="lg"
-            className="flex-1"
-            onClick={() => {
-              if (cameraState === 'error') restart()
-              retry()
-            }}
-          >
-            {stage === 'rejected' ? 'Intentar de nuevo' : 'Reintentar'}
-          </Button>
-        ) : null}
-        {cameraState === 'ready' && !ready ? (
-          <Button size="lg" className="flex-1" onClick={skip}>
-            Empezar ya
-          </Button>
-        ) : null}
-        <VoiceToggle scope="kiosk" compact />
-        {stage !== 'verified' ? (
-          <Button
-            variant="secondary"
-            size="lg"
-            className="shrink-0"
-            onClick={() => {
-              setStage('loading')
-              setFacingMode((v) => (v === 'user' ? 'environment' : 'user'))
-            }}
-          >
-            Cambiar cámara
-          </Button>
-        ) : null}
-        {stage !== 'verified' ? (
-          <Button variant="secondary" size="lg" className="flex-1" onClick={onCancel}>
-            Cancelar
-          </Button>
-        ) : null}
+      <div className="flex w-full min-w-0 flex-col items-center gap-4 landscape:flex-1 landscape:items-stretch">
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            {mode === 'verify' ? 'Paso 3 de 3 · Verificación de identidad' : 'Paso 3 de 3 · Foto de entrada'}
+          </p>
+          <p className="text-2xl font-bold tracking-tight text-slate-900">{title}</p>
+
+          {stage === 'verified' ? (
+            <p className="flex items-center justify-center gap-2 text-lg font-semibold text-emerald-700 landscape:justify-start">
+              <CircleCheck className="h-6 w-6" />
+              {mode === 'verify' ? 'Eres tú. Registrando…' : 'Registrando…'}
+            </p>
+          ) : stage === 'rejected' ? (
+            <div className="rounded-2xl border-2 border-rose-200 bg-rose-50 px-4 py-3 text-left">
+              <p className="flex items-center gap-2 text-base font-semibold text-rose-800">
+                <ShieldAlert className="h-5 w-5 shrink-0" />
+                No se registró nada
+              </p>
+              <p className="mt-1 text-sm text-rose-900/90">
+                {rejectedAsOther
+                  ? 'Cada persona debe registrar su propia asistencia con su número y PIN.'
+                  : 'Mira de frente, con buena luz y sin gorra ni lentes oscuros, e inténtalo de nuevo.'}
+                {rejections >= 2 ? ' Si sigue sin reconocerte, avisa a tu supervisor para que vuelva a registrar tu rostro.' : ''}
+              </p>
+            </div>
+          ) : (
+            <p className="min-h-7 text-lg font-medium text-slate-700" role="status">
+              {cameraState === 'error'
+                ? 'Revisa la cámara'
+                : cameraState === 'ready' && !ready
+                  ? 'Acomódate: en unos segundos te leemos'
+                  : stage === 'loading' ? 'Preparando…' : hint}
+            </p>
+          )}
+
+          <p className="text-sm text-slate-500">
+            {keepPhoto
+              ? 'Esta foto se guarda con tu entrada como evidencia.'
+              : 'La foto solo sirve para comprobar que eres tú y no se guarda.'}
+          </p>
+        </div>
+
+        <div className="flex w-full flex-wrap justify-center gap-3 landscape:justify-start">
+          {stage === 'rejected' || stage === 'failed' || cameraState === 'error' ? (
+            <Button
+              size="lg"
+              className="flex-1"
+              onClick={() => {
+                if (cameraState === 'error') restart()
+                retry()
+              }}
+            >
+              {stage === 'rejected' ? 'Intentar de nuevo' : 'Reintentar'}
+            </Button>
+          ) : null}
+          {cameraState === 'ready' && !ready ? (
+            <Button size="lg" className="flex-1" onClick={skip}>
+              Empezar ya
+            </Button>
+          ) : null}
+          <VoiceToggle scope="kiosk" compact />
+          {stage !== 'verified' ? (
+            <Button variant="secondary" size="lg" className="shrink-0" onClick={view.rotate} title="Si la imagen se ve de lado o de cabeza">
+              Girar imagen{view.rotation ? ` (${view.rotation}°)` : ''}
+            </Button>
+          ) : null}
+          {stage !== 'verified' ? (
+            <Button
+              variant="secondary"
+              size="lg"
+              className="shrink-0"
+              onClick={() => {
+                setStage('loading')
+                setFacingMode((v) => (v === 'user' ? 'environment' : 'user'))
+              }}
+            >
+              Cambiar cámara
+            </Button>
+          ) : null}
+          {stage !== 'verified' ? (
+            <Button variant="secondary" size="lg" className="flex-1" onClick={onCancel}>
+              Cancelar
+            </Button>
+          ) : null}
+        </div>
       </div>
     </div>
   )

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   descriptorDistance,
   faceCandidates,
@@ -13,6 +13,15 @@ import {
   type FaceReading,
 } from '@/lib/face'
 import { ClaimSession } from '@/lib/faceSession'
+import {
+  gainFor,
+  loadRotation,
+  nextRotation,
+  rotationCandidates,
+  saveRotation,
+  uprightAspect,
+  viewKey,
+} from '@/lib/cameraView'
 import { photoIsFresh, type PhotoCapture } from '@/lib/photoEvidence'
 import { kioskDevice, pickKioskBranch, punchableEmployees, resolveKiosk } from '@/lib/kiosk'
 import type { Employee } from '@/types'
@@ -203,5 +212,50 @@ describe('verificación después de número y PIN (1:1)', () => {
   it('verificar el rostro con número y PIN viene activado y se puede apagar', () => {
     expect(resolveKiosk(undefined).faceCheckOnPin).toBe(true)
     expect(resolveKiosk({ kiosk: { faceCheckOnPin: false } } as never).faceCheckOnPin).toBe(false)
+  })
+})
+
+describe('cámara según cómo esté la tablet', () => {
+  it('la caja toma la forma real de la imagen una vez derecha', () => {
+    expect(uprightAspect(1280, 720, 0)).toBeCloseTo(16 / 9)
+    expect(uprightAspect(1280, 720, 90)).toBeCloseTo(9 / 16) // llega acostada y de lado: se ve vertical
+    expect(uprightAspect(720, 1280, 270)).toBeCloseTo(16 / 9)
+    expect(uprightAspect(720, 1280, 0)).toBeCloseTo(9 / 16)
+    expect(uprightAspect(0, 0, 0)).toBeCloseTo(16 / 9) // todavía sin imagen
+  })
+
+  it('prueba primero un cuarto de vuelta cuando la imagen no coincide con la pantalla', () => {
+    // Tablet vertical que entrega una imagen horizontal: casi seguro viene girada 90°.
+    expect(rotationCandidates('portrait', 'landscape', 0)).toEqual([90, 270, 180])
+    // Misma forma: lo único posible es de cabeza.
+    expect(rotationCandidates('landscape', 'landscape', 0)).toEqual([180, 90, 270])
+    // Nunca vuelve a probar la que ya tiene.
+    expect(rotationCandidates('portrait', 'landscape', 90)).toEqual([270, 180, 0])
+  })
+
+  it('recuerda el giro por cada forma de sostener el equipo', () => {
+    const store = new Map<string, string>()
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+    })
+    const vertical = viewKey('portrait', 'landscape')
+    const horizontal = viewKey('landscape', 'landscape')
+    expect(loadRotation(vertical)).toBe(0)
+    saveRotation(vertical, 90)
+    expect(loadRotation(vertical)).toBe(90)
+    expect(loadRotation(horizontal)).toBe(0)
+    expect(nextRotation(270)).toBe(0)
+    expect(nextRotation(0)).toBe(90)
+    vi.unstubAllGlobals()
+  })
+
+  it('aclara solo cuando hace falta y con tope', () => {
+    expect(gainFor(140)).toBe(1) // luz de sobra: no toca nada
+    expect(gainFor(105)).toBe(1)
+    expect(gainFor(52)).toBeCloseTo(2.02, 1)
+    expect(gainFor(10)).toBe(2.4) // casi a oscuras: nunca más de 2,4×
+    expect(gainFor(0)).toBe(1)
+    expect(gainFor(Number.NaN)).toBe(1)
   })
 })

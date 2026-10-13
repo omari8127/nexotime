@@ -24,6 +24,8 @@ export function useCameraStream(active = true, { hd = false, facingMode = 'user'
   const [state, setState] = useState<CameraState>('starting')
   const [message, setMessage] = useState('')
   const [resolution, setResolution] = useState('')
+  // The picture's real size, kept current: a tablet that is turned changes it, and the view must follow.
+  const [size, setSize] = useState({ width: 0, height: 0 })
   const [attempt, setAttempt] = useState(0)
   const restart = useCallback(() => setAttempt((n) => n + 1), [])
 
@@ -33,9 +35,11 @@ export function useCameraStream(active = true, { hd = false, facingMode = 'user'
     let cancelled = false
     let playTimer: ReturnType<typeof setTimeout> | undefined
     let attached: HTMLVideoElement | null = null
+    let stopMeasuring = () => {}
     setState('starting')
     setMessage('')
     setResolution('')
+    setSize({ width: 0, height: 0 })
     const fail = (error: unknown) => {
       if (cancelled) return
       stream?.getTracks().forEach((track) => track.stop())
@@ -68,17 +72,28 @@ export function useCameraStream(active = true, { hd = false, facingMode = 'user'
       if (cancelled) return
       await waitForFreshFrame(video)
       if (cancelled) return
-      setResolution(`${video.videoWidth} × ${video.videoHeight}`)
+      const measure = () => {
+        setResolution(`${video.videoWidth} × ${video.videoHeight}`)
+        setSize({ width: video.videoWidth, height: video.videoHeight })
+      }
+      measure()
+      video.addEventListener('resize', measure)
+      video.addEventListener('loadedmetadata', measure)
+      stopMeasuring = () => {
+        video.removeEventListener('resize', measure)
+        video.removeEventListener('loadedmetadata', measure)
+      }
       setState('ready')
     }
     void start().catch(fail)
     return () => {
       cancelled = true
+      stopMeasuring()
       clearTimeout(playTimer)
       stream?.getTracks().forEach((t) => { t.onended = null; t.stop() })
       if (attached?.srcObject === stream) attached.srcObject = null
     }
   }, [active, hd, facingMode, attempt])
 
-  return { videoRef, state, message, resolution, restart }
+  return { videoRef, state, message, resolution, size, restart }
 }
