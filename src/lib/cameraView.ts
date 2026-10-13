@@ -21,18 +21,16 @@ export function uprightAspect(width: number, height: number, rotation: Rotation)
   return rotation === 90 || rotation === 270 ? height / width : width / height
 }
 
-/** Portrait window cut from a wide picture (3:4 — a face and shoulders), landscape from a tall one (4:3). */
-export const PORTRAIT_WINDOW = 3 / 4
-export const LANDSCAPE_WINDOW = 4 / 3
-
 /**
- * Shape of the window that shows the camera: the device's own. A tablet held upright gets a tall window
- * cut from the middle of the camera's wide picture (like the selfie camera of a phone), not a small wide
- * strip in a tall screen; a picture that already has the screen's shape is shown whole.
+ * Shape of the window that shows the camera, from the device and from how far people stand. A tablet held
+ * upright is a tall screen and the camera's picture is wide: farther away, a taller window is cut from
+ * its middle (3:4, people are small and the view can afford it); at a normal distance a little (4:3);
+ * and when people are at arm's reach ("near") the whole picture is shown, because anything cut away
+ * would be part of the face. A picture that already has the screen's shape is always shown whole.
  */
-export function windowAspect(upright: number, screen: Orientation): number {
-  if (screen === 'portrait' && upright > 1) return PORTRAIT_WINDOW
-  if (screen === 'landscape' && upright < 1) return LANDSCAPE_WINDOW
+export function windowAspect(upright: number, screen: Orientation, distance: 'near' | 'normal' | 'far' = 'normal'): number {
+  if (screen === 'portrait' && upright > 1) return distance === 'near' ? upright : distance === 'far' ? 3 / 4 : 4 / 3
+  if (screen === 'landscape' && upright < 1) return 4 / 3
   return upright
 }
 

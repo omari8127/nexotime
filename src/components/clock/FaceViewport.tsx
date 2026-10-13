@@ -44,12 +44,12 @@ export function FaceViewport({
     ? { width: `${100 / aspect}%`, height: `${100 * aspect}%` }
     : { width: '100%', height: '100%' }
   const w = aspect * 100
-  const ry = 36
-  const rx = Math.min(ry * 0.78, w * 0.44)
+  const ry = 41
+  const rx = Math.min(ry * 0.8, w * 0.46)
   return (
     <div
       className={cn(
-        'relative mx-auto overflow-hidden rounded-lg border border-slate-300 bg-slate-900 [--cam-h:60dvh] landscape:[--cam-h:70dvh]',
+        'relative mx-auto overflow-hidden rounded-2xl bg-white shadow-[0_0_0_6px_rgba(255,255,255,1),0_0_40px_10px_rgba(255,255,255,0.9)] [--cam-h:60dvh] landscape:[--cam-h:70dvh]',
         className,
       )}
       style={{ aspectRatio: String(aspect), width: `min(100%, calc(var(--cam-h) * ${aspect}))` }}
@@ -77,16 +77,17 @@ export function FaceViewport({
               <ellipse cx={w / 2} cy="48" rx={rx} ry={ry} fill="black" />
             </mask>
           </defs>
-          <rect width={w} height="100" fill="rgba(15,23,42,0.5)" mask={`url(#${maskId})`} />
+          {/* Outside the oval: bright white, the screen's own light on the face ("linterna"). */}
+          <rect width={w} height="100" fill="rgba(255,255,255,0.9)" mask={`url(#${maskId})`} />
           <ellipse
             cx={w / 2}
             cy="48"
             rx={rx}
             ry={ry}
             fill="none"
-            stroke={ok ? '#34d399' : 'rgba(255,255,255,0.8)'}
-            strokeWidth="1"
-            strokeDasharray={ok ? undefined : '3 2.5'}
+            stroke={ok ? '#10b981' : '#334155'}
+            strokeWidth="1.1"
+            strokeDasharray={ok ? undefined : '3.5 2.5'}
           />
         </svg>
       ) : null}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { FaceDistance } from '@/types'
 import {
   loadRotation,
   nextRotation,
@@ -19,7 +20,7 @@ import {
  *    when nobody can be seen (see `useRotationSearch`), can be set by hand, and is remembered per
  *    way of holding the device.
  */
-export function useCameraView(size: { width: number; height: number }) {
+export function useCameraView(size: { width: number; height: number }, distance: FaceDistance = 'normal') {
   const [screen, setScreen] = useState<Orientation>(() => screenOrientation())
   useEffect(() => {
     const update = () => setScreen(screenOrientation())
@@ -53,7 +54,7 @@ export function useCameraView(size: { width: number; height: number }) {
     screen,
     stream,
     /** Width ÷ height of the window that shows (and is read from) the picture: the device's shape. */
-    aspect: windowAspect(uprightAspect(size.width, size.height, rotation), screen),
+    aspect: windowAspect(uprightAspect(size.width, size.height, rotation), screen, distance),
   }
 }
 

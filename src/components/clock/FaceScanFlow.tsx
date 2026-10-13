@@ -11,6 +11,7 @@ import { useDataStore } from '@/store/dataStore'
 import { usePermissions } from '@/hooks/useScopedData'
 import {
   QUALITY_TEXT,
+  distanceProfile,
   faceCandidates,
   findFaceRotation,
   loadFaceApi,
@@ -66,7 +67,7 @@ export function FaceScanFlow({
   // The camera shows the person first and only then starts looking: a few seconds to get in place.
   const { left, ready, skip } = useGetReady(cameraState === 'ready', attempt)
   // The picture as it must be shown and read on this device, held this way (sideways cameras included).
-  const view = useCameraView(size)
+  const view = useCameraView(size, settings.faceDistance)
   const rotationRef = useRef(view.rotation)
   const aspectRef = useRef(view.aspect)
   const apiRef = useRef<FaceApi | null>(null)
@@ -194,7 +195,7 @@ export function FaceScanFlow({
             setReading('')
             setHint('Debe haber una sola persona frente a la cámara')
           } else {
-            const issues = qualityIssues(result.reading, { blur: true, minFace: tuning.minFace })
+            const issues = qualityIssues(result.reading, { blur: true, ...distanceProfile(settings.faceDistance, tuning) })
             if (issues.length > 0 || !result.reading.descriptor) {
               session.reset()
               unknownFrames = 0

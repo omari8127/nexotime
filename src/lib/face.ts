@@ -5,7 +5,7 @@
  * 128-number descriptor per sample is stored for each enrolled employee — never
  * a photo. The models are served from /models and cached by the browser.
  */
-import type { Employee, FaceStrictness } from '@/types'
+import type { Employee, FaceDistance, FaceStrictness } from '@/types'
 import { waitForFreshFrame } from './camera'
 import {
   gainFor,
@@ -110,7 +110,18 @@ export function tuningFor(strictness: FaceStrictness, threshold: number | null =
 /** Minimum face width as a fraction of the frame, so the descriptor is reliable. */
 export const MIN_FACE_RATIO = 0.15
 /** Above this the face fills the frame and gets clipped. */
-export const MAX_FACE_RATIO = 0.8
+export const MAX_FACE_RATIO = 0.85
+
+/**
+ * What "near" and "far" mean for the reloj. A tablet on a wall with people at arm's reach sees a face that
+ * fills most of the picture: that is expected there, not "too close" (and a stranger walking past, far
+ * away, is not "close enough"). Far counters need the opposite: faces are small, so smaller is accepted.
+ */
+export function distanceProfile(distance: FaceDistance, tuning: Tuning): { minFace: number; maxFace: number } {
+  if (distance === 'near') return { minFace: Math.max(tuning.minFace, 0.25), maxFace: 0.93 }
+  if (distance === 'far') return { minFace: Math.min(tuning.minFace, 0.08), maxFace: MAX_FACE_RATIO }
+  return { minFace: tuning.minFace, maxFace: MAX_FACE_RATIO }
+}
 /** Mean |Laplacian| below this reads as an out-of-focus image (used at enrollment). */
 export const MIN_SHARPNESS = 1.0
 /** Initial engineering floor, to validate on the actual deployment cameras. */
@@ -494,11 +505,14 @@ export const QUALITY_TEXT: Record<QualityIssue, string> = {
 }
 
 /** What is wrong with this frame for recognition, most important first. */
-export function qualityIssues(r: FaceReading, opts: { blur?: boolean; minFace?: number } = {}): QualityIssue[] {
+export function qualityIssues(
+  r: FaceReading,
+  opts: { blur?: boolean; minFace?: number; maxFace?: number } = {},
+): QualityIssue[] {
   const issues: QualityIssue[] = []
   if (!Number.isFinite(r.pixelWidth) || r.pixelWidth < MIN_FACE_PIXELS) issues.push('low_detail')
   if (r.size < (opts.minFace ?? MIN_FACE_RATIO)) issues.push('small')
-  if (r.size > MAX_FACE_RATIO) issues.push('close')
+  if (r.size > (opts.maxFace ?? MAX_FACE_RATIO)) issues.push('close')
   else if (r.edgeGap < -0.02) issues.push('cut_off')
   if (Math.abs(r.offset.x) > 0.3 || Math.abs(r.offset.y) > 0.3) issues.push('off_center')
   if (r.brightness < 40) issues.push('dark')

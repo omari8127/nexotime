@@ -9,6 +9,7 @@ import { GetReadyOverlay, useGetReady } from '@/hooks/useGetReady'
 import { videoFrameCanvas } from '@/lib/camera'
 import {
   QUALITY_TEXT,
+  distanceProfile,
   faceCandidates,
   findFaceRotation,
   loadFaceApi,
@@ -88,7 +89,7 @@ export function FaceVerifyFlow({
   // Time to get in place before anything is read or taken (see useGetReady).
   const { left, ready, skip } = useGetReady(cameraState === 'ready', attempt)
   // The picture as it must be shown and read on this device, held this way (sideways cameras included).
-  const view = useCameraView(size)
+  const view = useCameraView(size, settings.faceDistance)
   const rotationRef = useRef(view.rotation)
   const aspectRef = useRef(view.aspect)
   const apiRef = useRef<FaceApi | null>(null)
@@ -229,7 +230,7 @@ export function FaceVerifyFlow({
             clearSince = goodSince = mismatches = 0
             setHint('Debe haber una sola persona frente a la cámara')
           } else {
-            const issues = qualityIssues(result.reading, { blur: true, minFace: tuning.minFace })
+            const issues = qualityIssues(result.reading, { blur: true, ...distanceProfile(settings.faceDistance, tuning) })
             const descriptor = result.reading.descriptor
             if (issues.length > 0 || (mode === 'verify' && !descriptor)) {
               session.reset()

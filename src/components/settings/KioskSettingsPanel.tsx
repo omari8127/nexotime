@@ -15,7 +15,7 @@ import { resolveKiosk } from '@/lib/kiosk'
 import { useFeature } from '@/lib/license/features'
 import { TUNING } from '@/lib/face'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
-import type { Employee, FaceStrictness } from '@/types'
+import type { Employee, FaceDistance, FaceStrictness } from '@/types'
 
 /** Operating policies: megapixels alone do not determine recognition quality. */
 const STRICTNESS: Record<FaceStrictness, { label: string; text: string }> = {
@@ -29,6 +29,24 @@ const STRICTNESS: Record<FaceStrictness, { label: string; text: string }> = {
     text: 'Menor tolerancia al comparar rostros. Puede pedir repetir la lectura con más frecuencia.',
   },
 }
+
+const DISTANCE_OPTIONS: Array<{ value: FaceDistance; label: string; text: string }> = [
+  {
+    value: 'near',
+    label: 'Muy cerca (10–40 cm)',
+    text: 'Tablet en la pared y la persona casi pegada a ella. Muestra la imagen completa y acepta rostros grandes.',
+  },
+  {
+    value: 'normal',
+    label: 'Normal (40–80 cm)',
+    text: 'Mostrador o pared a la altura del rostro, a un brazo de distancia.',
+  },
+  {
+    value: 'far',
+    label: 'Lejos (80 cm o más)',
+    text: 'La persona se para a distancia: acerca la imagen y acepta rostros pequeños.',
+  },
+]
 
 const ZOOM_OPTIONS = [1, 1.3, 1.5, 1.7, 2, 2.5].map((z) => ({
   value: String(z),
@@ -64,6 +82,7 @@ export function KioskSettingsPanel() {
   const [threshold, setThreshold] = useState<number | null>(saved.faceThreshold)
   const [zoom, setZoom] = useState(String(saved.faceZoom))
   const [gap, setGap] = useState(String(saved.minGapMinutes))
+  const [distance, setDistance] = useState<FaceDistance>(saved.faceDistance)
   const [faceCheckOnPin, setFaceCheckOnPin] = useState(saved.faceCheckOnPin)
   const [exitPin, setExitPin] = useState(saved.exitPin)
   const exitPinValid = /^\d{4,8}$/.test(exitPin)
@@ -80,6 +99,7 @@ export function KioskSettingsPanel() {
     Number(zoom) !== saved.faceZoom ||
     Number(gap) !== saved.minGapMinutes ||
     faceCheckOnPin !== saved.faceCheckOnPin ||
+    distance !== saved.faceDistance ||
     (exitPin !== saved.exitPin && exitPinValid)
 
   const active = useMemo(() => employees.filter((e) => e.status === 'active'), [employees])
@@ -102,6 +122,7 @@ export function KioskSettingsPanel() {
           faceZoom: Number(zoom),
           minGapMinutes: Number(gap),
           faceCheckOnPin,
+          faceDistance: distance,
           exitPin: exitPinValid ? exitPin : saved.exitPin,
         },
       },
@@ -171,6 +192,23 @@ export function KioskSettingsPanel() {
               onValueChange={(v) => setStrictness(v as FaceStrictness)}
               disabled={!canManage}
               options={(['relaxed', 'balanced', 'strict'] as FaceStrictness[]).map((k) => ({ value: k, label: STRICTNESS[k].label }))}
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <Label>Distancia a la que se para la persona</Label>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {DISTANCE_OPTIONS.find((o) => o.value === distance)?.text} Si la cara no cabe en el óvalo o
+                dice "aléjate" siempre, elige una opción más cercana; si dice "acércate", una más lejana.
+              </p>
+            </div>
+            <Select
+              className="w-52"
+              value={distance}
+              onValueChange={(v) => setDistance(v as FaceDistance)}
+              disabled={!canManage}
+              options={DISTANCE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
             />
           </div>
 

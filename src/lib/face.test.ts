@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   descriptorDistance,
+  distanceProfile,
   faceCandidates,
   isConfidentMatch,
   meanDescriptor,
@@ -225,14 +226,35 @@ describe('cámara según cómo esté la tablet', () => {
     expect(uprightAspect(0, 0, 0)).toBeCloseTo(16 / 9) // todavía sin imagen
   })
 
-  it('la ventana tiene la forma del equipo: alta en vertical, ancha en horizontal', () => {
-    // Imagen ancha (16:9) con la tablet parada: ventana vertical 3:4 cortada del centro.
-    expect(windowAspect(16 / 9, 'portrait')).toBeCloseTo(0.75)
-    // Misma forma que la pantalla: se muestra entera.
-    expect(windowAspect(16 / 9, 'landscape')).toBeCloseTo(16 / 9)
-    expect(windowAspect(9 / 16, 'portrait')).toBeCloseTo(9 / 16)
+  it('la ventana depende del equipo y de la distancia: más recorte mientras más lejos', () => {
+    // Tablet parada con imagen ancha: normal = un poco más alta que ancha no; 4:3, lejos 3:4, muy cerca entera.
+    expect(windowAspect(16 / 9, 'portrait', 'normal')).toBeCloseTo(4 / 3)
+    expect(windowAspect(16 / 9, 'portrait', 'far')).toBeCloseTo(3 / 4)
+    expect(windowAspect(16 / 9, 'portrait', 'near')).toBeCloseTo(16 / 9)
+    // Misma forma que la pantalla: se muestra entera a cualquier distancia.
+    expect(windowAspect(16 / 9, 'landscape', 'far')).toBeCloseTo(16 / 9)
+    expect(windowAspect(9 / 16, 'portrait', 'far')).toBeCloseTo(9 / 16)
     // Imagen alta con la tablet acostada: ventana horizontal 4:3.
     expect(windowAspect(9 / 16, 'landscape')).toBeCloseTo(4 / 3)
+  })
+
+  it('muy cerca acepta rostros grandes; lejos acepta rostros chicos', () => {
+    const t = TUNING.balanced
+    const near = distanceProfile('near', t)
+    const normal = distanceProfile('normal', t)
+    const far = distanceProfile('far', t)
+    expect(near.maxFace).toBeGreaterThan(normal.maxFace)
+    expect(far.minFace).toBeLessThan(normal.minFace)
+    // Un rostro que ocupa el 88 % de la imagen: "aléjate" a distancia normal, bien con la tablet pegada.
+    const big = { size: 0.88, pixelWidth: 900, brightness: 120, offset: { x: 0, y: 0 }, yaw: 1, sharpness: 5, edgeGap: 0.04 } as FaceReading
+    expect(qualityIssues(big, { minFace: normal.minFace, maxFace: normal.maxFace })).toContain('close')
+    expect(qualityIssues(big, { minFace: near.minFace, maxFace: near.maxFace })).not.toContain('close')
+  })
+
+  it('la distancia del reloj viene en normal y solo acepta valores conocidos', () => {
+    expect(resolveKiosk(undefined).faceDistance).toBe('normal')
+    expect(resolveKiosk({ kiosk: { faceDistance: 'near' } } as never).faceDistance).toBe('near')
+    expect(resolveKiosk({ kiosk: { faceDistance: 'cerquita' } } as never).faceDistance).toBe('normal')
   })
 
   it('prueba primero un cuarto de vuelta cuando la imagen no coincide con la pantalla', () => {
