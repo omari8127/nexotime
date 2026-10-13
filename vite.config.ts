@@ -14,6 +14,10 @@ const tunnelHosts = ['.ngrok-free.app', '.ngrok-free.dev', '.ngrok.app', '.ngrok
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), seoPlugin(), serviceWorkerPlugin(dir)],
+  // Which build this is (shown at the reloj and in Configuración), so "is this tablet up to date?" has an answer.
+  define: {
+    __BUILD_ID__: JSON.stringify((process.env.VERCEL_GIT_COMMIT_SHA ?? 'local').slice(0, 7)),
+  },
   resolve: {
     alias: {
       '@': path.resolve(dir, './src'),

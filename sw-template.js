@@ -14,7 +14,9 @@ const RUNTIME = 'nx-runtime-v1'
 const CORE_FILES = __CORE_FILES__
 const MODEL_FILES = __MODEL_FILES__
 const SHELL = '/index.html'
-const NAV_TIMEOUT_MS = 3500
+// A slow tablet on a weak Wi-Fi must still get the NEW page: falling back to the cached one too early is
+// exactly how a device stays on an old version.
+const NAV_TIMEOUT_MS = 8000
 // Module scripts and <link crossorigin> send an Origin header; a `Vary: Origin` response would
 // otherwise never match what was precached (which had none). Files are content-hashed, so this is safe.
 const MATCH = { ignoreVary: true }

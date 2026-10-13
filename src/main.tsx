@@ -5,6 +5,7 @@ import { App } from '@/App'
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary'
 import { applyTheme, useUIStore } from '@/store/uiStore'
 import { installErrorReporting } from '@/lib/errorReport'
+import { watchForUpdates } from '@/lib/appUpdate'
 import '@/index.css'
 
 applyTheme(useUIStore.getState().theme)
@@ -24,7 +25,10 @@ createRoot(document.getElementById('root')!).render(
 // Production only — in development it would serve stale files.
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => undefined)
+    navigator.serviceWorker
+      .register('/sw.js')
+      .then((registration) => watchForUpdates(registration))
+      .catch(() => undefined)
     // Ask the browser not to evict the cached app and this device's stored identity when space is low.
     void navigator.storage?.persist?.()
   })

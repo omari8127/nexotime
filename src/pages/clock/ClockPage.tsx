@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   ArrowLeft,
@@ -41,6 +40,7 @@ import { copyrightLine } from '@/data/legal'
 import { PunchBlockedCard } from '@/components/clock/PunchBlockedCard'
 import { allowedPunchTypes } from '@/lib/kioskFeedback'
 import { useDataStore } from '@/store/dataStore'
+import { useUpdateStore } from '@/lib/appUpdate'
 import { useSyncStore } from '@/store/syncStore'
 import { applyTheme, useUIStore } from '@/store/uiStore'
 import { kioskDevice, pickKioskBranch, punchableEmployees, resolveKiosk } from '@/lib/kiosk'
@@ -127,7 +127,6 @@ function saveClockBranch(id: string) {
 }
 
 export function ClockPage() {
-  const navigate = useNavigate()
   const company = useDataStore((s) => s.company)
   const branches = useDataStore((s) => s.branches)
   const devices = useDataStore((s) => s.devices)
@@ -180,6 +179,13 @@ export function ClockPage() {
   const [faceVerified, setFaceVerified] = useState(false)
   // Where to continue after a photo that was asked for in the middle of registering.
   const resumeType = useRef<PunchType | null>(null)
+  // A new version was installed in the background: take it as soon as nobody is mid-way through a punch.
+  const updateReady = useUpdateStore((s) => s.ready)
+  useEffect(() => {
+    if (!updateReady || phase !== 'idle') return
+    const id = window.setTimeout(() => window.location.reload(), 2500)
+    return () => clearTimeout(id)
+  }, [updateReady, phase])
   // An idle kiosk left on overnight must notice the new day without being re-rendered every second.
   const [, setDayTick] = useState(0)
   useEffect(() => {
@@ -456,6 +462,10 @@ export function ClockPage() {
             <div className="flex justify-between gap-4">
               <dt className="text-slate-400">Sucursal</dt>
               <dd className="truncate font-medium text-slate-100">{branch?.name ?? '—'}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-slate-400">Versión</dt>
+              <dd className="font-mono text-slate-100">{__BUILD_ID__}</dd>
             </div>
             <div className="flex justify-between gap-4">
               <dt className="text-slate-400">Conexión</dt>
@@ -1108,7 +1118,8 @@ export function ClockPage() {
         open={showExitGate}
         expectedPin={kiosk.exitPin}
         onClose={() => setShowExitGate(false)}
-        onSuccess={() => navigate('/')}
+        // A full load, not a route change: the tablet's page may be days old, and the panel must come from the current build.
+        onSuccess={() => window.location.assign('/')}
       />
     </div>
   )

@@ -307,6 +307,10 @@ export function KioskSettingsPanel() {
               Guardar cambios
             </Button>
           ) : null}
+          <p className="text-xs text-muted-foreground">
+            Versión de Nexotime en este equipo: <span className="font-mono">{__BUILD_ID__}</span>. Si en otro equipo ves
+            opciones que aquí no aparecen, recarga la página para actualizar.
+          </p>
         </CardContent>
       </Card>
 

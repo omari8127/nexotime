@@ -10,6 +10,7 @@ import { PlanGate } from '@/components/subscription/PlanGate'
 import { FeatureGuard } from '@/components/license/FeatureGuard'
 import { RouteMeta } from '@/components/shared/RouteMeta'
 import { CookieNotice } from '@/components/shared/CookieNotice'
+import { UpdateBanner } from '@/components/shared/UpdateBanner'
 import { LEGAL_PATHS } from '@/data/legal'
 
 // The first visit (bienvenida / login / registro) loads right away; everything
@@ -78,6 +79,7 @@ export function App() {
   return (
     <>
       <AuthBoot />
+      <UpdateBanner />
       <RouteMeta />
       <PlanGate>
       <Suspense fallback={<FullScreenLoader />}>
