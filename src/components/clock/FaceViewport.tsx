@@ -11,6 +11,7 @@ export function FaceViewport({
   loadingModels,
   ok,
   zoom = 1,
+  className,
 }: {
   videoRef: RefObject<HTMLVideoElement | null>
   cameraState: CameraState
@@ -19,10 +20,11 @@ export function FaceViewport({
   ok?: boolean
   /** Digital zoom, so what the person sees is exactly the central part that is being read. */
   zoom?: number
+  className?: string
 }) {
   const ready = cameraState === 'ready'
   return (
-    <div className="relative aspect-video w-full max-w-md overflow-hidden rounded-lg border border-slate-300 bg-slate-900">
+    <div className={cn('relative aspect-video w-full max-w-md overflow-hidden rounded-lg border border-slate-300 bg-slate-900', className)}>
       <video
         ref={videoRef}
         muted

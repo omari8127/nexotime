@@ -11,6 +11,7 @@ import {
   QUALITY_TEXT,
   faceCandidates,
   loadFaceApi,
+  paceDelay,
   qualityIssues,
   readFace,
   tuningFor,
@@ -26,7 +27,8 @@ type Stage = 'loading' | 'searching' | 'failed'
 /** Frames of a clear, well-lit face with no trustworthy match before it is logged as rejected. */
 const REJECT_FRAMES = 14
 const REJECT_LOG_COOLDOWN_MS = 30_000
-/** Pause between readings while someone is being matched / while nobody is in front of the camera. */
+/** Shortest pause between readings while someone is being matched / while nobody is in front of the camera.
+ *  While matching it grows with how long a reading took (see paceDelay), so the preview stays smooth. */
 const ACTIVE_DELAY_MS = 40
 const IDLE_DELAY_MS = 160
 
@@ -61,6 +63,9 @@ export function FaceScanFlow({
   const logAudit = useDataStore((s) => s.logAudit)
   const currentUser = useDataStore((s) => s.currentUser)
   const { can } = usePermissions()
+  // The technical reading line is for administrators only: do not re-render on every frame for nobody.
+  const showReading = useRef(false)
+  showReading.current = can('biometrics.manage')
   const candidatesRef = useRef(candidates)
   const settingsRef = useRef(settings)
   const confirmRef = useRef(onConfirmed)
@@ -135,6 +140,7 @@ export function FaceScanFlow({
         try {
           const { faceStrictness, faceThreshold, faceZoom } = settingsRef.current
           const tuning = tuningFor(faceStrictness, faceThreshold)
+          const startedAt = performance.now()
           const result = await readFace(api, video, true, 'accurate', {
             zoom: faceZoom,
             minConfidence: tuning.minConfidence,
@@ -143,7 +149,7 @@ export function FaceScanFlow({
           errors = 0
           // Nobody in front of the camera: look less often (saves the tablet's CPU/battery); the
           // moment a face appears, the loop runs at full speed again.
-          nextDelay = result.kind === 'none' ? IDLE_DELAY_MS : ACTIVE_DELAY_MS
+          nextDelay = paceDelay(performance.now() - startedAt, result.kind === 'none' ? IDLE_DELAY_MS : ACTIVE_DELAY_MS, 600, result.kind === 'none' ? 1.5 : 0.8)
 
           if (result.kind === 'none') {
             session.reset()
@@ -165,7 +171,7 @@ export function FaceScanFlow({
             } else {
               const evidence = session.push(candidatesRef.current, result.reading.descriptor, tuning)
               const near = evidence.match
-              if (near) setReading(`Distancia ${near.distance.toFixed(3)} · límite ${tuning.threshold.toFixed(3)} · ${evidence.progress}/${evidence.required} lecturas`)
+              if (near && showReading.current) setReading(`Distancia ${near.distance.toFixed(3)} · límite ${tuning.threshold.toFixed(3)} · ${evidence.progress}/${evidence.required} lecturas`)
               if (evidence.accepted) {
                 accept(evidence.accepted)
                 return
@@ -227,6 +233,7 @@ export function FaceScanFlow({
             cameraMessage={cameraMessage}
             loadingModels={stage === 'loading'}
             zoom={settings.faceZoom}
+            className="max-w-xl"
           />
           <div className="space-y-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Reconocimiento facial</p>

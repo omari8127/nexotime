@@ -11,10 +11,13 @@ export function NumberPinFlow({
   employees,
   onIdentified,
   onCancel,
+  steps = 2,
 }: {
   employees: Employee[]
   onIdentified: (employee: Employee) => void
   onCancel: () => void
+  /** 3 when a camera step follows the PIN (face check / entry photo), so the person knows what is next. */
+  steps?: 2 | 3
 }) {
   const [step, setStep] = useState<'number' | 'pin'>('number')
   const [value, setValueState] = useState('')
@@ -121,15 +124,16 @@ export function NumberPinFlow({
         <div className="flex items-center justify-center gap-1.5">
           <span className="h-1.5 w-9 rounded-full bg-primary" />
           <span className={cn('h-1.5 w-9 rounded-full transition-colors', step === 'pin' ? 'bg-primary' : 'bg-slate-200')} />
+          {steps === 3 ? <span className="h-1.5 w-9 rounded-full bg-slate-200" /> : null}
         </div>
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Paso {step === 'number' ? '1' : '2'} de 2
+          Paso {step === 'number' ? '1' : '2'} de {steps}
         </p>
         <p className="text-xl font-semibold tracking-tight text-slate-900">{title}</p>
         {step === 'number' ? (
           <p className="text-sm text-muted-foreground">
-            Tu número de empleado, no tu PIN. Ejemplo: {example} → escribe {exampleDigits}. Se toma una foto de
-            evidencia al registrar tu entrada; quedará vinculada a tu asistencia.
+            Tu número de empleado, no tu PIN. Ejemplo: {example} → escribe {exampleDigits}.
+            {steps === 3 ? ' Después de tu PIN, la cámara comprobará que eres tú.' : ''}
           </p>
         ) : null}
       </div>

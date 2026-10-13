@@ -91,6 +91,8 @@ export interface KioskSettings {
   faceZoom?: number
   /** Minimum minutes between two punches of the same person (avoids double punches). */
   minGapMinutes?: number
+  /** After number + PIN, compare the person's face with the enrolled one before registering (default on). */
+  faceCheckOnPin?: boolean
   /** Code (4–8 digits) that unlocks leaving the reloj checador back to the admin panel. */
   exitPin?: string
 }

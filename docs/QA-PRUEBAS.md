@@ -29,6 +29,14 @@ Marca cada punto; si alguno falla, no se entrega.
 - [ ] Cada método: rostro, QR, código de barras, número + PIN. Número + PIN debe servir a empleados de otra sucursal.
 - [ ] Doble checada seguida: la segunda se rechaza con el mensaje de "Acabas de registrar".
 
+### 3.1 Número + PIN con verificación de rostro
+- [ ] Empleado **con rostro registrado**: número → PIN → cámara ("Verificación de identidad"). Solo registra si el rostro coincide; la salida y la comida también.
+- [ ] Alguien que escribe el número y PIN de **otra persona**: debe decir "Ese rostro es de otra persona" o "No coincide" y no registrar nada. Queda en Auditoría como "Identificación facial rechazada".
+- [ ] Empleado **sin rostro registrado**: la entrada pide foto de evidencia; la salida no abre la cámara.
+- [ ] Configuración → Reloj checador → "Verificar el rostro con número y PIN" en apagado: vuelve a ser solo número + PIN (la entrada sigue pidiendo foto).
+- [ ] Con la luz de apoyo (pantalla blanca) y con el brillo de la tablet al máximo, en un lugar poco iluminado: debe reconocer. Probar también apagada ("Luz apagada").
+- [ ] La cámara del reloj (rostro, QR y verificación) no se entrecorta ni se congela cada segundo en la tablet real. Si pasa, anotar el modelo de la tablet.
+
 ## 4. Sin conexión
 - [ ] Apagar el Wi‑Fi: checar a 3 personas. Debe decir que quedó guardado y mostrar "Sin conexión".
 - [ ] Prender el Wi‑Fi: la cola se envía sola ("Sincronizado") y las checadas aparecen en el panel.

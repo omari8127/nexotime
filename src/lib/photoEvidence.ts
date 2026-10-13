@@ -18,6 +18,13 @@ export const PHOTO_MAX_AGE_MS = 90_000
 export const needsEntryPhoto = (method: CaptureMethod, type: PunchType) =>
   type === 'entry' && (method === 'employee_number' || method === 'pin')
 
+/** A photo taken a moment ago still counts; one that waited on a screen for over a minute is retaken. */
+export const PHOTO_REUSE_MAX_AGE_MS = 75_000
+export function photoIsFresh(photo: PhotoCapture, now = trueNow().getTime()): boolean {
+  const age = now - Date.parse(photo.capturedAt)
+  return Number.isFinite(age) && age >= -5000 && age <= PHOTO_REUSE_MAX_AGE_MS
+}
+
 export function validatePhotoCapture(photo: PhotoCapture, now = trueNow().getTime()): void {
   const age = now - Date.parse(photo?.capturedAt)
   if (!photo || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(photo.id) ||

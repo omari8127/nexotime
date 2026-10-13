@@ -70,10 +70,13 @@ export const CameraScanner = forwardRef<CameraScannerHandle, { kind: ScanKind; o
     let stopped = false
     let stop: (() => void) | undefined
 
+    // Where the browser has its own hardware-accelerated detector (below), the software decoder is only a
+    // backup: running both flat out on the same feed is what made weak tablets stutter on this screen.
+    const native = typeof (window as unknown as { BarcodeDetector?: unknown }).BarcodeDetector === 'function'
     const hints = new Map()
     hints.set(DecodeHintType.POSSIBLE_FORMATS, FORMATS[kind])
-    hints.set(DecodeHintType.TRY_HARDER, true)
-    const reader = new BrowserMultiFormatReader(hints, { delayBetweenScanAttempts: 120 })
+    if (!native) hints.set(DecodeHintType.TRY_HARDER, true)
+    const reader = new BrowserMultiFormatReader(hints, { delayBetweenScanAttempts: native ? 450 : 160 })
 
     if (!videoRef.current) return
     reader
@@ -127,7 +130,7 @@ export const CameraScanner = forwardRef<CameraScannerHandle, { kind: ScanKind; o
       } catch {
         /* unsupported format / frame not ready: keep trying */
       }
-      timer = window.setTimeout(tick, 120)
+      timer = window.setTimeout(tick, 150)
     }
     tick()
     return () => {

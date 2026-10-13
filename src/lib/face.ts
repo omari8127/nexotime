@@ -35,13 +35,20 @@ export function loadFaceApi(): Promise<FaceApi> {
         api.nets.faceLandmark68Net.loadFromUri(base),
         api.nets.faceRecognitionNet.loadFromUri(base),
       ])
-      // The first inference of each network compiles its GPU shaders (seconds on a tablet).
-      // Pay that here, in the background / on the "Preparando…" screen, instead of on the
-      // first real camera frame: run every network once on blank input.
+      // The first inference of each network compiles its GPU shaders (seconds on a tablet), and the
+      // resize step compiles one per input size. Pay all of that here, on the "Preparando…" screen,
+      // instead of on the first real camera frames: run every network once on blank input, at the sizes
+      // the reloj actually feeds them (a 16:9 camera is always 1280×720 once scaled, and 4:3 is 640×480).
       const warmup = async () => {
-        const canvas = (size: number) => Object.assign(document.createElement('canvas'), { width: size, height: size })
-        await api.detectAllFaces(canvas(160), new api.TinyFaceDetectorOptions({ inputSize: 320 }))
-        await api.detectAllFaces(canvas(160), new api.SsdMobilenetv1Options({ minConfidence: 0.5 }))
+        const canvas = (w: number, h = w) => Object.assign(document.createElement('canvas'), { width: w, height: h })
+        for (const [w, h] of [[160, 160], [1280, 720], [640, 480]]) {
+          const c = canvas(w, h)
+          await api.detectAllFaces(c, new api.TinyFaceDetectorOptions({ inputSize: 224 })) // "is anyone there?"
+          await api.detectAllFaces(c, new api.SsdMobilenetv1Options({ minConfidence: 0.5 }))
+        }
+        for (const [w, h] of [[160, 160], [640, 360], [1280, 720]]) {
+          await api.detectAllFaces(canvas(w, h), new api.TinyFaceDetectorOptions({ inputSize: 320 })) // guidance + enrollment
+        }
         await api.nets.faceLandmark68Net.detectLandmarks(canvas(112))
         await api.nets.faceRecognitionNet.computeFaceDescriptor(canvas(150))
       }
@@ -206,95 +213,165 @@ let lastWideAt = 0
 const WIDE_STICKY_MS = 3000
 /** The margin copy is never larger than this on its long side (the detector shrinks it anyway). */
 const WIDE_MAX_SIDE = 640
+/** Longest side of the image the networks work on. SSD resizes to 512 px internally, so a 1080p frame only
+ *  cost memory, upload time and garbage collection (the "stutter every second" on weak tablets). */
+const MAX_WORK_SIDE = 1280
+/** After a face was seen this recently the cheap "is anyone there?" probe is skipped. */
+const WARM_MS = 1500
+/** With nobody in view, the full detector still runs on every Nth frame (faces the probe misses in dim light). */
+const COLD_FULL_EVERY = 3
 
-export async function readFace(
+let lastFaceAt = 0
+let coldFrames = 0
+/** How long the "is anyone there?" probe and the full detector take on THIS device (moving averages). The probe
+ *  is only used where it is clearly cheaper than the detector it saves; on a device where it is not, the
+ *  full detector simply runs every time, as it always did. */
+let probeMs = 0
+let ssdMs = 0
+const ema = (previous: number, sample: number) => (previous === 0 ? sample : previous * 0.7 + sample * 0.3)
+const probeIsCheap = () => probeMs > 0 && ssdMs > 0 && probeMs < ssdMs * 0.6
+let workCanvas: HTMLCanvasElement | null = null
+let wideCanvas: HTMLCanvasElement | null = null
+
+/** One canvas reused for every reading: allocating a new 8 MB canvas per frame floods the garbage collector. */
+function sized(existing: HTMLCanvasElement | null, width: number, height: number): HTMLCanvasElement {
+  const canvas = existing ?? document.createElement('canvas')
+  if (canvas.width !== width) canvas.width = width
+  if (canvas.height !== height) canvas.height = height
+  return canvas
+}
+
+/**
+ * Pause before the next reading so the GPU is not busy more than about half the time: a tablet that
+ * runs the networks back to back also has to composite the live video, and the preview freezes.
+ */
+export function paceDelay(lastMs: number, minMs: number, maxMs = 400, ratio = 0.8): number {
+  return Math.round(Math.min(maxMs, Math.max(minMs, lastMs * ratio)))
+}
+
+/** Readings run one at a time: they share the work canvases (and the GPU). */
+let readQueue: Promise<unknown> = Promise.resolve()
+
+export function readFace(
   api: FaceApi,
   video: HTMLVideoElement | HTMLCanvasElement,
   withDescriptor: boolean,
   detector: DetectorKind = 'accurate',
   options: ReadOptions = {},
 ): Promise<ReadResult> {
+  const run = readQueue.then(() => readFaceNow(api, video, withDescriptor, detector, options))
+  readQueue = run.then(() => undefined, () => undefined)
+  return run
+}
+
+async function readFaceNow(
+  api: FaceApi,
+  video: HTMLVideoElement | HTMLCanvasElement,
+  withDescriptor: boolean,
+  detector: DetectorKind,
+  options: ReadOptions,
+): Promise<ReadResult> {
   if ('videoWidth' in video) await waitForFreshFrame(video)
-  // Freeze once: detector, landmarks, descriptor and quality all see the SAME frame.
-  const snapshot = document.createElement('canvas')
-  snapshot.width = 'videoWidth' in video ? video.videoWidth : video.width
-  snapshot.height = 'videoHeight' in video ? video.videoHeight : video.height
-  const ctx = snapshot.getContext('2d')
-  if (!ctx) throw new Error('No se pudo leer la cámara')
-  ctx.drawImage(video, 0, 0)
-  let source = snapshot
-  let vw = snapshot.width
-  let vh = snapshot.height
+  const sw = 'videoWidth' in video ? video.videoWidth : video.width
+  const sh = 'videoHeight' in video ? video.videoHeight : video.height
+  if (!sw || !sh) throw new Error('No se pudo leer la cámara')
+  // Freeze once, straight from the camera: the central 1/zoom of the frame, at no more than
+  // MAX_WORK_SIDE. Detector, landmarks, descriptor and quality all see this SAME image.
   const zoom = options.zoom && options.zoom > 1 ? options.zoom : 1
-  if (zoom > 1 && vw > 1) {
-    const sw = Math.round(vw / zoom)
-    const sh = Math.round(vh / zoom)
-    const zoomCanvas = document.createElement('canvas')
-    if (zoomCanvas.width !== sw || zoomCanvas.height !== sh) {
-      zoomCanvas.width = sw
-      zoomCanvas.height = sh
-    }
-    zoomCanvas.getContext('2d')?.drawImage(snapshot, (vw - sw) / 2, (vh - sh) / 2, sw, sh, 0, 0, sw, sh)
-    source = zoomCanvas
-    vw = sw
-    vh = sh
-  }
-  const detectOn = (
-    input: HTMLVideoElement | HTMLCanvasElement,
-    detection: Parameters<FaceApi['detectAllFaces']>[1],
-    descriptor = withDescriptor,
-  ) => {
+  const cw = Math.max(1, Math.round(sw / zoom))
+  const ch = Math.max(1, Math.round(sh / zoom))
+  const k = Math.min(1, MAX_WORK_SIDE / Math.max(cw, ch))
+  const vw = Math.max(1, Math.round(cw * k))
+  const vh = Math.max(1, Math.round(ch * k))
+  workCanvas = sized(workCanvas, vw, vh)
+  const ctx = workCanvas.getContext('2d', { willReadFrequently: true })
+  if (!ctx) throw new Error('No se pudo leer la cámara')
+  ctx.drawImage(video, (sw - cw) / 2, (sh - ch) / 2, cw, ch, 0, 0, vw, vh)
+  const source = workCanvas
+
+  const detectOn = (input: HTMLCanvasElement, detection: Parameters<FaceApi['detectAllFaces']>[1]) => {
     const task = api.detectAllFaces(input, detection).withFaceLandmarks()
-    return descriptor ? task.withFaceDescriptors() : task
+    return withDescriptor ? task.withFaceDescriptors() : task
   }
   const ssdOptions = () =>
     new api.SsdMobilenetv1Options({ minConfidence: options.minConfidence ?? 0.5, maxResults: 3 })
-  let faces =
-    detector === 'accurate'
-      ? await detectOn(source, ssdOptions())
-      : await detectOn(source, new api.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.45 }))
-  if (faces.length === 0 && detector === 'fast') faces = await detectOn(source, ssdOptions())
+  const tinyOptions = (inputSize: number, scoreThreshold: number) =>
+    new api.TinyFaceDetectorOptions({ inputSize, scoreThreshold })
+
+  let faces: Awaited<ReturnType<typeof detectOn>> = []
+  if (detector === 'accurate') {
+    // The camera is on all day with usually nobody in front of it, and SSD is the expensive network.
+    // A cheap probe says whether anyone is there; SSD still runs on every Nth empty frame so a face the
+    // probe misses (poor light, an angle) is found a moment later instead of never.
+    let run = Date.now() - lastFaceAt < WARM_MS
+    if (!run) {
+      if (ssdMs === 0) {
+        run = true // measure the full detector first
+      } else if (probeMs === 0 || probeIsCheap()) {
+        const started = performance.now()
+        const probe = await api.detectAllFaces(source, tinyOptions(224, 0.3))
+        probeMs = ema(probeMs, performance.now() - started)
+        run = probe.length > 0 || ++coldFrames % COLD_FULL_EVERY === 0
+      } else {
+        run = true
+      }
+    }
+    if (run) {
+      const started = performance.now()
+      faces = await detectOn(source, ssdOptions())
+      if (faces.length === 0) ssdMs = ema(ssdMs, performance.now() - started)
+    }
+  } else {
+    faces = await detectOn(source, tinyOptions(320, 0.45))
+    if (faces.length === 0) faces = await detectOn(source, ssdOptions())
+  }
+
+  if (faces.length > 0) {
+    emptyFrames = 0
+    coldFrames = 0
+    lastFaceAt = Date.now()
+  }
 
   // The detectors cannot find a face that fills (or overflows) the frame: the person is simply too close,
   // and the screen used to say "place your face in the oval" while it was already filling it. Every few
   // empty frames look again on a copy with a wide margin; a face found that way is reported with its real
-  // (oversized) measures, so the quality check can say "aléjate" instead.
-  let wide: { x: number; y: number; scale: number } | null = null
-  // Once someone was found too close, keep looking on every frame (so "aléjate" doesn't flicker).
-  const retryWide = ++emptyFrames % WIDE_RETRY_EVERY === 0 || Date.now() - lastWideAt < WIDE_STICKY_MS
-  if (faces.length === 0 && retryWide) {
+  // (oversized) measures, so the quality check can say "aléjate" instead. Only the box is needed for that,
+  // so it uses the cheap detector and never produces a descriptor (nobody is compared or saved from it).
+  if (faces.length === 0) {
+    const retryWide = ++emptyFrames % WIDE_RETRY_EVERY === 0 || Date.now() - lastWideAt < WIDE_STICKY_MS
+    if (!retryWide) return { kind: 'none' }
     const scale = Math.min(1, WIDE_MAX_SIDE / (vw * 2))
     const ww = Math.max(1, Math.round(vw * 2 * scale))
     const wh = Math.max(1, Math.round(vh * 2 * scale))
-    const wideCanvas = document.createElement('canvas')
-    if (wideCanvas.width !== ww || wideCanvas.height !== wh) {
-      wideCanvas.width = ww
-      wideCanvas.height = wh
-    }
+    wideCanvas = sized(wideCanvas, ww, wh)
     const g = wideCanvas.getContext('2d')
-    if (g) {
-      g.fillStyle = '#808080'
-      g.fillRect(0, 0, ww, wh)
-      g.drawImage(source, (vw / 2) * scale, (vh / 2) * scale, vw * scale, vh * scale)
-      // Guidance only: the margin copy is downscaled, so it never yields a descriptor (nothing is
-      // compared or saved from it — the person is told to step back and a normal read follows).
-      const found = await detectOn(wideCanvas, ssdOptions(), false)
-      if (found.length === 1) {
-        faces = found
-        wide = { x: vw / 2, y: vh / 2, scale }
-        lastWideAt = Date.now()
-      }
+    if (!g) return { kind: 'none' }
+    g.fillStyle = '#808080'
+    g.fillRect(0, 0, ww, wh)
+    g.drawImage(source, (vw / 2) * scale, (vh / 2) * scale, vw * scale, vh * scale)
+    const found = probeIsCheap()
+      ? await api.detectAllFaces(wideCanvas, tinyOptions(320, 0.4))
+      : await api.detectAllFaces(wideCanvas, ssdOptions())
+    if (found.length !== 1) return { kind: 'none' }
+    lastWideAt = Date.now()
+    const raw = found[0].box
+    const box = { x: raw.x / scale - vw / 2, y: raw.y / scale - vh / 2, width: raw.width / scale, height: raw.height / scale }
+    return {
+      kind: 'face',
+      reading: {
+        size: box.width / vw,
+        pixelWidth: box.width / k,
+        brightness: faceBrightness(source, box),
+        offset: { x: (box.x + box.width / 2) / vw - 0.5, y: (box.y + box.height / 2) / vh - 0.5 },
+        yaw: 1,
+        sharpness: MIN_SHARPNESS * 4,
+        edgeGap: Math.min(box.x / vw, box.y / vh, 1 - (box.x + box.width) / vw, 1 - (box.y + box.height) / vh),
+      },
     }
   }
-  if (faces.length > 0) emptyFrames = 0
-  if (faces.length === 0) return { kind: 'none' }
   if (faces.length > 1) return { kind: 'multiple' }
   const f = faces[0]
-  const raw = f.detection.box
-  // Back to the original frame's coordinates (the margin copy is scaled and shifted).
-  const box = wide
-    ? { x: raw.x / wide.scale - wide.x, y: raw.y / wide.scale - wide.y, width: raw.width / wide.scale, height: raw.height / wide.scale }
-    : raw
+  const box = f.detection.box
   const pts = f.landmarks.positions
   const yaw = dist(pts[30], pts[0]) / Math.max(1, dist(pts[30], pts[16]))
   const descriptor =
@@ -304,7 +381,8 @@ export async function readFace(
     reading: {
       descriptor,
       size: box.width / vw,
-      pixelWidth: box.width,
+      // Real sensor pixels: the working image may have been scaled down, the zoom crop never rescales.
+      pixelWidth: box.width / k,
       brightness: faceBrightness(source, box),
       offset: { x: (box.x + box.width / 2) / vw - 0.5, y: (box.y + box.height / 2) / vh - 0.5 },
       yaw,
@@ -327,7 +405,7 @@ export const QUALITY_TEXT: Record<QualityIssue, string> = {
   cut_off: 'Tu rostro debe verse completo dentro de la imagen',
   blurry: 'La imagen está borrosa: mantente quieto y limpia el lente',
   off_center: 'Centra tu rostro en el óvalo',
-  dark: 'Hay poca luz: busca una zona más iluminada',
+  dark: 'Hay poca luz: busca una zona más iluminada o sube el brillo de la pantalla',
   bright: 'Hay demasiada luz detrás de ti: evita ventanas o focos a tu espalda',
 }
 
@@ -391,18 +469,60 @@ export interface FaceMatch {
   runnerUp: number
 }
 
+/** Distance from a face to one enrolled employee: mean of the two closest samples (0.7/0.3), robust to one
+ *  bad sample and harder to fool than "best of all". Infinity when the employee has no usable sample. */
+export function candidateDistance(candidate: FaceCandidate, descriptor: number[]): number {
+  const d = candidate.descriptors.filter(isFaceDescriptor).map((s) => descriptorDistance(s, descriptor)).sort((a, b) => a - b)
+  if (d.length === 0) return Infinity
+  return d.length > 1 ? d[0] * 0.7 + d[1] * 0.3 : d[0]
+}
+
 export function nearestFace(candidates: FaceCandidate[], descriptor: number[]): FaceMatch | null {
   if (!isFaceDescriptor(descriptor)) return null
   const scored = candidates
-    .map((c) => {
-      // Mean of the two closest samples: robust to one bad sample, harder to fool than "best of all".
-      const d = c.descriptors.filter(isFaceDescriptor).map((s) => descriptorDistance(s, descriptor)).sort((a, b) => a - b)
-      return { employee: c.employee, distance: d.length > 1 ? d[0] * 0.7 + d[1] * 0.3 : d[0] }
-    })
+    .map((c) => ({ employee: c.employee, distance: candidateDistance(c, descriptor) }))
     .filter((c) => Number.isFinite(c.distance))
     .sort((a, b) => a.distance - b.distance)
   if (scored.length === 0) return null
   return { ...scored[0], runnerUp: scored[1]?.distance ?? Infinity }
+}
+
+export type ClaimVerdict =
+  /** Not enrolled (or no usable sample): there is nothing to compare with. */
+  | { kind: 'not_enrolled' }
+  /** The face is the claimed person's. */
+  | { kind: 'match'; distance: number }
+  /** Too far from the claimed person's samples. */
+  | { kind: 'mismatch'; distance: number }
+  /** Looks clearly more like a different employee than like the one who typed the number + PIN. */
+  | { kind: 'other'; distance: number; other: Employee }
+
+/**
+ * 1:1 check for someone who already said who they are (number + PIN): is this face that employee's?
+ * It is the claimed person's face if it is within the limit and no other employee is clearly closer —
+ * a look-alike colleague alone does not lock anyone out, but another person's face using a borrowed
+ * number + PIN is refused.
+ */
+export function verifyClaimed(
+  candidates: FaceCandidate[],
+  employeeId: string,
+  descriptor: number[],
+  t: Tuning = TUNING.balanced,
+): ClaimVerdict {
+  const claimed = candidates.find((c) => c.employee.id === employeeId)
+  if (!claimed || !isFaceDescriptor(descriptor)) return { kind: 'not_enrolled' }
+  const distance = candidateDistance(claimed, descriptor)
+  if (!Number.isFinite(distance)) return { kind: 'not_enrolled' }
+  let rival: { employee: Employee; distance: number } | null = null
+  for (const c of candidates) {
+    if (c.employee.id === employeeId) continue
+    const d = candidateDistance(c, descriptor)
+    if (Number.isFinite(d) && (!rival || d < rival.distance)) rival = { employee: c.employee, distance: d }
+  }
+  if (rival && distance - rival.distance >= t.margin && rival.distance < t.threshold) {
+    return { kind: 'other', distance, other: rival.employee }
+  }
+  return distance < t.threshold ? { kind: 'match', distance } : { kind: 'mismatch', distance }
 }
 
 /** A trustworthy match: close enough AND clearly closer than anyone else. */

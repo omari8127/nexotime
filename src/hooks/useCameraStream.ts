@@ -57,7 +57,7 @@ export function useCameraStream(active = true, { hd = false, facingMode = 'user'
       if (!track) throw new Error('No hay video')
       track.onended = () => fail(new Error('Cámara desconectada'))
       // Do not let optional camera controls delay video start.
-      void tuneCamera(track)
+      void tuneCamera(track, { torch: facingMode === 'environment' })
       await Promise.race([
         video.play(),
         new Promise<never>((_, reject) => {

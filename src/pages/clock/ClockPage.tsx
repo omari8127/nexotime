@@ -29,8 +29,10 @@ import { Dropdown, DropdownItem, DropdownLabel } from '@/components/ui/dropdown'
 import { AnalogClock } from '@/components/clock/AnalogClock'
 import { FaceScanFlow } from '@/components/clock/FaceScanFlow'
 import { ScanFlow } from '@/components/clock/ScanFlow'
-import { EntryPhotoFlow } from '@/components/clock/EntryPhotoFlow'
-import { needsEntryPhoto, type PhotoCapture } from '@/lib/photoEvidence'
+import { FaceVerifyFlow } from '@/components/clock/FaceVerifyFlow'
+import { LightStage } from '@/components/clock/LightStage'
+import { LiveTime } from '@/components/clock/LiveTime'
+import { needsEntryPhoto, photoIsFresh, type PhotoCapture } from '@/lib/photoEvidence'
 import { NumberPinFlow } from '@/components/clock/NumberPinFlow'
 import { KioskExitGate } from '@/components/clock/KioskExitGate'
 import { METHOD_META } from '@/components/shared/badges'
@@ -43,7 +45,7 @@ import { useSyncStore } from '@/store/syncStore'
 import { applyTheme, useUIStore } from '@/store/uiStore'
 import { kioskDevice, pickKioskBranch, punchableEmployees, resolveKiosk } from '@/lib/kiosk'
 import { CODE_ERROR_TEXT, credentialValue, findEmployeeByCode } from '@/lib/credentials'
-import { useLiveClock, formatClockTime } from '@/hooks/useLiveClock'
+import { useClockReader, useLiveClock, formatClockTime } from '@/hooks/useLiveClock'
 import { useFullscreen } from '@/hooks/useFullscreen'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { useToday } from '@/hooks/useToday'
@@ -68,7 +70,7 @@ type Phase =
   | 'qr'
   | 'barcode'
   | 'number'
-  | 'entry_photo'
+  | 'verify'
   | 'confirm'
   | 'punch'
   | 'success'
@@ -138,7 +140,9 @@ export function ClockPage() {
   const registerPunch = useDataStore((s) => s.registerPunch)
   const registerPunchWithPhoto = useDataStore((s) => s.registerPunchWithPhoto)
   const punchBusy = useRef(false)
-  const now = useLiveClock()
+  // The page does not re-render every second (it made the camera steps stutter on weak tablets): the
+  // time is read when a punch is stamped, and the ticking digits live in their own small components.
+  const readClock = useClockReader()
   const faceAllowed = useFeature('face')
   const today = useToday()
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen()
@@ -170,6 +174,20 @@ export function ClockPage() {
   >(null)
   // Other methods keep a fleeting preview. Number/PIN entries persist evidence separately.
   const [pendingPhoto, setPendingPhoto] = useState<string | undefined>(undefined)
+  // The photo taken at the number + PIN step (it is what gets saved with an entry), what that step was
+  // (compare with the enrolled face, or only a photo for the record) and whether the face matched.
+  const [evidence, setEvidence] = useState<PhotoCapture | null>(null)
+  const [verifyMode, setVerifyMode] = useState<'verify' | 'evidence'>('verify')
+  const [faceVerified, setFaceVerified] = useState(false)
+  // Where to continue after a photo that was asked for in the middle of registering.
+  const resumeType = useRef<PunchType | null>(null)
+  // An idle kiosk left on overnight must notice the new day without being re-rendered every second.
+  const [, setDayTick] = useState(0)
+  useEffect(() => {
+    if (phase !== 'idle') return
+    const id = window.setInterval(() => setDayTick((n) => n + 1), 30_000)
+    return () => clearInterval(id)
+  }, [phase])
   const [showWeekSummary, setShowWeekSummary] = useState(false)
   const [notices, setNotices] = useState<Array<{ title: string; detail: string }>>([])
   const [showExitGate, setShowExitGate] = useState(false)
@@ -264,7 +282,7 @@ export function ClockPage() {
     if (phase !== 'confirm' || !confirmPunch) return
     // Face recognition already matched the person with a clear margin, so its "No soy yo"
     // window can be short — queues in the morning shouldn't wait on a countdown.
-    const seconds = method === 'face' ? Math.min(kiosk.autoRegisterSeconds, FACE_CONFIRM_SECONDS) : kiosk.autoRegisterSeconds
+    const seconds = method === 'face' || faceVerified ? Math.min(kiosk.autoRegisterSeconds, FACE_CONFIRM_SECONDS) : kiosk.autoRegisterSeconds
     const id = setTimeout(() => doPunch(confirmPunch.type), seconds * 1000)
     return () => clearTimeout(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -285,6 +303,9 @@ export function ClockPage() {
     setLastPunch(null)
     setNotices([])
     setPendingPhoto(undefined)
+    setEvidence(null)
+    setFaceVerified(false)
+    resumeType.current = null
     setBlockedMessage('')
   }
 
@@ -308,32 +329,57 @@ export function ClockPage() {
   /**
    * Once someone is identified: validate the movement they picked on the first screen
    * against today's record, then go to a short confirmation before registering it.
-   * Photos here are fleeting previews. Number/PIN entry evidence is captured immediately before saving.
+   * Photos here are fleeting previews, except the one taken at the number + PIN step, which is saved
+   * with an entry as evidence.
    */
   function identify(emp: Employee, capture: CaptureMethod, photo?: string) {
     setEmployee(emp)
     setMethod(capture)
     setPendingPhoto(photo)
+    setEvidence(null)
+    setFaceVerified(false)
     const record = attendance.find((r) => r.employeeId === emp.id && r.date === today)
     const type = selectedPunchType ?? detectNextPunch(record?.punches ?? [], company.attendanceSettings.trackLunch)?.type
     if (type) {
       const blocked = canRegisterPunch(record?.punches ?? [], type, company.attendanceSettings, {
         minutes: kiosk.minGapMinutes,
-        now: formatClock24(now),
+        now: formatClock24(readClock()),
       })
       if (blocked) {
         showBlocked(blocked)
         return
       }
     }
+    // Number + PIN: the PIN says who they claim to be, the camera step checks it is really them. An
+    // employee with an enrolled face is compared with it; one without gets a photo for the record
+    // (entries by number/PIN require one). Only then does the movement go through.
+    if (capture === 'employee_number') {
+      const enrolled = faceAllowed && kiosk.faceCheckOnPin && faceCandidates([emp]).length > 0
+      if (enrolled || needsEntryPhoto(capture, type ?? 'entry')) {
+        setVerifyMode(enrolled ? 'verify' : 'evidence')
+        setPhase('verify')
+        return
+      }
+    }
     setPhase(kiosk.autoRegister && type ? 'confirm' : 'punch')
   }
 
-  async function doPunch(type: PunchType, evidence?: PhotoCapture) {
+  async function doPunch(type: PunchType, freshEvidence?: PhotoCapture) {
     if (!employee || punchBusy.current) return
-    if (needsEntryPhoto(method, type) && !evidence) { setPhase('entry_photo'); return }
+    // An entry by number/PIN is saved with the photo taken at the camera step; if that photo is gone or
+    // too old (someone walked away and came back), the camera step is shown again.
+    let photo: PhotoCapture | undefined
+    if (needsEntryPhoto(method, type)) {
+      photo = freshEvidence ?? (evidence && photoIsFresh(evidence) ? evidence : undefined)
+      if (!photo) {
+        resumeType.current = type
+        setVerifyMode(faceAllowed && kiosk.faceCheckOnPin && faceCandidates([employee]).length > 0 ? 'verify' : 'evidence')
+        setPhase('verify')
+        return
+      }
+    }
     punchBusy.current = true
-    const time = formatClock24(now)
+    const time = formatClock24(readClock())
     try {
       const input = {
         employeeId: employee.id,
@@ -344,7 +390,7 @@ export function ClockPage() {
         date: today,
         location: effectiveLocation,
       }
-      const { record } = evidence ? await registerPunchWithPhoto(input, evidence) : registerPunch(input)
+      const { record } = photo ? await registerPunchWithPhoto(input, photo) : registerPunch(input)
       // Friendly heads-up when the punch reveals something worth knowing.
       const found: Array<{ title: string; detail: string }> = []
       const schedule = schedules.find((s) => s.id === record.scheduleId)
@@ -370,14 +416,12 @@ export function ClockPage() {
       setNotices(found)
     } catch (e) {
       // Impossible sequences (doble entrada, regreso sin comida…) are refused with a clear reason.
-      // The photo step reports its own failure (upload, camera…); otherwise show the full-screen notice.
-      if (evidence) throw e
       showBlocked(e instanceof Error ? e.message : 'No se pudo registrar el movimiento.')
       return
     } finally { punchBusy.current = false }
     // El registro siempre queda guardado localmente de inmediato; si no hay
     // conexión se encola en este dispositivo y se sincroniza al reconectar.
-    setLastPunch({ type, time, location: effectiveLocation, photo: evidence?.dataUrl ?? pendingPhoto })
+    setLastPunch({ type, time, location: effectiveLocation, photo: photo?.dataUrl ?? pendingPhoto })
     setPhase('success')
   }
 
@@ -398,13 +442,7 @@ export function ClockPage() {
         </button>
 
         <div className="flex flex-col items-start gap-6 lg:items-center lg:text-center">
-          <AnalogClock now={now} className="hidden h-56 w-56 lg:block xl:h-64 xl:w-64" />
-          <div className="lg:text-center">
-            <p className="whitespace-nowrap font-mono text-4xl font-semibold tabular-nums tracking-tight sm:text-5xl lg:text-4xl xl:text-5xl 2xl:text-6xl">
-              {formatClockTime(now)}
-            </p>
-            <p className="mt-2 text-sm text-slate-300">{formatLongDate(now)}</p>
-          </div>
+          <SideClock />
         </div>
 
         <div className="hidden space-y-3 border-t border-white/10 pt-5 text-[13px] lg:block">
@@ -610,14 +648,14 @@ export function ClockPage() {
             )}
 
             {phase === 'face' && (
-              <FlowCard key="face" onBack={backToMethod} title="Reconocimiento facial">
+              <LightStage key="face" title="Reconocimiento facial" onBack={backToMethod}>
                 <FaceScanFlow
                   employees={allEmployees}
                   settings={kiosk}
                   onCancel={backToMethod}
                   onConfirmed={(emp, photo) => identify(emp, 'face', photo)}
                 />
-              </FlowCard>
+              </LightStage>
             )}
 
             {(phase === 'qr' || phase === 'barcode') && (
@@ -635,18 +673,42 @@ export function ClockPage() {
               <FlowCard key="number" onBack={backToMethod}>
                 <NumberPinFlow
                   employees={punchable}
+                  steps={selectedPunchType === 'entry' || (faceAllowed && kiosk.faceCheckOnPin && hasEnrolledFaces) ? 3 : 2}
                   onCancel={backToMethod}
                   onIdentified={(emp) => identify(emp, 'employee_number')}
                 />
               </FlowCard>
             )}
 
-            {phase === 'entry_photo' && employee ? (
-              <motion.div key="entry-photo" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full max-w-md">
-                <EntryPhotoFlow name={employee.firstName} onCancel={reset}
-                  onCaptured={async (photo) => { await doPunch('entry', photo) }} />
-              </motion.div>
-            ) : null}
+            {phase === 'verify' && employee && (
+              <LightStage
+                key="verify"
+                title={`Verificación · ${employee.firstName}`}
+                onBack={reset}
+                backLabel="Cancelar"
+              >
+                <FaceVerifyFlow
+                  employee={employee}
+                  employees={allEmployees}
+                  settings={kiosk}
+                  mode={verifyMode}
+                  keepPhoto={needsEntryPhoto('employee_number', resumeType.current ?? selectedPunchType ?? 'entry')}
+                  onCancel={reset}
+                  onVerified={({ photo }) => {
+                    setEvidence(photo)
+                    setPendingPhoto(photo.dataUrl)
+                    setFaceVerified(verifyMode === 'verify')
+                    const resume = resumeType.current
+                    resumeType.current = null
+                    if (resume) {
+                      void doPunch(resume, photo)
+                    } else {
+                      setPhase(kiosk.autoRegister && confirmPunch ? 'confirm' : 'punch')
+                    }
+                  }}
+                />
+              </LightStage>
+            )}
 
             {phase === 'confirm' && employee && confirmPunch && (
               <FlowCard key="confirm" onBack={reset} title="Confirmar registro">
@@ -682,7 +744,7 @@ export function ClockPage() {
                       </p>
                     </div>
                     <p className="font-mono text-4xl font-bold tabular-nums tracking-tight text-slate-900">
-                      {formatTime12(formatClock24(now))}
+                      <LiveTime format={(d) => formatTime12(formatClock24(d))} />
                     </p>
                   </div>
 
@@ -815,7 +877,7 @@ export function ClockPage() {
                       <Button size="xl" className="w-full text-base" onClick={() => doPunch(confirmPunch.type)}>
                         {confirmPunch.label}
                         <span className="ml-2 font-mono text-sm opacity-90">
-                          {formatClockTime(now).replace(/:\d\d /, ' ')}
+                          <LiveTime format={(d) => formatClockTime(d).replace(/:\d\d /, ' ')} />
                         </span>
                       </Button>
                       <div className="flex items-center justify-between">
@@ -870,7 +932,7 @@ export function ClockPage() {
                 trackLunch={company.attendanceSettings.trackLunch}
                 allowed={allowedPunchTypes(punches, company.attendanceSettings, {
                   minutes: kiosk.minGapMinutes,
-                  now: formatClock24(now),
+                  now: formatClock24(readClock()),
                 })}
                 onChoose={(t) => {
                   setSelectedPunchType(t)
@@ -915,7 +977,7 @@ export function ClockPage() {
                   <p className="relative mt-2 font-mono text-6xl font-bold tabular-nums tracking-tight text-slate-900 md:text-7xl">
                     {formatTime12(lastPunch.time)}
                   </p>
-                  <p className="relative mt-2 text-base text-slate-500">{formatLongDate(now)}</p>
+                  <p className="relative mt-2 text-base text-slate-500">{formatLongDate(readClock())}</p>
                 </div>
 
                 <div className="border-t border-slate-100 px-7 pb-7 pt-6">
@@ -933,7 +995,11 @@ export function ClockPage() {
                     <div className="mt-3.5 overflow-hidden rounded-xl border border-slate-200">
                       <div className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-medium text-slate-500">
                         <Camera className="h-3.5 w-3.5" />
-                        {needsEntryPhoto(method, lastPunch.type) ? 'Foto de evidencia de entrada' : 'Foto de verificación'}
+                        {faceVerified
+                          ? needsEntryPhoto(method, lastPunch.type)
+                            ? 'Rostro verificado · foto guardada como evidencia'
+                            : 'Rostro verificado'
+                          : needsEntryPhoto(method, lastPunch.type) ? 'Foto de evidencia de entrada' : 'Foto de verificación'}
                       </div>
                       <img src={lastPunch.photo} alt="Foto de verificación" className="h-40 w-full object-cover" />
                     </div>
@@ -1081,5 +1147,21 @@ function FlowCard({
       </div>
       <div className="p-6">{children}</div>
     </motion.div>
+  )
+}
+
+/** Analog + digital clock and date of the side panel: the only part of the page that ticks every second. */
+function SideClock() {
+  const now = useLiveClock()
+  return (
+    <>
+      <AnalogClock now={now} className="hidden h-56 w-56 lg:block xl:h-64 xl:w-64" />
+      <div className="lg:text-center">
+        <p className="whitespace-nowrap font-mono text-4xl font-semibold tabular-nums tracking-tight sm:text-5xl lg:text-4xl xl:text-5xl 2xl:text-6xl">
+          {formatClockTime(now)}
+        </p>
+        <p className="mt-2 text-sm text-slate-300">{formatLongDate(now)}</p>
+      </div>
+    </>
   )
 }

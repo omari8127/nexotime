@@ -64,6 +64,7 @@ export function KioskSettingsPanel() {
   const [threshold, setThreshold] = useState<number | null>(saved.faceThreshold)
   const [zoom, setZoom] = useState(String(saved.faceZoom))
   const [gap, setGap] = useState(String(saved.minGapMinutes))
+  const [faceCheckOnPin, setFaceCheckOnPin] = useState(saved.faceCheckOnPin)
   const [exitPin, setExitPin] = useState(saved.exitPin)
   const exitPinValid = /^\d{4,8}$/.test(exitPin)
   const [testing, setTesting] = useState<Employee | null>(null)
@@ -78,6 +79,7 @@ export function KioskSettingsPanel() {
     threshold !== saved.faceThreshold ||
     Number(zoom) !== saved.faceZoom ||
     Number(gap) !== saved.minGapMinutes ||
+    faceCheckOnPin !== saved.faceCheckOnPin ||
     (exitPin !== saved.exitPin && exitPinValid)
 
   const active = useMemo(() => employees.filter((e) => e.status === 'active'), [employees])
@@ -99,6 +101,7 @@ export function KioskSettingsPanel() {
           faceThreshold: threshold ?? undefined,
           faceZoom: Number(zoom),
           minGapMinutes: Number(gap),
+          faceCheckOnPin,
           exitPin: exitPinValid ? exitPin : saved.exitPin,
         },
       },
@@ -140,6 +143,20 @@ export function KioskSettingsPanel() {
                 disabled={!canManage}
                 options={['2', '3', '5', '8'].map((v) => ({ value: v, label: `${v} segundos` }))}
               />
+            </div>
+          ) : null}
+
+          {faceAllowed ? (
+            <div className="flex items-start justify-between gap-4 border-t border-border pt-5">
+              <div>
+                <Label>Verificar el rostro con número y PIN</Label>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Después del PIN, el reloj toma una foto y la compara con el rostro registrado de ese
+                  empleado; solo registra si coincide. Quien aún no tiene rostro registrado checa como antes
+                  (en las entradas se guarda su foto como evidencia).
+                </p>
+              </div>
+              <Switch checked={faceCheckOnPin} onCheckedChange={setFaceCheckOnPin} disabled={!canManage} />
             </div>
           ) : null}
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useDataStore } from '@/store/dataStore'
 import { DEMO_TODAY } from '@/data/catalog'
 import { businessNow } from '@/lib/today'
@@ -36,6 +36,27 @@ export function useLiveClock(): Date {
   }, [mode, timezone])
 
   return now
+}
+
+/**
+ * The same wall clock, but as a function to call when the time is needed (to stamp a punch), without
+ * re-rendering anything every second. A screen that only needs the time at the moment of an action
+ * (the reloj checador: its camera steps must not repaint every second) reads it here and leaves the
+ * ticking digits to small components of their own.
+ */
+export function useClockReader(): () => Date {
+  const mode = useDataStore((s) => s.mode)
+  const startedAt = useRef(0)
+  useEffect(() => {
+    startedAt.current = Date.now()
+  }, [mode])
+  return useCallback(
+    () =>
+      mode === 'live'
+        ? businessNow()
+        : new Date(demoAnchor().getTime() + (Date.now() - (startedAt.current || Date.now()))),
+    [mode],
+  )
 }
 
 export function formatClockTime(date: Date): string {

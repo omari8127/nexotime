@@ -136,7 +136,7 @@ feat(clock): evidencia fotográfica de entrada y reconocimiento facial robusto
 - `scripts/verify-NX01.mjs`
 - `scripts/verify-face.mjs`
 - `src/components/attendance/AttendancePhotoPanel.tsx`
-- `src/components/clock/EntryPhotoFlow.tsx`
+- `src/components/clock/EntryPhotoFlow.tsx` (reemplazado después por `FaceVerifyFlow.tsx`, que toma la foto y además verifica el rostro)
 - `src/lib/faceSession.ts`
 - `src/lib/photoEvidence.ts`
 - `src/services/evidence/localPhotos.ts`

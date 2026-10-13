@@ -5,11 +5,15 @@ import {
   isConfidentMatch,
   meanDescriptor,
   nearestFace,
+  paceDelay,
   qualityIssues,
   tuningFor,
   TUNING,
+  verifyClaimed,
   type FaceReading,
 } from '@/lib/face'
+import { ClaimSession } from '@/lib/faceSession'
+import { photoIsFresh, type PhotoCapture } from '@/lib/photoEvidence'
 import { kioskDevice, pickKioskBranch, punchableEmployees, resolveKiosk } from '@/lib/kiosk'
 import type { Employee } from '@/types'
 
@@ -130,5 +134,74 @@ describe('ajustes del reloj', () => {
     expect(low.minConfidence).toBeLessThan(normal.minConfidence)
     // Aun en el nivel más tolerante se exige distancia contra el segundo más parecido.
     expect(low.margin).toBeGreaterThan(0)
+  })
+})
+
+describe('verificación después de número y PIN (1:1)', () => {
+  const ana = emp('ana', [face(1), face(1, 0.005)])
+  const beto = emp('beto', [face(2), face(2, 0.005)])
+  const candidates = faceCandidates([ana, beto])
+  const t = TUNING.balanced
+
+  it('acepta el rostro de quien dijo ser', () => {
+    const v = verifyClaimed(candidates, 'ana', face(1, 0.002), t)
+    expect(v.kind).toBe('match')
+  })
+
+  it('rechaza un rostro que no se parece a la persona registrada', () => {
+    const stranger = faceCandidates([ana])
+    const v = verifyClaimed(stranger, 'ana', face(5), t)
+    expect(v.kind).toBe('mismatch')
+  })
+
+  it('distingue "no eres tú" de "eres otra persona del equipo"', () => {
+    // Beto escribe el número y PIN de Ana: su rostro se parece claramente más al de Beto.
+    const v = verifyClaimed(candidates, 'ana', face(2, 0.002), t)
+    expect(v.kind).toBe('other')
+    if (v.kind === 'other') expect(v.other.id).toBe('beto')
+  })
+
+  it('sin rostro registrado no hay nada que comparar', () => {
+    expect(verifyClaimed(candidates, 'carla', face(1), t).kind).toBe('not_enrolled')
+  })
+
+  it('el umbral configurado manda: uno estricto rechaza lo que el flexible acepta', () => {
+    const near = face(1, 0.04) // ≈ 0.45 de distancia
+    expect(verifyClaimed(candidates, 'ana', near, tuningFor('balanced', 0.6)).kind).toBe('match')
+    expect(verifyClaimed(candidates, 'ana', near, tuningFor('balanced', 0.4)).kind).toBe('mismatch')
+  })
+
+  it('pide varias lecturas seguidas y reinicia con una que no coincide', () => {
+    const session = new ClaimSession(candidates, 'ana')
+    const now = 1_000_000
+    const first = session.push(face(1, 0.001), t, now)
+    expect(first.accepted).toBe(false)
+    expect(first.progress).toBe(1)
+    session.push(face(1, 0.002), t, now + 200)
+    const third = session.push(face(1, 0.001), t, now + 400)
+    expect(third.accepted).toBe(true)
+    // Un cuadro de otra persona deja el avance en cero.
+    const bad = session.push(face(2), t, now + 600)
+    expect(bad.progress).toBe(0)
+    expect(bad.accepted).toBe(false)
+  })
+
+  it('la pausa entre lecturas crece con lo que tardó la anterior y tiene tope', () => {
+    expect(paceDelay(10, 40)).toBe(40)
+    expect(paceDelay(250, 40)).toBe(200)
+    expect(paceDelay(5000, 40)).toBe(400)
+  })
+
+  it('una foto reciente sirve; una que esperó más de un minuto se vuelve a tomar', () => {
+    const at = (ms: number) => ({ capturedAt: new Date(ms).toISOString() }) as PhotoCapture
+    const now = 10_000_000
+    expect(photoIsFresh(at(now - 20_000), now)).toBe(true)
+    expect(photoIsFresh(at(now - 90_000), now)).toBe(false)
+    expect(photoIsFresh({ capturedAt: 'no es fecha' } as PhotoCapture, now)).toBe(false)
+  })
+
+  it('verificar el rostro con número y PIN viene activado y se puede apagar', () => {
+    expect(resolveKiosk(undefined).faceCheckOnPin).toBe(true)
+    expect(resolveKiosk({ kiosk: { faceCheckOnPin: false } } as never).faceCheckOnPin).toBe(false)
   })
 })
