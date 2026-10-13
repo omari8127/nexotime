@@ -1,4 +1,4 @@
-import type { RefObject } from 'react'
+import type { ReactNode, RefObject } from 'react'
 import { CameraOff, LoaderCircle } from 'lucide-react'
 import type { CameraState } from '@/hooks/useCameraStream'
 import { cn } from '@/lib/utils'
@@ -12,6 +12,7 @@ export function FaceViewport({
   ok,
   zoom = 1,
   className,
+  overlay,
 }: {
   videoRef: RefObject<HTMLVideoElement | null>
   cameraState: CameraState
@@ -21,6 +22,8 @@ export function FaceViewport({
   /** Digital zoom, so what the person sees is exactly the central part that is being read. */
   zoom?: number
   className?: string
+  /** Shown over the camera (the "get ready" countdown). */
+  overlay?: ReactNode
 }) {
   const ready = cameraState === 'ready'
   return (
@@ -53,6 +56,11 @@ export function FaceViewport({
             strokeDasharray={ok ? undefined : '3 2.5'}
           />
         </svg>
+      ) : null}
+      {ready && overlay ? (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-slate-900/45 text-center text-white">
+          {overlay}
+        </div>
       ) : null}
       {!ready || loadingModels ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-900/85 p-6 text-center text-slate-200">

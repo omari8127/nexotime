@@ -102,7 +102,6 @@ const PUNCH_TYPE_STYLE: Record<PunchType, { icon: string; card: string }> = {
 
 /** How long the success screen stays up before closing itself. Longer when it
  *  has a verification photo on it — there's actually something to look at. */
-const FACE_CONFIRM_SECONDS = 2
 const SUCCESS_SCREEN_MS = 4500
 const SUCCESS_SCREEN_MS_WITH_PHOTO = 8000
 /** The "that can't be registered" screen has to be read and acted on, so it stays longer. */
@@ -280,9 +279,9 @@ export function ClockPage() {
   // Auto-register: when the cancel window ends, register the proposed movement.
   useEffect(() => {
     if (phase !== 'confirm' || !confirmPunch) return
-    // Face recognition already matched the person with a clear margin, so its "No soy yo"
-    // window can be short — queues in the morning shouldn't wait on a countdown.
-    const seconds = method === 'face' || faceVerified ? Math.min(kiosk.autoRegisterSeconds, FACE_CONFIRM_SECONDS) : kiosk.autoRegisterSeconds
+    // Every method gets the full time configured for cancelling: a registration that happens by itself
+    // two seconds after the camera turns on does not give the person time to see what is being registered.
+    const seconds = kiosk.autoRegisterSeconds
     const id = setTimeout(() => doPunch(confirmPunch.type), seconds * 1000)
     return () => clearTimeout(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -714,7 +713,11 @@ export function ClockPage() {
               <FlowCard key="confirm" onBack={reset} title="Confirmar registro">
                 <div className="space-y-6">
                   <div className="flex items-center gap-3.5 rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3.5">
-                    <Avatar name={employee.fullName} size="lg" className="ring-2 ring-white shadow-sm" />
+                    {pendingPhoto ? (
+                      <img src={pendingPhoto} alt="" className="h-16 w-16 shrink-0 rounded-full object-cover ring-2 ring-white shadow-sm" />
+                    ) : (
+                      <Avatar name={employee.fullName} size="lg" className="ring-2 ring-white shadow-sm" />
+                    )}
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-base font-semibold text-slate-900">{employee.fullName}</p>
                       <p className="truncate text-[13px] text-slate-500">
@@ -738,7 +741,7 @@ export function ClockPage() {
                       })()}
                     </span>
                     <div>
-                      <p className="text-sm text-slate-500">Se registrará automáticamente</p>
+                      <p className="text-sm text-slate-500">Se va a registrar</p>
                       <p className="mt-0.5 text-2xl font-bold tracking-tight text-slate-900">
                         {PUNCH_TYPE_LABEL[confirmPunch.type]}
                       </p>
@@ -747,6 +750,8 @@ export function ClockPage() {
                       <LiveTime format={(d) => formatTime12(formatClock24(d))} />
                     </p>
                   </div>
+
+                  <AutoRegisterCountdown seconds={kiosk.autoRegisterSeconds} />
 
                   <div className="space-y-2.5">
                     <Button
@@ -1147,6 +1152,30 @@ function FlowCard({
       </div>
       <div className="p-6">{children}</div>
     </motion.div>
+  )
+}
+
+/** "Se registra solo en N s": the person sees how long is left to cancel or choose another movement. */
+function AutoRegisterCountdown({ seconds }: { seconds: number }) {
+  const [left, setLeft] = useState(seconds)
+  useEffect(() => {
+    const id = window.setInterval(() => setLeft((n) => Math.max(0, n - 1)), 1000)
+    return () => clearInterval(id)
+  }, [])
+  return (
+    <div className="space-y-1.5">
+      <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+        <motion.div
+          className="h-full origin-left rounded-full bg-emerald-500"
+          initial={{ scaleX: 1 }}
+          animate={{ scaleX: 0 }}
+          transition={{ duration: seconds, ease: 'linear' }}
+        />
+      </div>
+      <p className="text-center text-sm font-medium text-slate-600">
+        Se registra solo en {left} s · toca <span className="font-semibold">Registrar ahora</span> o cancela
+      </p>
+    </div>
   )
 }
 

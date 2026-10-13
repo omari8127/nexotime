@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { FaceViewport } from '@/components/clock/FaceViewport'
 import { VoiceToggle } from '@/components/shared/VoiceToggle'
 import { useCameraStream } from '@/hooks/useCameraStream'
+import { GetReadyOverlay, useGetReady } from '@/hooks/useGetReady'
 import { videoFrameCanvas } from '@/lib/camera'
 import {
   QUALITY_TEXT,
@@ -39,7 +40,7 @@ const MISMATCH_MIN_MS = 2500
 /** A photo only for the record: a good frame held this long (so it is sharp and not mid-blink). */
 const EVIDENCE_HOLD_MS = 1500
 /** Shows the green "verificado" state this long before moving on. */
-const VERIFIED_PAUSE_MS = 700
+const VERIFIED_PAUSE_MS = 1500
 /** Nobody did anything for this long: back to the start screen, the PIN stays unused. */
 const GIVE_UP_MS = 60_000
 const REJECT_LOG_COOLDOWN_MS = 30_000
@@ -82,6 +83,8 @@ export function FaceVerifyFlow({
   const [rejections, setRejections] = useState(0)
   const [rejectedAsOther, setRejectedAsOther] = useState(false)
   const { say, beep } = useVoice('kiosk')
+  // Time to get in place before anything is read or taken (see useGetReady).
+  const { left, ready, skip } = useGetReady(cameraState === 'ready', attempt)
   const logAudit = useDataStore((s) => s.logAudit)
   const currentUser = useDataStore((s) => s.currentUser)
 
@@ -108,7 +111,7 @@ export function FaceVerifyFlow({
   }, [stage, attempt, onCancel])
 
   useEffect(() => {
-    if (cameraState !== 'ready') return
+    if (cameraState !== 'ready' || !ready) return
     const video = videoRef.current
     if (!video) return
     let alive = true
@@ -254,7 +257,7 @@ export function FaceVerifyFlow({
       if (timer) clearTimeout(timer)
       if (doneTimer) clearTimeout(doneTimer)
     }
-  }, [cameraState, attempt, videoRef, employee, mode, beep, logAudit, currentUser])
+  }, [cameraState, ready, attempt, videoRef, employee, mode, beep, logAudit, currentUser])
 
   const retry = () => {
     setStage('loading')
@@ -274,7 +277,8 @@ export function FaceVerifyFlow({
         videoRef={videoRef}
         cameraState={cameraState}
         cameraMessage={cameraMessage}
-        loadingModels={stage === 'loading'}
+        loadingModels={stage === 'loading' && ready}
+        overlay={!ready ? <GetReadyOverlay left={left} /> : undefined}
         ok={stage === 'verified'}
         zoom={settings.faceZoom}
         className="max-w-xl"
@@ -306,7 +310,11 @@ export function FaceVerifyFlow({
           </div>
         ) : (
           <p className="min-h-7 text-lg font-medium text-slate-700" role="status">
-            {cameraState === 'error' ? 'Revisa la cámara' : stage === 'loading' ? 'Preparando…' : hint}
+            {cameraState === 'error'
+              ? 'Revisa la cámara'
+              : cameraState === 'ready' && !ready
+                ? 'Acomódate: en unos segundos te leemos'
+                : stage === 'loading' ? 'Preparando…' : hint}
           </p>
         )}
 
@@ -328,6 +336,11 @@ export function FaceVerifyFlow({
             }}
           >
             {stage === 'rejected' ? 'Intentar de nuevo' : 'Reintentar'}
+          </Button>
+        ) : null}
+        {cameraState === 'ready' && !ready ? (
+          <Button size="lg" className="flex-1" onClick={skip}>
+            Empezar ya
           </Button>
         ) : null}
         <VoiceToggle scope="kiosk" compact />

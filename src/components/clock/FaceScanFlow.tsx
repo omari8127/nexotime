@@ -4,6 +4,7 @@ import { FaceViewport } from '@/components/clock/FaceViewport'
 import { captureVideoFrame } from '@/lib/camera'
 import { VoiceToggle } from '@/components/shared/VoiceToggle'
 import { useCameraStream } from '@/hooks/useCameraStream'
+import { GetReadyOverlay, useGetReady } from '@/hooks/useGetReady'
 import { useVoice } from '@/lib/speech'
 import { useDataStore } from '@/store/dataStore'
 import { usePermissions } from '@/hooks/useScopedData'
@@ -60,6 +61,8 @@ export function FaceScanFlow({
   const [attempt, setAttempt] = useState(0)
   const [reading, setReading] = useState('')
   const { say } = useVoice('kiosk')
+  // The camera shows the person first and only then starts looking: a few seconds to get in place.
+  const { left, ready, skip } = useGetReady(cameraState === 'ready', attempt)
   const logAudit = useDataStore((s) => s.logAudit)
   const currentUser = useDataStore((s) => s.currentUser)
   const { can } = usePermissions()
@@ -97,7 +100,7 @@ export function FaceScanFlow({
   }, [stage, hint, say])
 
   useEffect(() => {
-    if (candidatesRef.current.length === 0 || cameraState !== 'ready') return
+    if (candidatesRef.current.length === 0 || cameraState !== 'ready' || !ready) return
     let alive = true
     let timer: number | undefined
     const video = videoRef.current
@@ -213,7 +216,7 @@ export function FaceScanFlow({
       alive = false
       if (timer) clearTimeout(timer)
     }
-  }, [cameraState, attempt, videoRef])
+  }, [cameraState, attempt, videoRef, ready])
 
   return (
     <div className="flex flex-col items-center gap-5 text-center">
@@ -231,14 +234,19 @@ export function FaceScanFlow({
             videoRef={videoRef}
             cameraState={cameraState}
             cameraMessage={cameraMessage}
-            loadingModels={stage === 'loading'}
+            loadingModels={stage === 'loading' && ready}
+            overlay={!ready ? <GetReadyOverlay left={left} /> : undefined}
             zoom={settings.faceZoom}
             className="max-w-xl"
           />
           <div className="space-y-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Reconocimiento facial</p>
             <p className="text-lg font-semibold text-slate-900">
-              {cameraState === 'error' ? 'Revisa la cámara' : stage === 'loading' ? 'Preparando…' : hint || 'Mira a la cámara'}
+              {cameraState === 'error'
+                ? 'Revisa la cámara'
+                : cameraState === 'ready' && !ready
+                  ? 'Acomódate frente a la cámara'
+                  : stage === 'loading' ? 'Preparando…' : hint || 'Mira a la cámara'}
             </p>
             <p className="text-sm text-slate-500">
               Se procesa en este equipo. Al identificarte verás una foto de verificación que no se guarda.
@@ -258,6 +266,11 @@ export function FaceScanFlow({
         {stage === 'failed' || cameraState === 'error' ? (
           <Button variant="secondary" size="lg" className="flex-1" onClick={() => { setStage('loading'); setAttempt((n) => n + 1); restart() }}>
             Reintentar cámara
+          </Button>
+        ) : null}
+        {cameraState === 'ready' && !ready ? (
+          <Button size="lg" className="flex-1" onClick={skip}>
+            Empezar ya
           </Button>
         ) : null}
         <VoiceToggle scope="kiosk" compact />
