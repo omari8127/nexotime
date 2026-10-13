@@ -19,6 +19,7 @@ import { useDataStore } from '@/store/dataStore'
 import { useScopedData } from '@/hooks/useScopedData'
 import { useToday } from '@/hooks/useToday'
 import { generateBarcodeValue, generateQrValue, takenBarcodes } from '@/lib/credentials'
+import { normalizeRfc } from '@/lib/importNormalize'
 import { SelectWithCustom } from '@/components/shared/SelectWithCustom'
 import { DEPARTMENTS, POSITIONS } from '@/data/catalog'
 import type { Employee, IdentificationMethod } from '@/types'
@@ -92,6 +93,7 @@ export function EmployeeFormDialog({ open, onOpenChange, employee, onSaved }: Pr
         status: employee.status,
         scheduleId: employee.scheduleId,
         pin: employee.pin ?? '',
+        rfc: employee.rfc ?? '',
         curp: employee.curp ?? '',
         address: employee.address ?? '',
         emergencyName: employee.emergencyContact?.name ?? '',
@@ -123,6 +125,11 @@ export function EmployeeFormDialog({ open, onOpenChange, employee, onSaved }: Pr
     }
     if (methods.pin && !/^\d{4}$/.test(form.pin.trim())) {
       toast.error('PIN inválido', 'El PIN debe tener exactamente 4 dígitos (o desactiva el método PIN).')
+      return
+    }
+    const rfc = form.rfc.trim() ? normalizeRfc(form.rfc) : undefined
+    if (rfc === null) {
+      toast.error('RFC inválido', 'El RFC debe tener 12 o 13 caracteres, por ejemplo PELJ900115AB1 (o déjalo vacío).')
       return
     }
     // Codes are generated once and kept on later edits — re-saving an employee must
@@ -161,6 +168,8 @@ export function EmployeeFormDialog({ open, onOpenChange, employee, onSaved }: Pr
       scheduleId: form.scheduleId,
       identifications,
       pin: form.pin.trim() || undefined,
+      // '' (not undefined) when an existing RFC is erased, so the change reaches the database.
+      rfc: rfc ?? (employee?.rfc ? '' : undefined),
       curp: form.curp.trim() || undefined,
       address: form.address.trim() || undefined,
       emergencyContact: form.emergencyName.trim()
@@ -213,6 +222,14 @@ export function EmployeeFormDialog({ open, onOpenChange, employee, onSaved }: Pr
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Número de empleado">
                 <Input value={form.employeeNumber} onChange={(e) => set({ employeeNumber: e.target.value })} />
+              </Field>
+              <Field label="RFC">
+                <Input
+                  value={form.rfc}
+                  maxLength={13}
+                  onChange={(e) => set({ rfc: e.target.value.toUpperCase() })}
+                  placeholder="Se imprime en el gafete"
+                />
               </Field>
               <Field label="Nombre(s)" required>
                 <Input value={form.firstName} onChange={(e) => set({ firstName: e.target.value })} />
@@ -425,6 +442,7 @@ function blank(employeeNumber: string, hireDate: string, branchId?: string, sche
     status: 'active' as Employee['status'],
     scheduleId: scheduleId ?? '',
     pin: '',
+    rfc: '',
     curp: '',
     address: '',
     emergencyName: '',

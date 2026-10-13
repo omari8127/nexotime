@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Download, MoreHorizontal, Printer, Search, Upload, UserPlus, Users } from 'lucide-react'
+import { Download, MoreHorizontal, Printer, QrCode, Search, Upload, UserPlus, Users } from 'lucide-react'
 import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,6 +18,7 @@ import {
 import { Dropdown, DropdownItem } from '@/components/ui/dropdown'
 import { EmployeeStatusBadge } from '@/components/shared/badges'
 import { EmployeeFormDialog } from '@/components/employees/EmployeeFormDialog'
+import { QrPreviewDialog } from '@/components/employees/QrPreviewDialog'
 import { useScopedData, usePermissions } from '@/hooks/useScopedData'
 import { useDataStore } from '@/store/dataStore'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -64,6 +65,9 @@ export function EmployeesPage() {
   const [status, setStatus] = useState('all')
   const [addOpen, setAddOpen] = useState(false)
   const [editing, setEditing] = useState<Employee | undefined>()
+  // Kept as an id so the dialog shows the fresh codes right after "Regenerar códigos".
+  const [badgeId, setBadgeId] = useState<string | undefined>()
+  const badgeEmployee = useMemo(() => employees.find((e) => e.id === badgeId), [employees, badgeId])
 
   const scheduleById = useMemo(() => new Map(schedules.map((s) => [s.id, s])), [schedules])
   const branchById = useMemo(() => new Map(allBranches.map((b) => [b.id, b])), [allBranches])
@@ -77,7 +81,7 @@ export function EmployeesPage() {
       .filter((e) => (status === 'all' ? true : e.status === status))
       .filter((e) =>
         q
-          ? [e.fullName, e.employeeNumber, e.position, e.department]
+          ? [e.fullName, e.employeeNumber, e.rfc ?? '', e.position, e.department]
               .join(' ')
               .toLowerCase()
               .includes(q)
@@ -90,8 +94,8 @@ export function EmployeesPage() {
     const list = filtered.filter((e) => e.status === 'active')
     const result = await printCredentials(list, company.name)
     if (result === 'blocked') toast.error('No se pudo abrir la impresión', 'Permite las ventanas emergentes para este sitio.')
-    else if (result === 'empty') toast.info('Sin credenciales', 'Ningún empleado de la lista tiene códigos activos.')
-    else toast.success('Credenciales listas', `${list.length} ${list.length === 1 ? 'credencial' : 'credenciales'} para imprimir (tamaño tarjeta).`)
+    else if (result === 'empty') toast.info('Sin gafetes', 'Ningún empleado de la lista tiene códigos activos.')
+    else toast.success('Gafetes listos', `${list.length} ${list.length === 1 ? 'gafete' : 'gafetes'} para imprimir (tamaño tarjeta).`)
   }
 
   const handleExport = () => {
@@ -100,6 +104,7 @@ export function EmployeesPage() {
       [
         { key: 'number', header: 'Número' },
         { key: 'name', header: 'Empleado' },
+        { key: 'rfc', header: 'RFC' },
         { key: 'position', header: 'Puesto' },
         { key: 'department', header: 'Departamento' },
         { key: 'branch', header: 'Sucursal' },
@@ -109,6 +114,7 @@ export function EmployeesPage() {
       filtered.map((e) => ({
         number: e.employeeNumber,
         name: e.fullName,
+        rfc: e.rfc ?? '',
         position: e.position,
         department: e.department,
         branch: branchById.get(e.branchId)?.name ?? '—',
@@ -129,7 +135,7 @@ export function EmployeesPage() {
           <>
             <Button variant="secondary" onClick={handlePrintBadges}>
               <Printer className="h-4 w-4" />
-              Credenciales
+              Gafetes
             </Button>
             <Button variant="secondary" onClick={handleExport}>
               <Download className="h-4 w-4" />
@@ -155,7 +161,7 @@ export function EmployeesPage() {
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3">
           <p className="text-sm">
             <b className="font-semibold">{legacy.length} {legacy.length === 1 ? 'empleado tiene' : 'empleados tienen'} un código QR antiguo</b>
-            , fácil de adivinar. Regénéralos por códigos aleatorios y vuelve a imprimir sus credenciales.
+            , fácil de adivinar. Regénéralos por códigos aleatorios y vuelve a imprimir sus gafetes.
           </p>
           <Button variant="secondary" size="sm" onClick={() => setLegacyOpen(true)}>
             Regenerar códigos
@@ -170,7 +176,7 @@ export function EmployeesPage() {
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar por nombre, número, puesto o departamento"
+              placeholder="Buscar por nombre, número, RFC, puesto o departamento"
               className="pl-9"
             />
           </div>
@@ -230,7 +236,7 @@ export function EmployeesPage() {
                 <TableHead className="hidden lg:table-cell">Sucursal</TableHead>
                 <TableHead className="hidden lg:table-cell">Horario</TableHead>
                 <TableHead>Estado</TableHead>
-                <TableHead className="w-10" />
+                <TableHead className="w-20" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -268,7 +274,16 @@ export function EmployeesPage() {
                     <TableCell>
                       <EmployeeStatusBadge status={e.status} />
                     </TableCell>
-                    <TableCell onClick={(ev) => ev.stopPropagation()}>
+                    <TableCell className="whitespace-nowrap" onClick={(ev) => ev.stopPropagation()}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Gafete con QR"
+                        aria-label={`Gafete con QR de ${e.fullName}`}
+                        onClick={() => setBadgeId(e.id)}
+                      >
+                        <QrCode className="h-4 w-4" />
+                      </Button>
                       <Dropdown
                         trigger={
                           <Button variant="ghost" size="icon">
@@ -325,15 +340,22 @@ export function EmployeesPage() {
         open={legacyOpen}
         onOpenChange={setLegacyOpen}
         title="Regenerar códigos antiguos"
-        description={`Se crearán códigos QR y de barras nuevos para ${legacy.length} ${legacy.length === 1 ? 'empleado' : 'empleados'}. Los gafetes impresos con los códigos anteriores dejarán de funcionar; imprime los nuevos desde «Credenciales».`}
+        description={`Se crearán códigos QR y de barras nuevos para ${legacy.length} ${legacy.length === 1 ? 'empleado' : 'empleados'}. Los gafetes impresos con los códigos anteriores dejarán de funcionar; imprime los nuevos desde «Gafetes».`}
         confirmLabel="Regenerar"
         onConfirm={() => {
           for (const e of legacy) regenerate(e.id, currentUser)
-          toast.success('Códigos regenerados', 'Imprime las credenciales nuevas desde «Credenciales».')
+          toast.success('Códigos regenerados', 'Imprime los gafetes nuevos desde «Gafetes».')
           setLegacyOpen(false)
         }}
       />
       <ImportEmployeesDialog open={importOpen} onOpenChange={setImportOpen} />
+      {badgeEmployee ? (
+        <QrPreviewDialog
+          open
+          onOpenChange={(o) => !o && setBadgeId(undefined)}
+          employee={badgeEmployee}
+        />
+      ) : null}
     </div>
   )
 }

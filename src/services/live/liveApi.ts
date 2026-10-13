@@ -274,6 +274,7 @@ export async function liveUpdateEmployee(id: string, patch: Partial<Employee>) {
   if (patch.scheduleId !== undefined) row.schedule_id = patch.scheduleId
   if (patch.identifications !== undefined) row.identifications = patch.identifications
   if (patch.pin !== undefined) row.pin = patch.pin
+  if (patch.rfc !== undefined) row.rfc = patch.rfc
   if (patch.curp !== undefined) row.curp = patch.curp
   if (patch.address !== undefined) row.address = patch.address
   if (patch.emergencyContact !== undefined) row.emergency_contact = patch.emergencyContact

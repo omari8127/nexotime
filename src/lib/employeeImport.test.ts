@@ -23,6 +23,7 @@ const row = (overrides: Partial<Record<(typeof F)[keyof typeof F], string>> = {}
   [F.phone]: '',
   [F.email]: '',
   [F.curp]: '',
+  [F.rfc]: '',
   ...overrides,
 })
 
@@ -72,6 +73,14 @@ describe('parseEmployeeImportRows', () => {
     expect(parseEmployeeImportRows(headers, [row({ [F.pin]: '12' })], ctx).rows[0].errors.length).toBeGreaterThan(0)
     expect(parseEmployeeImportRows(headers, [row({ [F.pin]: '' })], ctx).validCount).toBe(1)
     expect(parseEmployeeImportRows(headers, [row({ [F.email]: 'no-es-correo' })], ctx).rows[0].errors.length).toBeGreaterThan(0)
+  })
+
+  it('el RFC es opcional, se limpia a mayúsculas sin espacios y se rechaza si no tiene forma de RFC', () => {
+    expect(parseEmployeeImportRows(headers, [row()], ctx).rows[0].input?.rfc).toBeUndefined()
+    const ok = parseEmployeeImportRows(headers, [row({ [F.rfc]: ' catl890914-taa ' })], ctx)
+    expect(ok.rows[0].input?.rfc).toBe('CATL890914TAA')
+    const bad = parseEmployeeImportRows(headers, [row({ [F.rfc]: 'ABC123' })], ctx)
+    expect(bad.rows[0].errors.some((e) => e.includes('RFC'))).toBe(true)
   })
 
   it('tolera encabezados con mayúsculas distintas a la plantilla', () => {

@@ -130,7 +130,7 @@ export function EmployeeProfilePage() {
             ) : null}
             <Button variant="secondary" onClick={() => setQrOpen(true)}>
               <QrCode className="h-4 w-4" />
-              Credencial
+              Gafete
             </Button>
             {can('employees.edit') ? (
               <Button onClick={() => setEditOpen(true)}>
@@ -429,6 +429,7 @@ export function EmployeeProfilePage() {
                     .join(' · ') || 'Ninguno'
                 }
               />
+              <Info label="RFC" value={employee.rfc || 'No registrado'} />
               <Info label="CURP" value={employee.curp ?? 'No registrado'} />
               <Info label="Dirección" value={employee.address ?? 'No registrada'} />
               <Info

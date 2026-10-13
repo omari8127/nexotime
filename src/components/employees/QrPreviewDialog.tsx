@@ -14,10 +14,10 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { useDataStore } from '@/store/dataStore'
 import { usePermissions } from '@/hooks/useScopedData'
 import { barcodeSvg, credentialValue, qrSvg } from '@/lib/credentials'
-import { printCredentials } from '@/lib/credentialPrint'
+import { credentialFacts, printCredentials } from '@/lib/credentialPrint'
 import type { Employee } from '@/types'
 
-/** The employee's credential: real QR + Code 128 barcode, printable as a CR80 badge. */
+/** The employee's badge: real QR + Code 128 barcode, employee ID and RFC, printable in CR80 size. */
 export function QrPreviewDialog({
   open,
   onOpenChange,
@@ -63,9 +63,9 @@ export function QrPreviewDialog({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Credencial de {employee.firstName}</DialogTitle>
+            <DialogTitle>Gafete de {employee.firstName}</DialogTitle>
             <DialogDescription>
-              Código QR y código de barras únicos para registrar asistencia en el reloj checador.
+              Así se imprime: su código QR para el reloj checador, su ID de empleado y su RFC.
             </DialogDescription>
           </DialogHeader>
 
@@ -75,12 +75,18 @@ export function QrPreviewDialog({
                 {companyName}
               </p>
               <p className="mt-2 text-base font-semibold leading-tight">{employee.fullName}</p>
-              <p className="mt-0.5 text-[13px] text-slate-500">
-                {employee.employeeNumber} · {employee.position}
-              </p>
+              <p className="mt-0.5 truncate text-[13px] text-slate-500">{employee.position}</p>
+              <dl className="mt-2 space-y-0.5">
+                {credentialFacts(employee).map((f) => (
+                  <div key={f.label} className="flex items-baseline gap-2">
+                    <dt className="w-7 text-[10px] font-bold tracking-wide text-slate-500">{f.label}</dt>
+                    <dd className="text-sm font-semibold tabular-nums">{f.value}</dd>
+                  </div>
+                ))}
+              </dl>
               {bar ? (
                 <div
-                  className="mt-auto pt-4 [&_svg]:h-auto [&_svg]:max-h-14 [&_svg]:w-full"
+                  className="mt-auto pt-3 [&_svg]:h-auto [&_svg]:max-h-14 [&_svg]:w-full"
                   dangerouslySetInnerHTML={{ __html: barcodeSvg(bar, { height: 34 }) }}
                 />
               ) : (
@@ -99,8 +105,13 @@ export function QrPreviewDialog({
             )}
           </div>
 
+          {!employee.rfc && can('employees.edit') ? (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Este empleado no tiene RFC registrado: agrégalo desde «Editar» para que salga en el gafete.
+            </p>
+          ) : null}
           <p className="mt-3 text-xs text-muted-foreground">
-            ¿Se perdió la credencial? Regenera los códigos: los anteriores dejan de funcionar al instante.
+            ¿Se perdió el gafete? Regenera los códigos: los anteriores dejan de funcionar al instante.
           </p>
 
           <DialogFooter>
@@ -112,7 +123,7 @@ export function QrPreviewDialog({
             ) : null}
             <Button onClick={print} disabled={!qr && !bar}>
               <Printer className="h-4 w-4" />
-              Imprimir credencial
+              Imprimir gafete
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -202,6 +202,7 @@ export function employeeFromRow(row: Record<string, unknown>): Employee {
     scheduleId: row.schedule_id as string,
     identifications: (row.identifications as EmployeeIdentification[]) ?? [],
     pin: row.pin as string | undefined,
+    rfc: (row.rfc as string | null) || undefined,
     curp: row.curp as string | undefined,
     address: row.address as string | undefined,
     emergencyContact: row.emergency_contact as Employee['emergencyContact'],
@@ -228,6 +229,9 @@ export function employeeToRow(e: Employee) {
     schedule_id: e.scheduleId,
     identifications: e.identifications,
     pin: e.pin ?? null,
+    // Only sent when there is one: a project that has not run migration 007 yet
+    // (no "rfc" column) must still be able to create employees.
+    ...(e.rfc ? { rfc: e.rfc } : {}),
     curp: e.curp ?? null,
     address: e.address ?? null,
     emergency_contact: e.emergencyContact ?? null,

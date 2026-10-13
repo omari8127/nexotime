@@ -10,6 +10,7 @@ Ejecuta en el **SQL Editor** de tu proyecto de Supabase, en este orden y una sol
 4. `migrations/004_suscripciones.sql` — plan, estado de la suscripción y bitácora de pagos por empresa (Fase 1 del reemplazo del servidor de licencias; la app todavía no la usa, ver `docs/ESTADO.md`).
 5. `migrations/005_sucursales_coordenadas.sql` — latitud/longitud de cada sucursal, para que el reloj checador muestre la ubicación real registrada en vez de depender del GPS del dispositivo.
 6. `migrations/006_integracion_google_drive.sql` — tabla donde cada empresa guarda su propia conexión a Google Drive (ver § Integraciones más abajo).
+7. `migrations/007_empleados_rfc.sql` — RFC opcional de cada empleado, que se imprime en su gafete junto al QR y al número de empleado.
 
 Las migraciones se pueden volver a correr sin dañar nada.
 

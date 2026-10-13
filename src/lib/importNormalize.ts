@@ -14,6 +14,12 @@ export function normalizeKey(s: string): string {
     .replace(/\s+/g, ' ')
 }
 
+/** "catl 890914-taa" → "CATL890914TAA", or null if it does not have the shape of an RFC (12 or 13 characters). */
+export function normalizeRfc(raw: string): string | null {
+  const s = raw.toUpperCase().replace(/[\s.-]/g, '')
+  return /^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/.test(s) ? s : null
+}
+
 function isValidISODate(iso: string): boolean {
   const d = new Date(`${iso}T00:00:00Z`)
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === iso

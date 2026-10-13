@@ -218,6 +218,7 @@ export interface Employee {
   identifications: EmployeeIdentification[]
   pin?: string // demo only, never store plaintext in production
   /** Optional HR fields — deliberately not required. */
+  rfc?: string // printed on the badge
   curp?: string
   address?: string
   emergencyContact?: {

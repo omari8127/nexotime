@@ -109,6 +109,7 @@ export interface NewEmployeeInput {
   scheduleId: string
   identifications: Employee['identifications']
   pin?: string
+  rfc?: string
   curp?: string
   address?: string
   emergencyContact?: Employee['emergencyContact']
@@ -416,6 +417,7 @@ export const useDataStore = create<DataState>((set, get) => {
     scheduleId: input.scheduleId,
     identifications: input.identifications,
     pin: input.pin || undefined,
+    rfc: input.rfc || undefined,
     curp: input.curp || undefined,
     address: input.address || undefined,
     emergencyContact: input.emergencyContact,

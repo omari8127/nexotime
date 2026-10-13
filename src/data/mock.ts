@@ -242,7 +242,7 @@ function makeEmployee(bp: EmpBlueprint, active = true): Employee {
   const fullName = `${bp.first} ${bp.p}${maternal}`
   const seed = 1000 + counter
   const idr = mulberry32(seed)
-  return {
+  const employee: Employee = {
     id: `emp_${counter}`,
     companyId: COMPANY_ID,
     branchId: bp.branchId,
@@ -262,6 +262,12 @@ function makeEmployee(bp: EmpBlueprint, active = true): Employee {
     pin: idr() > 0.3 ? String(randInt(1000, 9999)) : undefined,
     curp: idr() > 0.7 ? undefined : `${bp.p.slice(0, 2).toUpperCase()}${bp.m.slice(0, 1).toUpperCase() || 'X'}${bp.first.slice(0, 1).toUpperCase()}${randInt(80, 99)}${String(randInt(1, 12)).padStart(2, '0')}${String(randInt(1, 28)).padStart(2, '0')}HBCXXX0${randInt(1, 9)}`,
   }
+  // Same first 10 characters as the CURP, like a real RFC. No extra random draws, so the rest of the seed stays the same.
+  if (employee.curp) {
+    const initials = employee.curp.slice(0, 10).normalize('NFD').replace(/\p{Diacritic}/gu, '')
+    employee.rfc = `${initials}${seed.toString(36).toUpperCase().padStart(3, '0').slice(-3)}`
+  }
+  return employee
 }
 
 for (const bp of NAMED) employees.push(makeEmployee(bp))

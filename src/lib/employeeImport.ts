@@ -3,7 +3,7 @@
  * spreadsheet the customer filled in before any employee is actually created.
  */
 import { generateQrValue } from '@/lib/credentials'
-import { normalizeDate, normalizeKey } from '@/lib/importNormalize'
+import { normalizeDate, normalizeKey, normalizeRfc } from '@/lib/importNormalize'
 import type { SheetColumn, WorkbookPayload } from '@/services/exportService'
 import { buildWorkbookPayload } from '@/services/exportService'
 import type { NewEmployeeInput } from '@/store/dataStore'
@@ -22,6 +22,7 @@ export const EMPLOYEE_IMPORT_FIELDS = {
   phone: 'Teléfono',
   email: 'Correo',
   curp: 'CURP (opcional)',
+  rfc: 'RFC (opcional)',
 } as const
 
 type FieldKey = keyof typeof EMPLOYEE_IMPORT_FIELDS
@@ -71,6 +72,7 @@ export function buildEmployeeImportTemplate(ctx: {
     [EMPLOYEE_IMPORT_FIELDS.phone]: '5512345678',
     [EMPLOYEE_IMPORT_FIELDS.email]: 'juan.perez@empresa.com',
     [EMPLOYEE_IMPORT_FIELDS.curp]: '',
+    [EMPLOYEE_IMPORT_FIELDS.rfc]: 'PELJ900115AB1',
   }
   const sheet = buildWorkbookPayload('Empleados', columns, [example])
   const instructions = buildWorkbookPayload(
@@ -93,6 +95,7 @@ export function buildEmployeeImportTemplate(ctx: {
       },
       { campo: EMPLOYEE_IMPORT_FIELDS.hireDate, nota: 'Formato AAAA-MM-DD. Si se deja vacío se usa la fecha de hoy.' },
       { campo: EMPLOYEE_IMPORT_FIELDS.pin, nota: 'Opcional, exactamente 4 dígitos. Sirve para checar por número de empleado.' },
+      { campo: EMPLOYEE_IMPORT_FIELDS.rfc, nota: 'Opcional, 12 o 13 caracteres. Se imprime en el gafete del empleado.' },
       { campo: 'General', nota: 'No borres ni cambies los encabezados de la primera fila de la hoja «Empleados». Borra la fila de ejemplo antes de subir tu lista real. El rostro y el código de barras se registran después, desde el perfil de cada empleado.' },
     ],
   )
@@ -148,6 +151,10 @@ export function parseEmployeeImportRows(
     const email = val('email')
     if (email && !/^\S+@\S+\.\S+$/.test(email)) errors.push('El correo no es válido.')
 
+    const rawRfc = val('rfc')
+    const rfc = rawRfc ? normalizeRfc(rawRfc) : null
+    if (rawRfc && !rfc) errors.push('El RFC no es válido (12 o 13 caracteres), o déjalo vacío.')
+
     const preview = { name: [firstName, lastNamePaternal].filter(Boolean).join(' ') || `Fila ${rowNumber}`, number: employeeNumber || '—', branch: branchName || '—', schedule: scheduleName || '—' }
 
     if (errors.length > 0 || !branchId || !scheduleId || !hireDate) return { rowNumber, errors, preview }
@@ -174,6 +181,7 @@ export function parseEmployeeImportRows(
         { method: 'face', enabled: false },
       ],
       curp: val('curp') || undefined,
+      rfc: rfc || undefined,
     }
     return { rowNumber, errors: [], input, preview }
   })
