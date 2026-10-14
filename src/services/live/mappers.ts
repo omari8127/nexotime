@@ -153,8 +153,9 @@ export function branchToPatch(patch: Partial<Branch>): Record<string, unknown> {
   if (patch.city !== undefined) row.city = patch.city
   if (patch.phone !== undefined) row.phone = patch.phone
   if (patch.active !== undefined) row.active = patch.active
-  if (patch.lat !== undefined) row.lat = patch.lat
-  if (patch.lng !== undefined) row.lng = patch.lng
+  // The form always sends both keys: an empty one means "remove the point", which must reach the database.
+  if ('lat' in patch) row.lat = patch.lat ?? null
+  if ('lng' in patch) row.lng = patch.lng ?? null
   return row
 }
 
@@ -207,6 +208,7 @@ export function employeeFromRow(row: Record<string, unknown>): Employee {
     identifications: (row.identifications as EmployeeIdentification[]) ?? [],
     pin: row.pin as string | undefined,
     rfc: (row.rfc as string | null) || undefined,
+    remotePunch: row.remote_punch === true || undefined,
     curp: row.curp as string | undefined,
     address: row.address as string | undefined,
     emergencyContact: row.emergency_contact as Employee['emergencyContact'],
@@ -236,6 +238,8 @@ export function employeeToRow(e: Employee) {
     // Only sent when there is one: a project that has not run migration 007 yet
     // (no "rfc" column) must still be able to create employees.
     ...(e.rfc ? { rfc: e.rfc } : {}),
+    // Same for "remote_punch" (migration 013).
+    ...(e.remotePunch ? { remote_punch: true } : {}),
     curp: e.curp ?? null,
     address: e.address ?? null,
     emergency_contact: e.emergencyContact ?? null,

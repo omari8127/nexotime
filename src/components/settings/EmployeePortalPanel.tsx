@@ -7,6 +7,7 @@ import { toast } from '@/components/ui/toast'
 import { useDataStore } from '@/store/dataStore'
 import { usePermissions } from '@/hooks/useScopedData'
 import { qrSvg } from '@/lib/credentials'
+import { PortalZoneSettings } from '@/components/settings/PortalZoneSettings'
 
 /**
  * Configuración → Portal de empleados: the code and link the company hands to its people so they
@@ -101,6 +102,8 @@ export function EmployeePortalPanel() {
             }}
           />
         </div>
+
+        <PortalZoneSettings />
 
         <div className="grid gap-5 sm:grid-cols-[minmax(0,1fr)_auto]">
           <div className="space-y-4">

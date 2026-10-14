@@ -16,6 +16,7 @@ Ejecuta en el **SQL Editor** de tu proyecto de Supabase, en este orden y una sol
 10. `migrations/010_portal_bloqueo_progresivo_y_topes.sql` — portal del empleado: bloqueo progresivo por intentos y topes.
 11. `migrations/011_cuenta_reloj_checador.sql` — rol «Reloj checador (tablet)» para la cuenta dedicada de la tablet.
 12. `migrations/012_borrar_rostros_motor_anterior.sql` — **una sola vez, al cambiar a Human**: borra las muestras de rostro del motor anterior (ya no se pueden comparar). Esos empleados quedan como «No registrado» y registran su rostro de nuevo. No toca los rostros ya registrados con Human.
+13. `migrations/013_portal_zona_gps.sql` — portal del empleado: solo se checa desde el celular con el GPS real del teléfono (precisión de 100 m o mejor) y cerca de la sucursal (150 m por defecto; se ajusta en **Configuración → Portal de empleados**). Agrega «Puede checar desde cualquier lugar» por empleado (home office, ventas, choferes). Antes, pon el punto exacto de cada sucursal en **Sucursales**.
 
 Las migraciones se pueden volver a correr sin dañar nada.
 
@@ -34,6 +35,7 @@ El empleado no tiene cuenta de Supabase. Todo pasa por las funciones `employee_p
 - `employee_portal_login` comprueba código de empresa, número y PIN, y entrega una llave de sesión de 12 horas (en la base solo se guarda su huella). Cinco intentos fallidos bloquean a ese empleado 15 minutos.
 - Con esa llave, las demás funciones solo leen y escriben lo de **ese** empleado: su día de hoy, sus registros recientes y sus solicitudes de vacaciones.
 - Cada movimiento exige una foto tomada en ese momento y se compara con la hora del servidor (±5 minutos): cambiar el reloj del teléfono no sirve para checar a otra hora.
+- Desde la migración 013, cada movimiento exige la ubicación del GPS del teléfono y se mide contra el punto de su sucursal: fuera de la zona no se registra (o se marca «Fuera de zona», según la empresa).
 - Las tablas `employee_portal_sessions` y `employee_portal_attempts` no son legibles desde el navegador.
 - Para apagarlo: **Configuración → Portal de empleados**. El reloj checador no se ve afectado.
 

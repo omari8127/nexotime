@@ -8,7 +8,9 @@ import {
   Loader2,
   LogOut,
   MapPin,
+  MapPinCheck,
   MapPinOff,
+  MapPinX,
   Plane,
   RefreshCw,
   ScanFace,
@@ -24,12 +26,15 @@ import { AnimatedCheck } from '@/components/shared/SuccessDialog'
 import { AttendanceStatusBadge, IncidenciaStatusBadge } from '@/components/shared/badges'
 import { PunchPill } from '@/components/attendance/PunchPill'
 import { FaceVerifyFlow } from '@/components/clock/FaceVerifyFlow'
+import { MiniMap } from '@/components/shared/MiniMap'
 import { useGeolocation } from '@/hooks/useGeolocation'
 import { PUNCH_TYPE_LABEL, WEEKDAY_LABEL, canRegisterPunch, presenceOf, weekdayFromISO } from '@/lib/attendance'
 import { PUNCH_ORDER } from '@/lib/dayEdit'
 import { faceCandidates } from '@/lib/face'
+import { formatDistance } from '@/lib/geo'
 import { resolveKiosk } from '@/lib/kiosk'
 import { buildPortalPunch } from '@/lib/portalPunch'
+import { checkPortalZone, portalPunchLocation, portalZoneProblem, resolvePortalZone, type PortalZoneCheck } from '@/lib/portalZone'
 import { PUNCH_STYLE, compactDuration } from '@/lib/punchStyle'
 import { inTimezone } from '@/lib/today'
 import { countVacationDays, vacationBalance } from '@/lib/vacations'
@@ -37,7 +42,7 @@ import { cn, formatClock24, formatLongDate, formatShortDate, formatTime12 } from
 import type { PhotoCapture } from '@/lib/photoEvidence'
 import { PortalSessionError, PortalStaleError, portalApi, type PortalState } from '@/services/portal/portalApi'
 import { readPortalToken, savePortalToken } from '@/services/portal/portalSession'
-import type { AttendanceRecord, Incidencia, PunchType } from '@/types'
+import type { AttendanceRecord, Incidencia, PunchLocation, PunchType } from '@/types'
 
 type Tab = 'checar' | 'asistencia' | 'vacaciones'
 
@@ -72,10 +77,10 @@ export function EmployeePortalPage() {
   const [tab, setTab] = useState<Tab>('checar')
   const [capture, setCapture] = useState<PunchType | null>(null)
   const [saving, setSaving] = useState(false)
-  const [done, setDone] = useState<{ type: PunchType; time: string; photo: string } | null>(null)
+  const [done, setDone] = useState<{ type: PunchType; time: string; photo: string; location?: PunchLocation } | null>(null)
   /** Server clock − phone clock, so the hour shown and stamped is the company's, not the phone's. */
   const offset = useRef(0)
-  const { location, denied: locationDenied } = useGeolocation()
+  const { location, denied: locationDenied, refresh: refreshLocation } = useGeolocation()
 
   const leave = useCallback(
     (message?: string) => {
@@ -140,6 +145,11 @@ export function EmployeePortalPage() {
   const todayRecord = state.attendance.find((r) => r.date === state.today)
   const kiosk = resolveKiosk(company.attendanceSettings)
   const enrolled = faceCandidates([employee]).length > 0
+  // Where they are against their branch's allowed zone: the database checks it again on every punch.
+  const branchPoint =
+    state.branch?.lat != null && state.branch?.lng != null ? { lat: state.branch.lat, lng: state.branch.lng } : undefined
+  const zoneCheck = checkPortalZone(location, branchPoint, resolvePortalZone(company.attendanceSettings), !!employee.remotePunch)
+  const zoneProblem = portalZoneProblem(zoneCheck, state.branch?.name)
 
   const submit = async (type: PunchType, photo: PhotoCapture) => {
     if (saving) return
@@ -158,7 +168,7 @@ export function EmployeePortalPage() {
             time: formatClock24(now()),
             method: 'app',
             photoEvidence: { id: photo.id, capturedAt: photo.capturedAt },
-            location: location ?? undefined,
+            location: location ? portalPunchLocation(location, zoneCheck) : undefined,
           },
           today: current.today,
         })
@@ -177,7 +187,8 @@ export function EmployeePortalPage() {
       setState((s) =>
         s ? { ...s, attendance: [record, ...s.attendance.filter((r) => r.id !== record.id && r.date !== record.date)] } : s,
       )
-      setDone({ type, time: record.punches.find((p) => p.type === type)?.time ?? formatClock24(now()), photo: photo.dataUrl })
+      const made = record.punches.find((p) => p.type === type)
+      setDone({ type, time: made?.time ?? formatClock24(now()), photo: photo.dataUrl, location: made?.location })
     } catch (e) {
       if (e instanceof PortalSessionError) leave(e.message)
       else toast.error('No se registró', e instanceof Error ? e.message : 'Inténtalo de nuevo.')
@@ -232,10 +243,18 @@ export function EmployeePortalPage() {
                 state={state}
                 todayRecord={todayRecord}
                 now={now}
-                hasLocation={!!location}
+                zone={zoneCheck}
+                zoneProblem={zoneProblem}
+                anywhere={!!employee.remotePunch}
+                onRefreshLocation={refreshLocation}
                 locationDenied={locationDenied}
                 enrolled={enrolled}
-                onPick={setCapture}
+                onPick={(type) => {
+                  // A fresh reading while the photo is taken: the movement carries where they are now.
+                  refreshLocation()
+                  if (zoneProblem) toast.error('Todavía no puedes checar', zoneProblem)
+                  else setCapture(type)
+                }}
               />
             ) : tab === 'asistencia' ? (
               <HistoryPanel state={state} />
@@ -332,12 +351,15 @@ export function EmployeePortalPage() {
               <AnimatedCheck className="mx-auto h-20 w-20" />
               <h2 className="mt-3 text-xl font-semibold tracking-tight">¡{PUNCH_STYLE[done.type].label} registrada!</h2>
               <p className="mt-1 font-mono text-3xl font-bold tabular-nums">{formatTime12(done.time)}</p>
-              <div className="mt-4 flex items-center gap-3 rounded-xl border border-border bg-secondary/40 p-2.5 text-left">
-                <img src={done.photo} alt="Tu foto de verificación" className="h-14 w-14 rounded-lg object-cover" />
-                <p className="text-xs text-muted-foreground">
-                  Foto guardada con el movimiento{location ? ' y tu ubicación' : ''}. Tu empresa puede revisarla.
-                </p>
+              <div className={cn('mt-4 grid gap-2.5', done.location ? 'grid-cols-2' : 'grid-cols-1')}>
+                <img src={done.photo} alt="Tu foto de verificación" className="h-32 w-full rounded-xl border border-border object-cover" />
+                {done.location ? (
+                  <MiniMap location={done.location} link className="h-32 w-full rounded-xl border border-border" />
+                ) : null}
               </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Foto guardada con el movimiento{done.location ? ' y tu ubicación' : ''}. Tu empresa puede revisarla.
+              </p>
               <Button variant="success" size="lg" className="mt-5 w-full" autoFocus onClick={() => setDone(null)}>
                 Listo
               </Button>
@@ -374,7 +396,10 @@ function PunchPanel({
   state,
   todayRecord,
   now,
-  hasLocation,
+  zone,
+  zoneProblem,
+  anywhere,
+  onRefreshLocation,
   locationDenied,
   enrolled,
   onPick,
@@ -382,7 +407,12 @@ function PunchPanel({
   state: PortalState
   todayRecord?: AttendanceRecord
   now: () => Date
-  hasLocation: boolean
+  /** Where the phone is against the branch's allowed zone. */
+  zone: PortalZoneCheck
+  /** Why they cannot check in right now (no GPS, imprecise, too far); null when they can. */
+  zoneProblem: string | null
+  anywhere: boolean
+  onRefreshLocation: () => void
   locationDenied: boolean
   enrolled: boolean
   onPick: (type: PunchType) => void
@@ -399,23 +429,49 @@ function PunchPanel({
         <p className="mt-1.5 text-sm text-muted-foreground">{formatLongDate(new Date(`${state.today}T00:00:00`))}</p>
         <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
           <Badge variant={PRESENCE[presence].variant}>{PRESENCE[presence].label}</Badge>
-          <span
-            className={cn(
-              'inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium',
-              hasLocation ? 'bg-success/12 text-success' : 'bg-muted text-muted-foreground',
-            )}
-          >
-            {hasLocation ? <MapPin className="h-3 w-3" /> : <MapPinOff className="h-3 w-3" />}
-            {hasLocation ? 'Ubicación lista' : locationDenied ? 'Ubicación bloqueada' : 'Buscando ubicación…'}
-          </span>
+          <ZoneChip zone={zone} anywhere={anywhere} denied={locationDenied} />
         </div>
       </section>
+
+      <AnimatePresence initial={false}>
+        {zoneProblem ? (
+          <motion.div
+            key="zone-problem"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className={cn(
+              'flex items-start gap-2.5 overflow-hidden rounded-xl border px-3.5 py-3 text-sm leading-snug',
+              zone.kind === 'outside'
+                ? 'border-rose-300 bg-rose-50 text-rose-900 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-200'
+                : 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200',
+            )}
+          >
+            {zone.kind === 'outside' ? <MapPinX className="mt-0.5 h-5 w-5 shrink-0" /> : <MapPinOff className="mt-0.5 h-5 w-5 shrink-0" />}
+            <div className="min-w-0 flex-1">
+              <p>{zoneProblem}</p>
+              {locationDenied ? null : (
+                <button
+                  type="button"
+                  onClick={onRefreshLocation}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-white/70 px-2.5 py-1 text-xs font-semibold shadow-sm ring-1 ring-black/10 active:scale-95 dark:bg-white/10"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Volver a leer mi ubicación
+                </button>
+              )}
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       <section className="grid grid-cols-2 gap-3">
         {types.map((type, index) => {
           const style = PUNCH_STYLE[type]
           const made = punches.find((p) => p.type === type)
-          const blocked = canRegisterPunch(punches, type, settings)
+          const notNow = canRegisterPunch(punches, type, settings)
+          // Not possible today, or not from where the phone is right now.
+          const blocked = notNow || (!made && zoneProblem)
           return (
             <motion.button
               key={type}
@@ -438,7 +494,7 @@ function PunchPanel({
               <style.Icon className="h-7 w-7" />
               <span className="text-base font-semibold leading-tight">{style.label}</span>
               <span className="text-xs font-medium tabular-nums opacity-90">
-                {made ? formatTime12(made.time) : blocked ? 'No disponible' : 'Tocar para registrar'}
+                {made ? formatTime12(made.time) : notNow ? 'No disponible' : blocked ? 'Revisa tu ubicación' : 'Tocar para registrar'}
               </span>
             </motion.button>
           )
@@ -450,9 +506,43 @@ function PunchPanel({
         {enrolled
           ? 'Antes de registrar, la cámara compara tu rostro con el que tienes registrado y guarda la foto.'
           : 'Antes de registrar se toma una foto tuya. Se guarda con el movimiento y la revisa tu empresa.'}
-        {locationDenied ? ' Permite la ubicación en tu navegador para que quede registrado dónde checaste.' : ''}
+        {' Cada movimiento guarda tu ubicación real (GPS del celular).'}
       </p>
     </div>
+  )
+}
+
+/** One glance: can I check in from here? Green in the zone, amber waiting for GPS, red too far. */
+function ZoneChip({ zone, anywhere, denied }: { zone: PortalZoneCheck; anywhere: boolean; denied: boolean }) {
+  const look =
+    zone.kind === 'inside'
+      ? { Icon: MapPinCheck, tone: 'bg-success/12 text-success' }
+      : zone.kind === 'outside'
+        ? zone.blocked
+          ? { Icon: MapPinX, tone: 'bg-rose-500/12 text-rose-700 dark:text-rose-300' }
+          : { Icon: MapPinX, tone: 'bg-amber-400/20 text-amber-800 dark:text-amber-200' }
+        : zone.kind === 'imprecise' || denied
+          ? { Icon: MapPinOff, tone: 'bg-amber-400/20 text-amber-800 dark:text-amber-200' }
+          : { Icon: MapPin, tone: 'bg-muted text-muted-foreground' }
+  const text =
+    zone.kind === 'no_location'
+      ? denied
+        ? 'Ubicación bloqueada'
+        : 'Buscando tu ubicación…'
+      : zone.kind === 'imprecise'
+        ? `Esperando GPS preciso${zone.accuracy != null ? ` · ±${formatDistance(zone.accuracy)}` : ''}`
+        : zone.kind === 'outside'
+          ? `Fuera de tu zona · a ${formatDistance(zone.distance)}${zone.blocked ? '' : ' (se marcará)'}`
+          : anywhere
+            ? 'Puedes checar desde cualquier lugar'
+            : zone.checked && zone.distance != null
+              ? `En tu zona · a ${formatDistance(zone.distance)} de tu sucursal`
+              : 'Ubicación lista'
+  return (
+    <span className={cn('inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium', look.tone)}>
+      {zone.kind === 'no_location' && !denied ? <Loader2 className="h-3 w-3 animate-spin" /> : <look.Icon className="h-3 w-3" />}
+      {text}
+    </span>
   )
 }
 

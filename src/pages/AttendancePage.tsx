@@ -1,7 +1,29 @@
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { CalendarDays, CalendarPlus, Download, ListChecks, Search, SquarePen, X } from 'lucide-react'
+import {
+  Activity,
+  AlarmClock,
+  CalendarDays,
+  CalendarPlus,
+  CircleCheck,
+  CircleDashed,
+  CircleX,
+  ClipboardList,
+  Clock3,
+  Download,
+  LayoutList,
+  ListChecks,
+  LogIn,
+  LogOut,
+  RefreshCw,
+  Search,
+  SquarePen,
+  TrendingUp,
+  UserRound,
+  Utensils,
+  X,
+} from 'lucide-react'
 import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -32,8 +54,10 @@ import { toast } from '@/components/ui/toast'
 import { INCIDENCIA_META, INCIDENCIA_TYPES } from '@/data/incidencias'
 import { PUNCH_TYPE_LABEL, WEEKDAY_LABEL, lunchMinutes, weekdayFromISO } from '@/lib/attendance'
 import { PUNCH_LOG_TABS, buildPunchLog, matchesEmployee, type PunchLogTab } from '@/lib/punchLog'
-import { compactDuration } from '@/lib/punchStyle'
+import { PUNCH_STYLE, compactDuration } from '@/lib/punchStyle'
+import { restoreSession } from '@/services/live/liveApi'
 import { addDaysISO } from '@/lib/vacations'
+import { locationSource } from '@/lib/geo'
 import { cn, formatShortDate } from '@/lib/utils'
 import { useToday } from '@/hooks/useToday'
 import type { AttendanceRecord, AttendanceStatus, Incidencia, PunchType } from '@/types'
@@ -50,10 +74,36 @@ const STATUS_OPTIONS: Array<{ value: string; label: string }> = [
 type View = 'resumen' | 'checadas'
 const PAGE = 150
 
+/** Each kind of movement keeps its colour everywhere: green in, red out, orange lunch. */
+const LOG_TAB_STYLE: Record<PunchLogTab, { Icon: typeof LogIn; active: string; idle: string }> = {
+  entries: {
+    Icon: LogIn,
+    active: 'border-emerald-600 bg-emerald-600 text-white shadow-md shadow-emerald-600/30',
+    idle: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300',
+  },
+  exits: {
+    Icon: LogOut,
+    active: 'border-rose-600 bg-rose-600 text-white shadow-md shadow-rose-600/30',
+    idle: 'border-rose-500/40 bg-rose-500/10 text-rose-700 hover:bg-rose-500/20 dark:text-rose-300',
+  },
+  lunch: {
+    Icon: Utensils,
+    active: 'border-orange-500 bg-orange-500 text-white shadow-md shadow-orange-500/30',
+    idle: 'border-orange-500/40 bg-orange-500/10 text-orange-700 hover:bg-orange-500/20 dark:text-orange-300',
+  },
+  all: {
+    Icon: LayoutList,
+    active: 'border-indigo-600 bg-indigo-600 text-white shadow-md shadow-indigo-600/30',
+    idle: 'border-indigo-500/40 bg-indigo-500/10 text-indigo-700 hover:bg-indigo-500/20 dark:text-indigo-300',
+  },
+}
+
 export function AttendancePage() {
   const { employees, attendance, allBranches, schedules, incidencias } = useScopedData()
   const cancelIncidencia = useDataStore((s) => s.cancelIncidencia)
   const currentUser = useDataStore((s) => s.currentUser)
+  const mode = useDataStore((s) => s.mode)
+  const hydrateLive = useDataStore((s) => s.hydrateLive)
   const { can } = usePermissions()
   const canEdit = can('attendance.edit')
   const [params, setParams] = useSearchParams()
@@ -69,6 +119,9 @@ export function AttendancePage() {
   const [incType, setIncType] = useState('all')
   const [logTab, setLogTab] = useState<PunchLogTab>('entries')
   const [limit, setLimit] = useState(PAGE)
+  const [loading, setLoading] = useState(false)
+  /** Bumped by "Cargar": the photo thumbnails load right away and retry the ones that failed. */
+  const [reloadKey, setReloadKey] = useState(0)
   const [detail, setDetail] = useState<AttendanceRecord | undefined>()
   const [editing, setEditing] = useState<{ employeeId: string; date: string } | null>(null)
   const [addOpen, setAddOpen] = useState(false)
@@ -78,6 +131,10 @@ export function AttendancePage() {
   const empById = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees])
   const scheduleById = useMemo(() => new Map(schedules.map((s) => [s.id, s])), [schedules])
   const branchName = (id: string) => allBranches.find((b) => b.id === id)?.name ?? '—'
+  const branchPoint = (id: string) => {
+    const b = allBranches.find((x) => x.id === id)
+    return b?.lat != null && b?.lng != null ? { lat: b.lat, lng: b.lng } : undefined
+  }
 
   const departments = useMemo(
     () => [...new Set(employees.map((e) => e.department).filter(Boolean))].sort(),
@@ -123,6 +180,28 @@ export function AttendancePage() {
     () => buildPunchLog(attendance, employees, { from: start, to: end, tab: logTab, query, branchId }),
     [attendance, employees, start, end, logTab, query, branchId],
   )
+  const logCounts = useMemo(() => {
+    const count = (tab: PunchLogTab) =>
+      buildPunchLog(attendance, employees, { from: start, to: end, tab, query, branchId }).length
+    return { entries: count('entries'), exits: count('exits'), lunch: count('lunch'), all: count('all') }
+  }, [attendance, employees, start, end, query, branchId])
+
+  /** "Cargar": bring what was registered at the relojes and phones since this page opened, and the photos. */
+  const reload = async () => {
+    setLoading(true)
+    try {
+      if (mode === 'live') {
+        const bundle = await restoreSession()
+        if (bundle) hydrateLive(bundle)
+      }
+      setReloadKey((k) => k + 1)
+      toast.success('Registros actualizados', 'Se cargaron las checadas y las fotos más recientes.')
+    } catch {
+      toast.error('No se pudo cargar', 'Revisa tu conexión e inténtalo de nuevo.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const incidenciasInRange = useMemo(() => {
     return incidencias
@@ -169,6 +248,10 @@ export function AttendancePage() {
           { key: 'method', header: 'Medio' },
           { key: 'lat', header: 'Latitud' },
           { key: 'lng', header: 'Longitud' },
+          { key: 'accuracy', header: 'Precisión (m)' },
+          { key: 'source', header: 'Origen de la ubicación' },
+          { key: 'distance', header: 'Distancia a la sucursal (m)' },
+          { key: 'outside', header: 'Fuera de zona' },
           { key: 'photo', header: 'Foto' },
           { key: 'branch', header: 'Sucursal' },
         ],
@@ -181,6 +264,10 @@ export function AttendancePage() {
           method: punch.edited ? 'Ajuste manual' : METHOD_META[punch.method].label,
           lat: punch.location?.lat ?? '',
           lng: punch.location?.lng ?? '',
+          accuracy: punch.location?.accuracy ?? '',
+          source: punch.location ? (locationSource(punch.location) === 'gps' ? 'GPS del equipo' : 'Punto fijo de la sucursal') : '',
+          distance: punch.location?.distance ?? '',
+          outside: punch.location?.outside ? 'Sí' : '',
           photo: punch.photoEvidence ? 'Sí' : 'No',
           branch: branchName(record.branchId),
         })),
@@ -236,8 +323,14 @@ export function AttendancePage() {
         }}
       >
         <TabsList>
-          <TabsTrigger value="resumen">Resumen diario</TabsTrigger>
-          <TabsTrigger value="checadas">Registro de checadas</TabsTrigger>
+          <TabsTrigger value="resumen" className="gap-1.5">
+            <ClipboardList className="h-4 w-4" />
+            Resumen diario
+          </TabsTrigger>
+          <TabsTrigger value="checadas" className="gap-1.5">
+            <ListChecks className="h-4 w-4" />
+            Registro de checadas
+          </TabsTrigger>
         </TabsList>
       </Tabs>
 
@@ -318,43 +411,43 @@ export function AttendancePage() {
                 ]}
               />
             </div>
-            <div className="mt-3 flex flex-wrap gap-2 text-xs">
-              <Chip label="Presentes" value={counts.present} tone="text-success" />
-              <Chip label="Retardos" value={counts.late} tone="text-warning" />
-              <Chip label="Faltas" value={counts.absent} tone="text-destructive" />
-              <Chip label="Incompletos" value={counts.incomplete} tone="text-primary" />
-              <Chip label="Horas extra" value={counts.overtime} tone="text-success" />
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+              <Chip icon={CircleCheck} label="Presentes" value={counts.present} tone="bg-emerald-500/12 text-emerald-700 dark:text-emerald-300" />
+              <Chip icon={AlarmClock} label="Retardos" value={counts.late} tone="bg-amber-400/20 text-amber-800 dark:text-amber-200" />
+              <Chip icon={CircleX} label="Faltas" value={counts.absent} tone="bg-rose-500/12 text-rose-700 dark:text-rose-300" />
+              <Chip icon={CircleDashed} label="Incompletos" value={counts.incomplete} tone="bg-sky-500/12 text-sky-700 dark:text-sky-300" />
+              <Chip icon={TrendingUp} label="Horas extra" value={counts.overtime} tone="bg-violet-500/12 text-violet-700 dark:text-violet-300" />
+              <LoadButton loading={loading} onClick={() => void reload()} className="ml-auto" />
             </div>
           </>
         ) : (
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
             {PUNCH_LOG_TABS.map((t) => {
               const active = logTab === t.value
-              const tone =
-                t.value === 'entries'
-                  ? 'bg-emerald-600 border-emerald-600'
-                  : t.value === 'exits'
-                    ? 'bg-rose-600 border-rose-600'
-                    : t.value === 'lunch'
-                      ? 'bg-amber-500 border-amber-500'
-                      : 'bg-slate-700 border-slate-700'
+              const style = LOG_TAB_STYLE[t.value]
               return (
                 <button
                   key={t.value}
                   type="button"
+                  aria-pressed={active}
                   onClick={() => {
                     setLogTab(t.value)
                     setLimit(PAGE)
                   }}
                   className={cn(
-                    'rounded-md border px-3.5 py-1.5 text-sm font-semibold transition-all',
-                    active ? `${tone} text-white shadow-sm` : 'border-border bg-card text-muted-foreground hover:text-foreground',
+                    'inline-flex items-center gap-1.5 rounded-lg border px-3.5 py-1.5 text-sm font-semibold transition-all active:scale-95',
+                    active ? style.active : style.idle,
                   )}
                 >
+                  <style.Icon className="h-4 w-4" />
                   {t.label}
+                  <span className={cn('rounded-full px-1.5 text-[11px] font-bold tabular-nums', active ? 'bg-white/25' : 'bg-black/5 dark:bg-white/10')}>
+                    {logCounts[t.value]}
+                  </span>
                 </button>
               )
             })}
+            <LoadButton loading={loading} onClick={() => void reload()} />
             <span className="ml-auto text-xs text-muted-foreground">
               {logRows.length} {logRows.length === 1 ? 'checada' : 'checadas'} · {periodLabel}
             </span>
@@ -379,7 +472,7 @@ export function AttendancePage() {
                 description="No hay movimientos que coincidan con el periodo y la búsqueda."
               />
             ) : (
-              <PunchLogTable rows={logRows.slice(0, limit)} branchName={branchName} />
+              <PunchLogTable rows={logRows.slice(0, limit)} branchName={branchName} branchPoint={branchPoint} reloadKey={reloadKey} />
             )
           ) : (
             <>
@@ -446,15 +539,15 @@ export function AttendancePage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Empleado</TableHead>
-                        <TableHead>Fecha</TableHead>
-                        <TableHead className="text-center">Entrada</TableHead>
-                        <TableHead className="hidden text-center md:table-cell">Salida a comer</TableHead>
-                        <TableHead className="hidden text-center md:table-cell">Regreso</TableHead>
-                        <TableHead className="text-center">Salida</TableHead>
-                        <TableHead className="text-center">Horas</TableHead>
+                        <TableHead><HeadLabel icon={UserRound}>Empleado</HeadLabel></TableHead>
+                        <TableHead><HeadLabel icon={CalendarDays}>Fecha</HeadLabel></TableHead>
+                        <TableHead className="text-center"><HeadLabel icon={PUNCH_STYLE.entry.Icon} tone={PUNCH_STYLE.entry.text}>Entrada</HeadLabel></TableHead>
+                        <TableHead className="hidden text-center md:table-cell"><HeadLabel icon={PUNCH_STYLE.lunch_out.Icon} tone={PUNCH_STYLE.lunch_out.text}>Salida a comer</HeadLabel></TableHead>
+                        <TableHead className="hidden text-center md:table-cell"><HeadLabel icon={PUNCH_STYLE.lunch_in.Icon} tone={PUNCH_STYLE.lunch_in.text}>Regreso</HeadLabel></TableHead>
+                        <TableHead className="text-center"><HeadLabel icon={PUNCH_STYLE.exit.Icon} tone={PUNCH_STYLE.exit.text}>Salida</HeadLabel></TableHead>
+                        <TableHead className="text-center"><HeadLabel icon={Clock3} tone="text-blue-600 dark:text-blue-400">Horas</HeadLabel></TableHead>
                         <TableHead className="hidden text-center 2xl:table-cell">Comida</TableHead>
-                        <TableHead>Estado</TableHead>
+                        <TableHead><HeadLabel icon={Activity}>Estado</HeadLabel></TableHead>
                         {canEdit ? <TableHead className="sticky right-0 bg-card text-right">Acciones</TableHead> : null}
                       </TableRow>
                     </TableHeader>
@@ -577,11 +670,39 @@ export function AttendancePage() {
   )
 }
 
-function Chip({ label, value, tone }: { label: string; value: number; tone: string }) {
+function Chip({ icon: Icon, label, value, tone }: { icon: typeof LogIn; label: string; value: number; tone: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-secondary/40 px-2 py-1">
-      <span className={`font-semibold tabular-nums ${tone}`}>{value}</span>
-      <span className="text-muted-foreground">{label}</span>
+    <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-medium', tone)}>
+      <Icon className="h-3.5 w-3.5" />
+      <span className="font-bold tabular-nums">{value}</span>
+      {label}
     </span>
+  )
+}
+
+function HeadLabel({ icon: Icon, tone, children }: { icon: typeof LogIn; tone?: string; children: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <Icon className={cn('h-3.5 w-3.5', tone)} />
+      {children}
+    </span>
+  )
+}
+
+/** "Cargar": brings the newest movements (from the relojes and the phones) and their photos. */
+function LoadButton({ loading, onClick, className }: { loading: boolean; onClick: () => void; className?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={loading}
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-lg border border-teal-600 bg-teal-600 px-3.5 py-1.5 text-sm font-semibold text-white shadow-md shadow-teal-600/25 transition-all hover:bg-teal-700 active:scale-95 disabled:opacity-70',
+        className,
+      )}
+    >
+      <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
+      {loading ? 'Cargando…' : 'Cargar'}
+    </button>
   )
 }

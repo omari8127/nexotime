@@ -1,56 +1,100 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PunchLocation } from '@/types'
 
+/** Good enough to stop listening: a real GPS fix, not a guess from the network. */
+const GOOD_FIX_METERS = 25
+/** How long one "burst" keeps the GPS on looking for a better fix. */
+const BURST_MS = 30_000
+/** The device may have moved (a phone in someone's pocket): look again this often. */
+const REFRESH_MS = 120_000
+/** A fix older than this is replaced by any newer one, even a less precise one. */
+const STALE_MS = 90_000
+
 /**
- * Best-known device location, fetched in the background so a punch never
- * waits on a GPS fix. The kiosk sits in one fixed spot, so a single good fix
- * is enough.
+ * The device's best-known position, kept fresh in the background so a punch never waits for it.
  *
- * Why a punch can still land with no location: the auto-register countdown
- * (2–8 s, configurable) is often shorter than how long it takes a brand-new
- * browser profile to show its permission prompt, wait for someone to answer
- * it, and get a first fix. That first miss is expected — once this hook gets
- * one good fix it keeps it for the rest of the session, so every punch after
- * the first one on a given tablet carries a location. Network-based location
- * (enableHighAccuracy: false) is used on purpose: it resolves in roughly a
- * second via Wi-Fi/cell instead of GPS's much slower cold fix, and
- * block-level precision is all this needs.
+ * It asks for the *precise* position (GPS on a phone or tablet, Wi-Fi scanning on a PC) and keeps
+ * the most accurate fix it gets. The first answers are often rough — a browser may start with a
+ * guess from the network that is blocks or kilometers away — so it keeps listening for a while and
+ * replaces a rough fix with a better one. The accuracy travels with the position: whoever uses it
+ * (see `pickPunchLocation`) knows whether it is exact or only an area.
+ *
+ * The GPS is not left on all the time (battery, heat on a wall tablet): it works in short bursts,
+ * stops as soon as the fix is good, and looks again every couple of minutes and whenever the page
+ * comes back to the front.
+ *
+ * `refresh()` forgets what it had and reads again right now: the employee portal calls it when someone
+ * is about to check in, so the movement carries where they are at that moment, not a minute ago.
  */
 export function useGeolocation() {
   const [location, setLocation] = useState<PunchLocation | null>(null)
   const [denied, setDenied] = useState(false)
+  const restart = useRef<() => void>(() => {})
 
   useEffect(() => {
     if (!('geolocation' in navigator)) return
     let cancelled = false
-    let id: number
+    let watchId: number | null = null
+    let stopTimer: number | undefined
+    let best: { fix: PunchLocation; at: number } | null = null
 
-    const attempt = () => {
-      navigator.geolocation.getCurrentPosition(
+    const stop = () => {
+      if (watchId != null) navigator.geolocation.clearWatch(watchId)
+      watchId = null
+      window.clearTimeout(stopTimer)
+    }
+
+    const burst = () => {
+      if (cancelled || watchId != null) return
+      watchId = navigator.geolocation.watchPosition(
         (pos) => {
           if (cancelled) return
-          setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy })
+          const fix: PunchLocation = {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            accuracy: Math.round(pos.coords.accuracy),
+          }
+          const now = Date.now()
+          const better =
+            !best || now - best.at > STALE_MS || (fix.accuracy ?? Infinity) <= (best.fix.accuracy ?? Infinity)
+          if (better) {
+            best = { fix, at: now }
+            setLocation(fix)
+          }
           setDenied(false)
-          window.clearInterval(id)
+          if ((fix.accuracy ?? Infinity) <= GOOD_FIX_METERS) stop()
         },
         (err) => {
           if (cancelled) return
-          setDenied(err.code === err.PERMISSION_DENIED)
+          if (err.code === err.PERMISSION_DENIED) {
+            setDenied(true)
+            stop()
+          }
         },
-        { enableHighAccuracy: false, timeout: 10_000, maximumAge: 5 * 60_000 },
+        { enableHighAccuracy: true, timeout: 20_000, maximumAge: 0 },
       )
+      stopTimer = window.setTimeout(stop, BURST_MS)
     }
 
-    attempt()
-    // A fixed kiosk never needs a second fix once it has one — this only
-    // keeps firing while we don't have a location yet (new permission still
-    // pending, or a slow first fix), roughly every 15 s instead of every 2 min.
-    id = window.setInterval(attempt, 15_000)
+    restart.current = () => {
+      stop()
+      best = null
+      burst()
+    }
+    burst()
+    const refresh = window.setInterval(burst, REFRESH_MS)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') burst()
+    }
+    document.addEventListener('visibilitychange', onVisible)
     return () => {
       cancelled = true
-      window.clearInterval(id)
+      stop()
+      window.clearInterval(refresh)
+      document.removeEventListener('visibilitychange', onVisible)
     }
   }, [])
 
-  return { location, denied }
+  const refresh = useCallback(() => restart.current(), [])
+  return { location, denied, refresh }
 }

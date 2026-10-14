@@ -60,6 +60,3 @@ export function buildPunchLog(
   )
 }
 
-export function mapsUrl(location: { lat: number; lng: number }): string {
-  return `https://www.google.com/maps?q=${location.lat},${location.lng}`
-}

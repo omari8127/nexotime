@@ -22,6 +22,7 @@ import {
 } from '@/services/live/mappers'
 import { useDataStore } from '@/store/dataStore'
 import { getToday, nowISO } from '@/lib/today'
+import { checkPortalZone, portalPunchLocation, portalZoneProblem, resolvePortalZone } from '@/lib/portalZone'
 import type { PhotoCapture } from '@/lib/photoEvidence'
 import type { AttendanceRecord, AttendanceSettings, Branch, Employee, Incidencia, Schedule } from '@/types'
 
@@ -210,6 +211,13 @@ const demo: PortalApi = {
     const employee = demoEmployee(token)
     const punch = record.punches.find((p) => p.photoEvidence?.id === photo.id)
     if (!punch) throw new Error('La foto no corresponde a este movimiento.')
+    // Same location rules as the database (migration 013).
+    const s = useDataStore.getState()
+    const branch = s.branches.find((b) => b.id === employee.branchId)
+    const point = branch?.lat != null && branch?.lng != null ? { lat: branch.lat, lng: branch.lng } : undefined
+    const zone = checkPortalZone(punch.location, point, resolvePortalZone(s.company.attendanceSettings), !!employee.remotePunch)
+    const problem = portalZoneProblem(zone, branch?.name)
+    if (problem || !punch.location) throw new Error(problem ?? 'Activa la ubicación de tu celular.')
     await putLocalPhoto({ ...photo, companyId: record.companyId, employeeId: employee.id, date: record.date })
     return useDataStore.getState().registerPunch({
       employeeId: employee.id,
@@ -217,7 +225,7 @@ const demo: PortalApi = {
       time: punch.time,
       method: 'app',
       date: record.date,
-      location: punch.location,
+      location: portalPunchLocation(punch.location, zone),
       photoEvidence: punch.photoEvidence,
     }).record
   },

@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Play, RefreshCw, UserRoundX, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { FaceViewport } from '@/components/clock/FaceViewport'
+import { CameraTools, FacePrivacyNote, FaceStatus, FaceSteps, type FaceTone } from '@/components/clock/FacePanelParts'
 import { videoFrameCanvas } from '@/lib/camera'
 import { encodePhotoCapture, KIOSK_PHOTO_MAX_SIDE, type PhotoCapture } from '@/lib/photoEvidence'
-import { VoiceToggle } from '@/components/shared/VoiceToggle'
 import { useCameraStream } from '@/hooks/useCameraStream'
 import { useCameraView, useRotationSearch } from '@/hooks/useCameraView'
 import { useAutoFrame } from '@/hooks/useAutoFrame'
-import { GetReadyOverlay, useGetReady } from '@/hooks/useGetReady'
+import { GET_READY_SECONDS, GetReadyOverlay, useGetReady } from '@/hooks/useGetReady'
 import { useVoice } from '@/lib/speech'
 import { useDataStore } from '@/store/dataStore'
 import { usePermissions } from '@/hooks/useScopedData'
@@ -63,6 +64,9 @@ export function FaceScanFlow({
   })
   const [stage, setStage] = useState<Stage>('loading')
   const [hint, setHint] = useState('')
+  /** Whether the current hint is an instruction or a problem to fix, and how far the confirmation is (0–1). */
+  const [hintKind, setHintKind] = useState<'scan' | 'warn'>('scan')
+  const [progress, setProgress] = useState(0)
   const [attempt, setAttempt] = useState(0)
   const [reading, setReading] = useState('')
   const { say } = useVoice('kiosk')
@@ -153,9 +157,14 @@ export function FaceScanFlow({
       }
       if (!alive) return
       apiRef.current = api
+      const show = (text: string, kind: 'scan' | 'warn' = 'scan', done = 0) => {
+        setHint(text)
+        setHintKind(kind)
+        setProgress(done)
+      }
       setStage('searching')
       setReading('')
-      setHint('Mira a la cámara')
+      show('Mira a la cámara')
 
       const session = new FaceSession()
       let errors = 0
@@ -203,12 +212,12 @@ export function FaceScanFlow({
             session.reset()
             unknownFrames = 0
             setReading('')
-            setHint('Coloca tu rostro dentro del óvalo')
+            show('Coloca tu rostro dentro del óvalo')
           } else if (result.kind === 'multiple') {
             session.reset()
             unknownFrames = 0
             setReading('')
-            setHint('Debe haber una sola persona frente a la cámara')
+            show('Debe haber una sola persona frente a la cámara', 'warn')
           } else {
             const issues = frameRef.current.relevant(
               qualityIssues(result.reading, { blur: true, ...distanceProfile(settingsRef.current.faceDistance, tuning) }),
@@ -217,7 +226,8 @@ export function FaceScanFlow({
               session.reset()
               unknownFrames = 0
               setReading('')
-              setHint(issues.length ? QUALITY_TEXT[issues[0]] : 'Mira a la cámara')
+              if (issues.length) show(QUALITY_TEXT[issues[0]], 'warn')
+              else show('Mira a la cámara')
             } else {
               const evidence = session.push(candidatesRef.current, result.reading.descriptor, tuning)
               const near = evidence.match
@@ -228,12 +238,11 @@ export function FaceScanFlow({
               }
               if (evidence.progress > 0) {
                 unknownFrames = 0
-                setHint(`Mantente quieto · verificando ${evidence.progress}/${evidence.required}`)
+                show('Mantente quieto', 'scan', evidence.progress / evidence.required)
               } else {
                 unknownFrames += 1
-                setHint(unknownFrames >= 5
-                  ? 'No hay una coincidencia clara. Mira de frente, mejora la luz o usa otro método.'
-                  : 'Mira a la cámara')
+                if (unknownFrames >= 5) show('No hay una coincidencia clara. Mira de frente, mejora la luz o usa otro método.', 'warn')
+                else show('Mira a la cámara')
                 if (near && unknownFrames >= REJECT_FRAMES) {
                   unknownFrames = 0
                   reject(`Rostro no reconocido: distancia ${near.distance.toFixed(2)} (límite ${tuning.threshold.toFixed(2)}).`)
@@ -251,7 +260,7 @@ export function FaceScanFlow({
             setStage('failed')
             return
           }
-          setHint('No se pudo leer la imagen. Mantente frente a la cámara.')
+          show('No se pudo leer la imagen. Mantente frente a la cámara.', 'warn')
         }
         timer = window.setTimeout(loop, nextDelay)
       }
@@ -266,16 +275,53 @@ export function FaceScanFlow({
   }, [cameraState, attempt, videoRef, ready])
 
   const cameraOn = candidates.length > 0
+  const counting = cameraState === 'ready' && !ready
+  const broken = stage === 'failed' || cameraState === 'error'
+  const status: { tone: FaceTone; title: string; detail?: string; progress?: number } = broken
+    ? {
+        tone: 'error',
+        title: cameraState === 'error' ? 'Revisa la cámara' : 'No se pudo usar el reconocimiento',
+        detail: stage === 'failed' ? hint : 'Toca «Reintentar cámara» o usa QR, código de barras o tu número.',
+      }
+    : cameraState !== 'ready'
+      ? { tone: 'wait', title: 'Encendiendo la cámara…' }
+      : counting
+        ? {
+            tone: 'ready',
+            title: 'Acomódate frente a la cámara',
+            detail: `Pon tu cara dentro del óvalo. Empezamos en ${left} s.`,
+            progress: 1 - left / GET_READY_SECONDS,
+          }
+        : stage === 'loading'
+          ? { tone: 'wait', title: 'Preparando el reconocimiento…', detail: 'Solo tarda unos segundos.' }
+          : progress > 0
+            ? { tone: 'progress', title: 'Mantente quieto…', detail: 'Te estamos reconociendo.', progress }
+            : hintKind === 'warn'
+              ? { tone: 'warn', title: hint }
+              : { tone: 'scan', title: hint || 'Mira a la cámara', detail: 'Con buena luz, de frente y sin gorra ni lentes oscuros.' }
+
   return (
     // Held upright: the camera on top, the text and buttons under it. Held sideways: side by side.
-    <div className="flex flex-col items-center gap-5 text-center landscape:flex-row landscape:items-center landscape:gap-8 landscape:text-left">
+    // Without a camera (nobody enrolled) the notice and its button simply stack.
+    <div
+      className={
+        cameraOn
+          ? 'flex flex-col items-center gap-5 text-center landscape:flex-row landscape:items-center landscape:gap-8 landscape:text-left'
+          : 'mx-auto flex w-full max-w-xl flex-col gap-4'
+      }
+    >
       {!cameraOn ? (
-        <div className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-6 text-left">
-          <p className="text-[15px] font-semibold text-slate-900">Aún no hay rostros registrados</p>
-          <p className="mt-1 text-sm text-slate-500">
-            Registra el rostro de cada empleado desde su perfil (botón «Rostro») o desde Configuración →
-            Reloj checador. Mientras tanto, usa el código QR, el de barras o el número de empleado.
-          </p>
+        <div className="flex w-full items-start gap-3.5 rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-5 text-left">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-400 text-amber-950 shadow-lg shadow-amber-500/30">
+            <UserRoundX className="h-6 w-6" />
+          </span>
+          <div>
+            <p className="text-lg font-bold text-amber-950">Aún no hay rostros registrados</p>
+            <p className="mt-1 text-sm text-slate-600">
+              Registra el rostro de cada empleado desde su perfil (botón «Rostro») o desde Configuración →
+              Reloj checador. Mientras tanto, usa el código QR, el de barras o el número de empleado.
+            </p>
+          </div>
         </div>
       ) : (
         <div className="w-full landscape:w-[55%] landscape:shrink-0">
@@ -285,6 +331,7 @@ export function FaceScanFlow({
             cameraMessage={cameraMessage}
             loadingModels={stage === 'loading' && ready}
             overlay={!ready ? <GetReadyOverlay left={left} /> : undefined}
+            scanning={stage === 'searching' && ready}
             zoom={frame.zoom}
             rotation={view.rotation}
             aspect={view.aspect}
@@ -294,49 +341,48 @@ export function FaceScanFlow({
 
       <div className="flex w-full min-w-0 flex-col items-center gap-4 landscape:flex-1 landscape:items-stretch">
         {cameraOn ? (
-          <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Reconocimiento facial</p>
-            <p className="text-lg font-semibold text-slate-900" role="status">
-              {cameraState === 'error'
-                ? 'Revisa la cámara'
-                : cameraState === 'ready' && !ready
-                  ? 'Acomódate frente a la cámara'
-                  : stage === 'loading' ? 'Preparando…' : hint || 'Mira a la cámara'}
-            </p>
-            <p className="text-sm text-slate-500">
-              El reconocimiento se hace en este equipo. Se toma una foto y se guarda con tu registro.
-            </p>
-            {resolution ? <p className="text-xs text-slate-500">Cámara: {resolution}</p> : null}
-            {reading && stage === 'searching' && can('biometrics.manage') ? <p className="font-mono text-[11px] text-slate-400">{reading}</p> : null}
-          </div>
+          <>
+            <FaceSteps step={counting || cameraState !== 'ready' ? 1 : 2} />
+            <FaceStatus tone={status.tone} eyebrow="Reconocimiento facial" title={status.title} detail={status.detail} progress={status.progress} />
+            {can('biometrics.manage') && (resolution || (reading && stage === 'searching')) ? (
+              <p className="w-full text-left font-mono text-[11px] text-slate-400">
+                {resolution ? `Cámara ${resolution}` : ''}
+                {reading && stage === 'searching' ? ` · ${reading}` : ''}
+              </p>
+            ) : null}
+          </>
         ) : null}
 
-        {cameraOn ? (
-          <div className="flex flex-wrap justify-center gap-2 landscape:justify-start">
-            <Button variant="secondary" onClick={() => { setStage('loading'); setFacingMode((v) => v === 'user' ? 'environment' : 'user') }}>
-              Cambiar a cámara {facingMode === 'user' ? 'trasera' : 'frontal'}
-            </Button>
-            <Button variant="secondary" onClick={view.rotate} title="Si la imagen se ve de lado o de cabeza">
-              Girar imagen{view.rotation ? ` (${view.rotation}°)` : ''}
-            </Button>
-          </div>
-        ) : null}
         <div className="flex w-full flex-wrap gap-3">
-          {stage === 'failed' || cameraState === 'error' ? (
-            <Button variant="secondary" size="lg" className="flex-1" onClick={() => { setStage('loading'); setAttempt((n) => n + 1); restart() }}>
+          {broken && cameraOn ? (
+            <Button size="lg" className="flex-1 gap-2" onClick={() => { setStage('loading'); setAttempt((n) => n + 1); restart() }}>
+              <RefreshCw className="h-5 w-5" />
               Reintentar cámara
             </Button>
           ) : null}
-          {cameraState === 'ready' && !ready ? (
-            <Button size="lg" className="flex-1" onClick={skip}>
+          {counting ? (
+            <Button size="lg" className="flex-1 gap-2 bg-indigo-600 shadow-lg shadow-indigo-600/25 hover:bg-indigo-700" onClick={skip}>
+              <Play className="h-5 w-5" />
               Empezar ya
             </Button>
           ) : null}
-          <VoiceToggle scope="kiosk" compact />
-          <Button variant="secondary" size="lg" className="flex-1" onClick={onCancel}>
-            Cancelar
+          <Button variant="outline" size="lg" className="flex-1 gap-2" onClick={onCancel}>
+            <X className="h-5 w-5" />
+            {cameraOn ? 'Cancelar' : 'Elegir otro método'}
           </Button>
         </div>
+
+        {cameraOn ? (
+          <>
+            <CameraTools
+              facingMode={facingMode}
+              onSwitch={() => { setStage('loading'); setFacingMode((v) => v === 'user' ? 'environment' : 'user') }}
+              onRotate={view.rotate}
+              rotation={view.rotation}
+            />
+            <FacePrivacyNote>El reconocimiento se hace en este equipo. Se toma una foto y se guarda con tu registro.</FacePrivacyNote>
+          </>
+        ) : null}
       </div>
     </div>
   )

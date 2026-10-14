@@ -79,6 +79,15 @@ export interface AttendanceSettings {
   photoRetentionDays?: number
   /** Reloj checador. All optional: companies created before these existed use the defaults. */
   kiosk?: KioskSettings
+  /** Portal del empleado: how close to the branch a phone must be to check in (migration 013). */
+  portalZone?: PortalZoneSettings
+}
+
+export interface PortalZoneSettings {
+  /** Allowed distance from the branch's point, in meters (50–5000; 150 when unset). */
+  radiusMeters?: number
+  /** Outside it: 'block' (default) does not register, 'flag' registers it marked, 'off' does not check. */
+  outsideZone?: 'block' | 'flag' | 'off'
 }
 
 export type FaceStrictness = 'strict' | 'balanced' | 'relaxed'
@@ -229,6 +238,8 @@ export interface Employee {
   pin?: string // demo only, never store plaintext in production
   /** Optional HR fields — deliberately not required. */
   rfc?: string // printed on the badge
+  /** Can check in from the phone anywhere (home office, sales, drivers): the branch zone is not checked. */
+  remotePunch?: boolean
   curp?: string
   address?: string
   emergencyContact?: {
@@ -290,6 +301,13 @@ export interface PunchLocation {
   lng: number
   /** Meters, as reported by the browser — smaller is more precise. */
   accuracy?: number
+  /** 'gps': the device's own position at that moment. 'branch': the branch's fixed point (the device
+   *  had no precise fix). Absent on older records — see `locationSource` in lib/geo. */
+  source?: 'gps' | 'branch'
+  /** Meters to the employee's branch when it was made from the phone (employee portal). */
+  distance?: number
+  /** Made from the phone outside the branch's allowed zone (company rule "permitir y marcar"). */
+  outside?: boolean
 }
 
 export type AttendanceStatus =

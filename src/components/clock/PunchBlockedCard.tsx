@@ -1,10 +1,11 @@
 import { motion } from 'framer-motion'
-import { CheckCheck, Clock3, Hand, OctagonAlert, type LucideIcon } from 'lucide-react'
+import { Check, CheckCheck, ChevronRight, Clock3, Hand, OctagonAlert, X, type LucideIcon } from 'lucide-react'
 import { Avatar } from '@/components/ui/misc'
 import { Button } from '@/components/ui/button'
 import { PUNCH_TYPE_LABEL } from '@/lib/attendance'
 import { describeBlock, type BlockTone } from '@/lib/kioskFeedback'
-import { formatTime12 } from '@/lib/utils'
+import { PUNCH_STYLE } from '@/lib/punchStyle'
+import { cn, formatTime12 } from '@/lib/utils'
 import type { Employee, Punch, PunchType } from '@/types'
 
 const TONE: Record<
@@ -46,6 +47,38 @@ const TONE: Record<
 }
 
 const DAY: PunchType[] = ['entry', 'lunch_out', 'lunch_in', 'exit']
+
+/** In the person's words, under each button: what pressing it means. */
+const MEANING: Record<PunchType, string> = {
+  entry: 'Empiezo mi jornada',
+  lunch_out: 'Me voy a comer',
+  lunch_in: 'Ya regresé de comer',
+  exit: 'Termino mi jornada',
+}
+
+/** Each movement with its own colour, so two choices never look alike (same colours as the panel). */
+const CHOICE: Record<PunchType, { card: string; iconBox: string; sub: string }> = {
+  entry: {
+    card: 'bg-emerald-600 text-white shadow-emerald-600/30 hover:bg-emerald-700',
+    iconBox: 'bg-white/20',
+    sub: 'text-emerald-50/90',
+  },
+  lunch_out: {
+    card: 'bg-amber-400 text-amber-950 shadow-amber-500/30 hover:bg-amber-500',
+    iconBox: 'bg-white/40',
+    sub: 'text-amber-900/80',
+  },
+  lunch_in: {
+    card: 'bg-sky-600 text-white shadow-sky-600/30 hover:bg-sky-700',
+    iconBox: 'bg-white/20',
+    sub: 'text-sky-50/90',
+  },
+  exit: {
+    card: 'bg-rose-600 text-white shadow-rose-600/30 hover:bg-rose-700',
+    iconBox: 'bg-white/20',
+    sub: 'text-rose-50/90',
+  },
+}
 
 /**
  * Full-card answer for "that cannot be registered right now": a big icon and headline, what they
@@ -115,22 +148,41 @@ export function PunchBlockedCard({
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Tu día de hoy</p>
           <ul className={`grid gap-2 ${slots.length === 4 ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-2'}`}>
-            {slots.map((t) => {
+            {slots.map((t, i) => {
               const p = punches.find((x) => x.type === t)
+              const style = PUNCH_STYLE[t]
+              const SlotIcon = style.Icon
               return (
-                <li
+                <motion.li
                   key={t}
-                  className={`rounded-xl border px-3 py-2.5 text-center ${
-                    p ? 'border-emerald-200 bg-emerald-50/70' : 'border-slate-200 bg-white'
-                  }`}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.08 + i * 0.05 }}
+                  className={cn(
+                    'flex flex-col items-center gap-1.5 rounded-xl border px-2 py-2.5 text-center',
+                    p ? cn('border-transparent', style.soft) : 'border-dashed border-slate-200 bg-white text-slate-400',
+                  )}
                 >
-                  <p className={`text-xs font-medium ${p ? 'text-emerald-700' : 'text-slate-400'}`}>
-                    {PUNCH_TYPE_LABEL[t]}
-                  </p>
-                  <p className={`mt-0.5 whitespace-nowrap font-mono text-sm font-bold tabular-nums md:text-base ${p ? 'text-slate-900' : 'text-slate-300'}`}>
-                    {p ? formatTime12(p.time) : '—'}
-                  </p>
-                </li>
+                  <span
+                    className={cn(
+                      'relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
+                      p ? style.solid : 'bg-slate-100 text-slate-400',
+                    )}
+                  >
+                    <SlotIcon className="h-4 w-4" />
+                    {p ? (
+                      <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-white text-emerald-600 shadow ring-1 ring-emerald-200">
+                        <Check className="h-3 w-3" strokeWidth={3} />
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-[11px] font-medium leading-tight">{PUNCH_TYPE_LABEL[t]}</span>
+                    <span className={cn('block whitespace-nowrap text-sm font-bold tabular-nums', p ? 'text-slate-900' : 'text-slate-300')}>
+                      {p ? formatTime12(p.time) : 'Pendiente'}
+                    </span>
+                  </span>
+                </motion.li>
               )
             })}
           </ul>
@@ -138,13 +190,38 @@ export function PunchBlockedCard({
 
         {allowed.length > 0 ? (
           <div>
-            <p className="mb-2 text-sm font-semibold text-slate-700">Ahora puedes registrar:</p>
-            <div className="grid gap-2.5">
-              {allowed.map((t) => (
-                <Button key={t} size="xl" variant="success" className="w-full text-lg" onClick={() => onChoose(t)}>
-                  {PUNCH_TYPE_LABEL[t]}
-                </Button>
-              ))}
+            <p className="mb-2 text-sm font-semibold text-slate-700">
+              {allowed.length === 1 ? '¿Quieres registrar esto?' : '¿Qué quieres registrar ahora? Elige una opción:'}
+            </p>
+            <div className="grid gap-3">
+              {allowed.map((t, i) => {
+                const ChoiceIcon = PUNCH_STYLE[t].Icon
+                const look = CHOICE[t]
+                return (
+                  <motion.button
+                    key={t}
+                    type="button"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 + i * 0.07, ease: [0.16, 1, 0.3, 1] }}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => onChoose(t)}
+                    className={cn(
+                      'group flex w-full items-center gap-3.5 rounded-2xl px-4 py-4 text-left shadow-lg transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-slate-300',
+                      look.card,
+                    )}
+                  >
+                    <span className={cn('flex h-12 w-12 shrink-0 items-center justify-center rounded-xl', look.iconBox)}>
+                      <ChoiceIcon className="h-6 w-6" strokeWidth={2.2} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-lg font-bold leading-tight">{PUNCH_TYPE_LABEL[t]}</span>
+                      <span className={cn('block text-sm', look.sub)}>{MEANING[t]}</span>
+                    </span>
+                    <ChevronRight className="h-6 w-6 shrink-0 opacity-70 transition-transform group-hover:translate-x-0.5" />
+                  </motion.button>
+                )
+              })}
             </div>
           </div>
         ) : info.tone === 'wait' ? null : (
@@ -153,8 +230,9 @@ export function PunchBlockedCard({
           </p>
         )}
 
-        <Button size="xl" variant="secondary" className="w-full text-lg" onClick={onClose}>
-          Cerrar
+        <Button size="lg" variant="ghost" className="w-full gap-2 text-base text-slate-500 hover:text-slate-800" onClick={onClose}>
+          <X className="h-5 w-5" />
+          {allowed.length > 0 ? 'No registrar nada y cerrar' : 'Cerrar'}
         </Button>
       </div>
 

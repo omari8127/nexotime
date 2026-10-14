@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { QrCode, Barcode, ScanFace, UserRound, KeyRound } from 'lucide-react'
+import { QrCode, Barcode, ScanFace, UserRound, KeyRound, MapPinned } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -95,6 +95,7 @@ export function EmployeeFormDialog({ open, onOpenChange, employee, onSaved }: Pr
         scheduleId: employee.scheduleId,
         pin: employee.pin ?? '',
         rfc: employee.rfc ?? '',
+        remotePunch: !!employee.remotePunch,
         curp: employee.curp ?? '',
         address: employee.address ?? '',
         emergencyName: employee.emergencyContact?.name ?? '',
@@ -171,6 +172,8 @@ export function EmployeeFormDialog({ open, onOpenChange, employee, onSaved }: Pr
       pin: form.pin.trim() || undefined,
       // '' (not undefined) when an existing RFC is erased, so the change reaches the database.
       rfc: rfc ?? (employee?.rfc ? '' : undefined),
+      // Only sent when it is on or being turned off (a database without migration 013 has no such column).
+      remotePunch: form.remotePunch || employee?.remotePunch ? form.remotePunch : undefined,
       curp: form.curp.trim() || undefined,
       address: form.address.trim() || undefined,
       emergencyContact: form.emergencyName.trim()
@@ -369,6 +372,24 @@ export function EmployeeFormDialog({ open, onOpenChange, employee, onSaved }: Pr
             ) : null}
           </div>
 
+          {/* Checar desde el celular */}
+          <div className={SECTION}>
+            <p className={SECTION_TITLE}>Checar desde el celular</p>
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2.5">
+              <div className="flex items-start gap-2.5">
+                <MapPinned className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">Puede checar desde cualquier lugar</p>
+                  <p className="text-xs text-muted-foreground">
+                    Para home office, vendedores o choferes. Apagado, desde el celular solo puede checar cerca de su
+                    sucursal. Su ubicación real se guarda siempre.
+                  </p>
+                </div>
+              </div>
+              <Switch checked={form.remotePunch} onCheckedChange={(v) => set({ remotePunch: v })} />
+            </div>
+          </div>
+
           {/* Adicional */}
           <details className="rounded-xl border border-border bg-secondary/30 p-4">
             <summary className="cursor-pointer text-sm font-semibold text-foreground">
@@ -444,6 +465,7 @@ function blank(employeeNumber: string, hireDate: string, branchId?: string, sche
     scheduleId: scheduleId ?? '',
     pin: '',
     rfc: '',
+    remotePunch: false,
     curp: '',
     address: '',
     emergencyName: '',

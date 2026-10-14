@@ -15,6 +15,7 @@ export function FaceViewport({
   cameraMessage,
   loadingModels,
   ok,
+  scanning,
   zoom = 1,
   className,
   overlay,
@@ -26,6 +27,8 @@ export function FaceViewport({
   cameraMessage: string
   loadingModels?: boolean
   ok?: boolean
+  /** Reading the face: the guide turns blue and its dashes run around it, so it is clear it is working. */
+  scanning?: boolean
   /** Digital zoom, so what the person sees is exactly the central part that is being read. */
   zoom?: number
   className?: string
@@ -87,14 +90,18 @@ export function FaceViewport({
             rx={rx}
             ry={ry}
             fill="none"
-            stroke={ok ? '#10b981' : '#334155'}
-            strokeWidth="1.1"
+            stroke={ok ? '#10b981' : scanning ? '#4f46e5' : '#334155'}
+            strokeWidth={ok || scanning ? 1.5 : 1.1}
             strokeDasharray={ok ? undefined : '3.5 2.5'}
-          />
+          >
+            {scanning && !ok ? (
+              <animate attributeName="stroke-dashoffset" from="0" to="-12" dur="0.9s" repeatCount="indefinite" />
+            ) : null}
+          </ellipse>
         </svg>
       ) : null}
       {ready && overlay ? (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-slate-900/45 text-center text-white">
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-slate-900/20 text-center text-white">
           {overlay}
         </div>
       ) : null}

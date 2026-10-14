@@ -111,6 +111,7 @@ export interface NewEmployeeInput {
   identifications: Employee['identifications']
   pin?: string
   rfc?: string
+  remotePunch?: boolean
   curp?: string
   address?: string
   emergencyContact?: Employee['emergencyContact']
@@ -428,6 +429,7 @@ export const useDataStore = create<DataState>((set, get) => {
     identifications: input.identifications,
     pin: input.pin || undefined,
     rfc: input.rfc || undefined,
+    remotePunch: input.remotePunch || undefined,
     curp: input.curp || undefined,
     address: input.address || undefined,
     emergencyContact: input.emergencyContact,

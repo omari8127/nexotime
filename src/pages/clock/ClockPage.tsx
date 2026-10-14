@@ -55,6 +55,8 @@ import { useFullscreen } from '@/hooks/useFullscreen'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { useToday } from '@/hooks/useToday'
 import { useGeolocation } from '@/hooks/useGeolocation'
+import { ROUGH_FIX_METERS, formatDistance, locationSource, pickPunchLocation } from '@/lib/geo'
+import { MiniMap } from '@/components/shared/MiniMap'
 import { useLiveRefresh } from '@/hooks/useLiveRefresh'
 import { faceCandidates, loadFaceApi } from '@/lib/face'
 import {
@@ -256,8 +258,13 @@ export function ClockPage() {
   // The branch's own address (fixed once by an admin) is the real source of truth for a
   // kiosk that never moves — instant and reliable, unlike the device's own GPS. Only
   // fall back to the device's location while the branch has none configured yet.
-  const effectiveLocation: PunchLocation | undefined =
-    branch?.lat != null && branch?.lng != null ? { lat: branch.lat, lng: branch.lng } : (deviceLocation ?? undefined)
+  // Where a movement is stamped: the branch's fixed point, set once by an admin (the reloj does not
+  // move, and a PC or tablet only guesses its position); the device's own reading only when the
+  // branch has no point yet (see pickPunchLocation).
+  const effectiveLocation: PunchLocation | undefined = pickPunchLocation(
+    deviceLocation,
+    branch?.lat != null && branch?.lng != null ? { lat: branch.lat, lng: branch.lng } : undefined,
+  )
   const device = kioskDevice(devices, effectiveBranchId)
   const branchEmployees = useMemo(
     () => allEmployees.filter((e) => e.branchId === effectiveBranchId && e.status === 'active'),
@@ -1052,15 +1059,27 @@ export function ClockPage() {
                     </div>
                   </div>
 
-                  {lastPunch.photo ? (
-                    <div className="mt-3.5 overflow-hidden rounded-xl border border-slate-200">
-                      <div className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-medium text-slate-500">
-                        <Camera className="h-3.5 w-3.5" />
-                        {faceVerified
-                          ? 'Rostro verificado · foto guardada con tu registro'
-                          : 'Foto guardada con tu registro'}
-                      </div>
-                      <img src={lastPunch.photo} alt="Foto de verificación" className="h-40 w-full object-cover" />
+                  {/* The photo and, beside it, a small map of where it was made. */}
+                  {lastPunch.photo || lastPunch.location ? (
+                    <div className={`mt-3.5 grid gap-3 ${lastPunch.photo && lastPunch.location ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                      {lastPunch.photo ? (
+                        <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200">
+                          <div className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-500">
+                            <Camera className="h-3.5 w-3.5 shrink-0" />
+                            <span className="truncate">{faceVerified ? 'Rostro verificado · foto guardada' : 'Foto guardada'}</span>
+                          </div>
+                          <img src={lastPunch.photo} alt="Foto de verificación" className="h-40 w-full object-cover" />
+                        </div>
+                      ) : null}
+                      {lastPunch.location ? (
+                        <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200">
+                          <div className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-500">
+                            <MapPin className="h-3.5 w-3.5 shrink-0" />
+                            <span className="truncate">Dónde se registró</span>
+                          </div>
+                          <MiniMap location={lastPunch.location} className="h-40 w-full" />
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
 
@@ -1113,24 +1132,7 @@ export function ClockPage() {
                     </div>
                   </div>
 
-                  {/* A text line, not an embedded map: loading a whole third-party map page at the moment
-                      someone clocks in froze weak tablets (and needs the Internet). */}
-                  {lastPunch.location ? (
-                    <div className="mt-3 flex items-center gap-2.5 rounded-xl border border-slate-200 px-3.5 py-3">
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
-                        <MapPin className="h-4 w-4" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[11px] uppercase tracking-wide text-slate-400">
-                          {branch?.lat != null && branch?.lng != null ? 'Ubicación de la sucursal' : 'Ubicación del registro'}
-                        </p>
-                        <p className="truncate text-sm font-medium text-slate-800">
-                          {branch?.name ?? 'Ubicación registrada'} · {lastPunch.location.lat.toFixed(4)},{' '}
-                          {lastPunch.location.lng.toFixed(4)}
-                        </p>
-                      </div>
-                    </div>
-                  ) : null}
+                  {lastPunch.location ? <KioskLocationLine location={lastPunch.location} branchName={branch?.name} /> : null}
 
                   <Button className="mt-5 w-full text-base" size="xl" onClick={reset}>
                     Listo
@@ -1268,5 +1270,46 @@ function SideClock() {
         <p className="mt-2 text-sm text-slate-300">{formatLongDate(now)}</p>
       </div>
     </>
+  )
+}
+
+/**
+ * Where the movement was stamped. A text line, not an embedded map: loading a whole third-party map
+ * page at the moment someone clocks in froze weak tablets (and needs the Internet). A device reading
+ * without real precision is a guess from the network, and is said plainly.
+ */
+function KioskLocationLine({ location, branchName }: { location: PunchLocation; branchName?: string }) {
+  const fixed = locationSource(location) === 'branch'
+  const rough = !fixed && (location.accuracy ?? Infinity) > ROUGH_FIX_METERS
+  return (
+    <div className={`mt-3 rounded-xl border px-3.5 py-3 ${rough ? 'border-amber-200 bg-amber-50/60' : 'border-slate-200'}`}>
+      <div className="flex items-center gap-2.5">
+        <span
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+            rough ? 'bg-amber-100 text-amber-700' : 'bg-emerald-50 text-emerald-600'
+          }`}
+        >
+          <MapPin className="h-4 w-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] uppercase tracking-wide text-slate-400">
+            {fixed
+              ? 'Ubicación de la sucursal'
+              : rough
+                ? `Ubicación aproximada del equipo${location.accuracy != null ? ` · ±${formatDistance(location.accuracy)}` : ''}`
+                : `Ubicación por GPS${location.accuracy != null ? ` · ±${Math.round(location.accuracy)} m` : ''}`}
+          </p>
+          <p className="truncate text-sm font-medium text-slate-800">
+            {branchName ?? 'Ubicación registrada'} · {location.lat.toFixed(5)}, {location.lng.toFixed(5)}
+          </p>
+        </div>
+      </div>
+      {rough ? (
+        <p className="mt-2 text-xs leading-snug text-amber-800">
+          Este equipo no sabe su ubicación exacta. Para que quede la correcta, en Sucursales pega el punto de esta
+          sucursal desde Google Maps.
+        </p>
+      ) : null}
+    </div>
   )
 }
