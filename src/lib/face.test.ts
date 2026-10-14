@@ -24,7 +24,7 @@ import {
   viewKey,
   windowAspect,
 } from '@/lib/cameraView'
-import { photoExpired, photoIsFresh, type PhotoCapture } from '@/lib/photoEvidence'
+import { photoExpired, photoIsFresh, photoRetentionDays, type PhotoCapture } from '@/lib/photoEvidence'
 import { kioskDevice, pickKioskBranch, punchableEmployees, resolveKiosk } from '@/lib/kiosk'
 import type { Employee } from '@/types'
 
@@ -217,6 +217,17 @@ describe('verificación después de número y PIN (1:1)', () => {
     expect(photoExpired('2026-07-20', now)).toBe(false) // 85 días
     expect(photoExpired('2026-07-10', now)).toBe(true) // 95 días
     expect(photoExpired('no es fecha', now)).toBe(false)
+    // Con el plazo propio de la empresa.
+    expect(photoExpired('2026-09-01', now, 30)).toBe(true)
+    expect(photoExpired('2026-09-01', now, 60)).toBe(false)
+  })
+
+  it('el plazo de fotos de la empresa se acota a lo que acepta la base', () => {
+    expect(photoRetentionDays(undefined)).toBe(90)
+    expect(photoRetentionDays({ photoRetentionDays: 180 })).toBe(180)
+    expect(photoRetentionDays({ photoRetentionDays: 5 })).toBe(30)
+    expect(photoRetentionDays({ photoRetentionDays: 99999 })).toBe(3650)
+    expect(photoRetentionDays({ photoRetentionDays: Number.NaN })).toBe(90)
   })
 
   it('verificar el rostro con número y PIN viene activado y se puede apagar', () => {

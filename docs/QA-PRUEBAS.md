@@ -41,6 +41,10 @@ Marca cada punto; si alguno falla, no se entrega.
 - [ ] En un cuarto con poca luz: pantalla blanca al máximo de brillo, la persona a ~40 cm. Debe leerla; si dice "poca luz", acercarse a la pantalla.
 - [ ] La cámara del reloj (rostro, QR y verificación) no se entrecorta ni se congela cada segundo en la tablet real. Si pasa, anotar el modelo de la tablet.
 
+### 3.3 Portal del empleado: bloqueo
+- [ ] Con el empleado de prueba, 5 PIN equivocados seguidos: bloquea 15 min y lo dice. Otros 5 al terminar ese plazo: bloquea 1 h ("Espera 1 h").
+- [ ] Entrar bien reinicia el conteo (el siguiente error vuelve a contar desde 1).
+
 ### 3.2 Borrado de fotos
 - [ ] Después de correr la migración 009: en el SQL Editor, `select jobname, schedule, active from cron.job;` muestra `nexotime-borrar-fotos-90-dias` activo.
 - [ ] Prueba a mano con un plazo corto sobre datos de prueba: `select public.purge_old_attendance_photos(30);` devuelve cuántas borró; esas checadas siguen en Asistencia y su foto dice "eliminada".

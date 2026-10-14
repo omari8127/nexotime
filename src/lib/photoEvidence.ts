@@ -17,10 +17,16 @@ export const PHOTO_MAX_CHARS = 180_000
 /** The database deletes the photo of a checada this many days after its date (migration 009). */
 export const PHOTO_RETENTION_DAYS = 90
 
+/** The company's own plazo (Configuración → Reloj checador), within what the database accepts. */
+export function photoRetentionDays(settings?: { photoRetentionDays?: number } | null): number {
+  const n = settings?.photoRetentionDays
+  return typeof n === 'number' && Number.isFinite(n) ? Math.min(3650, Math.max(30, Math.round(n))) : PHOTO_RETENTION_DAYS
+}
+
 /** True when the photo of a movement of that day has already been (or is about to be) deleted. */
-export function photoExpired(date: string, now = Date.now()): boolean {
+export function photoExpired(date: string, now = Date.now(), days = PHOTO_RETENTION_DAYS): boolean {
   const day = Date.parse(`${date}T00:00:00Z`)
-  return Number.isFinite(day) && now - day > PHOTO_RETENTION_DAYS * 86_400_000
+  return Number.isFinite(day) && now - day > days * 86_400_000
 }
 export const PHOTO_MAX_AGE_MS = 90_000
 export const needsEntryPhoto = (method: CaptureMethod, type: PunchType) =>

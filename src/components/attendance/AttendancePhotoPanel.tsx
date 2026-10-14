@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useDataStore } from '@/store/dataStore'
 import { isValidTimeZone } from '@/lib/today'
-import { PHOTO_RETENTION_DAYS, photoExpired } from '@/lib/photoEvidence'
+import { photoExpired, photoRetentionDays } from '@/lib/photoEvidence'
 import { canAccessEmployee } from '@/lib/scope'
 import { getLocalPhoto } from '@/services/evidence/localPhotos'
 import { liveReadAttendancePhoto } from '@/services/live/liveApi'
@@ -13,6 +13,7 @@ export function AttendancePhotoPanel({ record, open }: { record: AttendanceRecor
   const employee = useDataStore((s) => s.employees.find((e) => e.id === record.employeeId))
   const mode = useDataStore((s) => s.mode)
   const timezone = useDataStore((s) => s.company.timezone)
+  const keepDays = useDataStore((s) => photoRetentionDays(s.company.attendanceSettings))
   const photo = record.punches.find((p) => p.photoEvidence)?.photoEvidence
   const [image, setImage] = useState('')
   const [imageId, setImageId] = useState('')
@@ -29,8 +30,8 @@ export function AttendancePhotoPanel({ record, open }: { record: AttendanceRecor
     const load = async () => {
       const local = await getLocalPhoto(photo.id).catch(() => undefined)
       const result = local ?? (mode === 'live' ? await liveReadAttendancePhoto(photo.id, record.companyId, record.employeeId) : undefined)
-      if (!result && photoExpired(record.date)) {
-        throw new Error(`La foto ya se eliminó: las fotos de checada se conservan ${PHOTO_RETENTION_DAYS} días.`)
+      if (!result && photoExpired(record.date, Date.now(), keepDays)) {
+        throw new Error(`La foto ya se eliminó: las fotos de checada se conservan ${keepDays} días.`)
       }
       if (!result || result.companyId !== record.companyId || result.employeeId !== record.employeeId || result.date !== record.date) {
         throw new Error('La foto todavía no está disponible en este equipo. Revisa la sincronización del reloj que tomó la entrada.')
@@ -40,7 +41,7 @@ export function AttendancePhotoPanel({ record, open }: { record: AttendanceRecor
     void load().catch((e) => { if (alive) setError(e instanceof Error ? e.message : 'No se pudo consultar la foto.') })
       .finally(() => { if (alive) setBusy(false) })
     return () => { alive = false }
-  }, [open, requested, retry, photo?.id, allowed, user.id, mode, record.companyId, record.employeeId, record.date])
+  }, [open, requested, retry, photo?.id, allowed, user.id, mode, record.companyId, record.employeeId, record.date, keepDays])
   if (!photo || !allowed) return null
   return (
     <section className="space-y-3 rounded-xl border border-border p-4">

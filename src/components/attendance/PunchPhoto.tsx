@@ -6,7 +6,7 @@ import { useDataStore } from '@/store/dataStore'
 import { getLocalPhoto } from '@/services/evidence/localPhotos'
 import { liveReadAttendancePhoto } from '@/services/live/liveApi'
 import { isValidTimeZone } from '@/lib/today'
-import { PHOTO_RETENTION_DAYS, photoExpired } from '@/lib/photoEvidence'
+import { photoExpired, photoRetentionDays } from '@/lib/photoEvidence'
 import { formatTime12 } from '@/lib/utils'
 import type { AttendanceRecord, Employee, Punch } from '@/types'
 
@@ -34,6 +34,7 @@ async function loadPhoto(record: AttendanceRecord, id: string, live: boolean): P
 export function PunchPhoto({ record, punch, employee }: { record: AttendanceRecord; punch: Punch; employee: Employee }) {
   const live = useDataStore((s) => s.mode === 'live')
   const timezone = useDataStore((s) => s.company.timezone)
+  const keepDays = useDataStore((s) => photoRetentionDays(s.company.attendanceSettings))
   const evidence = punch.photoEvidence
   const holder = useRef<HTMLButtonElement>(null)
   const [visible, setVisible] = useState(false)
@@ -93,8 +94,8 @@ export function PunchPhoto({ record, punch, employee }: { record: AttendanceReco
         }}
         title={
           failed
-            ? photoExpired(record.date)
-              ? `La foto se eliminó: se conservan ${PHOTO_RETENTION_DAYS} días`
+            ? photoExpired(record.date, Date.now(), keepDays)
+              ? `La foto se eliminó: se conservan ${keepDays} días`
               : 'La foto todavía no está disponible'
             : 'Ver foto'
         }

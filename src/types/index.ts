@@ -75,6 +75,8 @@ export interface AttendanceSettings {
   /** Minutes worked beyond schedule before overtime accrues. */
   overtimeThresholdMinutes: number
   roundingMinutes: number
+  /** Days a checada's photo is kept before the database deletes it (30–3650; 90 when unset). */
+  photoRetentionDays?: number
   /** Reloj checador. All optional: companies created before these existed use the defaults. */
   kiosk?: KioskSettings
 }

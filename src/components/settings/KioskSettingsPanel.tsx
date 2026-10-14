@@ -12,6 +12,7 @@ import { FaceEnrollDialog } from '@/components/employees/FaceEnrollDialog'
 import { useDataStore } from '@/store/dataStore'
 import { usePermissions } from '@/hooks/useScopedData'
 import { resolveKiosk } from '@/lib/kiosk'
+import { photoRetentionDays } from '@/lib/photoEvidence'
 import { useFeature } from '@/lib/license/features'
 import { TUNING } from '@/lib/face'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -85,6 +86,8 @@ export function KioskSettingsPanel() {
   const [distance, setDistance] = useState<FaceDistance>(saved.faceDistance)
   const [faceCheckOnPin, setFaceCheckOnPin] = useState(saved.faceCheckOnPin)
   const [exitPin, setExitPin] = useState(saved.exitPin)
+  const savedRetention = photoRetentionDays(company.attendanceSettings)
+  const [retention, setRetention] = useState(String(savedRetention))
   const exitPinValid = /^\d{4,8}$/.test(exitPin)
   const [testing, setTesting] = useState<Employee | null>(null)
   const [removing, setRemoving] = useState<Employee | null>(null)
@@ -99,6 +102,7 @@ export function KioskSettingsPanel() {
     Number(zoom) !== saved.faceZoom ||
     Number(gap) !== saved.minGapMinutes ||
     faceCheckOnPin !== saved.faceCheckOnPin ||
+    Number(retention) !== savedRetention ||
     distance !== saved.faceDistance ||
     (exitPin !== saved.exitPin && exitPinValid)
 
@@ -114,6 +118,7 @@ export function KioskSettingsPanel() {
   const save = () => {
     updateSettings(
       {
+        photoRetentionDays: Number(retention),
         kiosk: {
           autoRegister,
           autoRegisterSeconds: Number(seconds),
@@ -272,6 +277,23 @@ export function KioskSettingsPanel() {
               onValueChange={setGap}
               disabled={!canManage}
               options={['0', '1', '2', '5', '10'].map((v) => ({ value: v, label: v === '0' ? 'Sin espera' : `${v} min` }))}
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-4 border-t border-border pt-5">
+            <div>
+              <Label>Conservar las fotos de checada</Label>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Cada movimiento guarda una foto. Pasado este plazo se borra sola (cada noche); el registro de
+                asistencia se conserva. Menos días ocupan menos espacio y guardan menos datos personales.
+              </p>
+            </div>
+            <Select
+              className="w-36"
+              value={retention}
+              onValueChange={setRetention}
+              disabled={!canManage}
+              options={['30', '60', '90', '180', '365'].map((v) => ({ value: v, label: `${v} días` }))}
             />
           </div>
 
