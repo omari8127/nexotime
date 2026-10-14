@@ -11,7 +11,9 @@ import { toast } from '@/components/ui/toast'
 import { FaceEnrollDialog } from '@/components/employees/FaceEnrollDialog'
 import { useDataStore } from '@/store/dataStore'
 import { usePermissions } from '@/hooks/useScopedData'
-import { resolveKiosk } from '@/lib/kiosk'
+import { KIOSK_DEFAULTS, resolveKiosk } from '@/lib/kiosk'
+import { useDeviceUse } from '@/hooks/useDeviceUse'
+import { PANEL_UNLOCK_MS } from '@/lib/deviceUse'
 import { photoRetentionDays } from '@/lib/photoEvidence'
 import { useFeature } from '@/lib/license/features'
 import { TUNING } from '@/lib/face'
@@ -91,6 +93,7 @@ export function KioskSettingsPanel() {
   const [distance, setDistance] = useState<FaceDistance>(saved.faceDistance)
   const [faceCheckOnPin, setFaceCheckOnPin] = useState(saved.faceCheckOnPin)
   const [exitPin, setExitPin] = useState(saved.exitPin)
+  const [deviceUse, setDeviceUse] = useDeviceUse()
   const savedRetention = photoRetentionDays(company.attendanceSettings)
   const [retention, setRetention] = useState(String(savedRetention))
   const exitPinValid = /^\d{4,8}$/.test(exitPin)
@@ -302,6 +305,23 @@ export function KioskSettingsPanel() {
             />
           </div>
 
+          <div className="flex items-start justify-between gap-4 border-t border-border pt-5">
+            <div>
+              <Label>Este equipo es el reloj checador</Label>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Solo afecta a <strong>este</strong> navegador. Al activarlo, al abrir la app aquí siempre se llega
+                al reloj, y el panel solo se abre con el código de salida y se vuelve a cerrar tras{' '}
+                {PANEL_UNLOCK_MS / 60_000} minutos sin tocarlo. Actívalo en la tablet que usa el personal; no en tu
+                computadora.
+              </p>
+            </div>
+            <Switch
+              checked={deviceUse === 'kiosk'}
+              onCheckedChange={(on) => setDeviceUse(on ? 'kiosk' : 'panel')}
+              aria-label="Este equipo es el reloj checador"
+            />
+          </div>
+
           <div className="border-t border-border pt-5">
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -326,6 +346,12 @@ export function KioskSettingsPanel() {
             </div>
             {!exitPinValid ? (
               <p className="mt-1.5 text-right text-xs text-destructive">Debe tener de 4 a 8 dígitos.</p>
+            ) : null}
+            {exitPinValid && exitPin === KIOSK_DEFAULTS.exitPin ? (
+              <p className="mt-1.5 text-xs text-amber-700">
+                Es el código de fábrica ({KIOSK_DEFAULTS.exitPin}): cualquiera que haya visto cómo se entra al panel lo
+                sabe. Cámbialo por uno propio antes de dejar la tablet en uso.
+              </p>
             ) : null}
           </div>
 

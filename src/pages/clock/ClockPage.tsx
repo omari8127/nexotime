@@ -31,6 +31,10 @@ import { ScanFlow } from '@/components/clock/ScanFlow'
 import { FaceVerifyFlow } from '@/components/clock/FaceVerifyFlow'
 import { LightStage } from '@/components/clock/LightStage'
 import { LiveTime } from '@/components/clock/LiveTime'
+import { KioskSetupPrompt } from '@/components/clock/KioskSetupPrompt'
+import { useDeviceUse } from '@/hooks/useDeviceUse'
+import { lockPanel, unlockPanel } from '@/lib/deviceUse'
+import { can as roleCan } from '@/data/roles'
 import { needsEntryPhoto, photoIsFresh, type PhotoCapture } from '@/lib/photoEvidence'
 import { NumberPinFlow } from '@/components/clock/NumberPinFlow'
 import { KioskExitGate } from '@/components/clock/KioskExitGate'
@@ -43,7 +47,7 @@ import { useDataStore } from '@/store/dataStore'
 import { useUpdateStore } from '@/lib/appUpdate'
 import { useSyncStore } from '@/store/syncStore'
 import { applyTheme, useUIStore } from '@/store/uiStore'
-import { kioskDevice, pickKioskBranch, punchableEmployees, resolveKiosk } from '@/lib/kiosk'
+import { KIOSK_DEFAULTS, kioskDevice, pickKioskBranch, punchableEmployees, resolveKiosk } from '@/lib/kiosk'
 import { CODE_ERROR_TEXT, credentialValue, findEmployeeByCode } from '@/lib/credentials'
 import { useClockReader, useLiveClock, formatClockTime } from '@/hooks/useLiveClock'
 import { useFullscreen } from '@/hooks/useFullscreen'
@@ -196,6 +200,14 @@ export function ClockPage() {
   const [showWeekSummary, setShowWeekSummary] = useState(false)
   const [notices, setNotices] = useState<Array<{ title: string; detail: string }>>([])
   const [showExitGate, setShowExitGate] = useState(false)
+  // This device may be the company's clock: then the panel is locked behind the exit code (see deviceUse).
+  const [deviceUse, setDeviceUse] = useDeviceUse()
+  const [setupLater, setSetupLater] = useState(false)
+  const currentUserRole = useDataStore((s) => s.currentUser.role)
+  useEffect(() => {
+    // Arriving at the clock closes the panel again on a kiosk device.
+    if (deviceUse === 'kiosk') lockPanel()
+  }, [deviceUse])
   // Why a movement could not be registered, shown as a full screen instead of a corner toast.
   const [blockedMessage, setBlockedMessage] = useState('')
   const pendingSync = useSyncStore((s) => s.pending)
@@ -1120,12 +1132,24 @@ export function ClockPage() {
       <p className="pb-4 text-center text-xs text-slate-400">Nexotime · Control de asistencia · {copyrightLine()}</p>
       </section>
 
+      <KioskSetupPrompt
+        open={mode === 'live' && deviceUse === null && !setupLater && roleCan(currentUserRole, 'settings.manage')}
+        usingDefaultCode={kiosk.exitPin === KIOSK_DEFAULTS.exitPin}
+        onKiosk={() => setDeviceUse('kiosk')}
+        onPanel={() => setDeviceUse('panel')}
+        onLater={() => setSetupLater(true)}
+      />
+
       <KioskExitGate
         open={showExitGate}
         expectedPin={kiosk.exitPin}
         onClose={() => setShowExitGate(false)}
         // A full load, not a route change: the tablet's page may be days old, and the panel must come from the current build.
-        onSuccess={() => window.location.assign('/')}
+        // The code was typed correctly: the panel opens for the next 15 minutes.
+        onSuccess={() => {
+          unlockPanel()
+          window.location.assign('/')
+        }}
       />
     </div>
   )
