@@ -6,6 +6,7 @@ import { encodePhotoCapture, KIOSK_PHOTO_MAX_SIDE, type PhotoCapture } from '@/l
 import { VoiceToggle } from '@/components/shared/VoiceToggle'
 import { useCameraStream } from '@/hooks/useCameraStream'
 import { useCameraView, useRotationSearch } from '@/hooks/useCameraView'
+import { useAutoFrame } from '@/hooks/useAutoFrame'
 import { GetReadyOverlay, useGetReady } from '@/hooks/useGetReady'
 import { useVoice } from '@/lib/speech'
 import { useDataStore } from '@/store/dataStore'
@@ -69,6 +70,12 @@ export function FaceScanFlow({
   const { left, ready, skip } = useGetReady(cameraState === 'ready', attempt)
   // The picture as it must be shown and read on this device, held this way (sideways cameras included).
   const view = useCameraView(size, settings.faceDistance)
+  // Automatic framing: the zoom follows how close the face is (or stays at the configured zoom).
+  const frame = useAutoFrame({ distance: settings.faceDistance, baseZoom: settings.faceZoom, aspect: view.aspect })
+  const frameRef = useRef(frame)
+  useEffect(() => {
+    frameRef.current = frame
+  })
   const rotationRef = useRef(view.rotation)
   const aspectRef = useRef(view.aspect)
   const apiRef = useRef<FaceApi | null>(null)
@@ -175,11 +182,11 @@ export function FaceScanFlow({
       const loop = async () => {
         if (!alive) return
         try {
-          const { faceStrictness, faceThreshold, faceZoom } = settingsRef.current
+          const { faceStrictness, faceThreshold } = settingsRef.current
           const tuning = tuningFor(faceStrictness, faceThreshold)
           const startedAt = performance.now()
           const result = await readFace(api, video, true, 'accurate', {
-            zoom: faceZoom,
+            zoom: frameRef.current.zoomRef.current,
             minConfidence: tuning.minConfidence,
             rotation: rotationRef.current,
             fitAspect: aspectRef.current,
@@ -187,6 +194,7 @@ export function FaceScanFlow({
           if (!alive) return
           errors = 0
           noteReadingRef.current(result.kind !== 'none')
+          frameRef.current.note(result)
           // Nobody in front of the camera: look less often (saves the tablet's CPU/battery); the
           // moment a face appears, the loop runs at full speed again.
           nextDelay = paceDelay(performance.now() - startedAt, result.kind === 'none' ? IDLE_DELAY_MS : ACTIVE_DELAY_MS, 600, result.kind === 'none' ? 1.5 : 0.8)
@@ -202,7 +210,9 @@ export function FaceScanFlow({
             setReading('')
             setHint('Debe haber una sola persona frente a la cámara')
           } else {
-            const issues = qualityIssues(result.reading, { blur: true, ...distanceProfile(settings.faceDistance, tuning) })
+            const issues = frameRef.current.relevant(
+              qualityIssues(result.reading, { blur: true, ...distanceProfile(settingsRef.current.faceDistance, tuning) }),
+            )
             if (issues.length > 0 || !result.reading.descriptor) {
               session.reset()
               unknownFrames = 0
@@ -275,7 +285,7 @@ export function FaceScanFlow({
             cameraMessage={cameraMessage}
             loadingModels={stage === 'loading' && ready}
             overlay={!ready ? <GetReadyOverlay left={left} /> : undefined}
-            zoom={settings.faceZoom}
+            zoom={frame.zoom}
             rotation={view.rotation}
             aspect={view.aspect}
           />

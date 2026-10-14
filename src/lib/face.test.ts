@@ -14,6 +14,7 @@ import {
   type FaceReading,
 } from '@/lib/face'
 import { ClaimSession } from '@/lib/faceSession'
+import { AUTO_MAX_ZOOM, nextAutoZoom, targetFaceRatio } from '@/lib/autoFrame'
 import {
   gainFor,
   loadRotation,
@@ -270,10 +271,11 @@ describe('cámara según cómo esté la tablet', () => {
     expect(qualityIssues(big, { minFace: near.minFace, maxFace: near.maxFace })).not.toContain('close')
   })
 
-  it('la distancia del reloj viene en normal y solo acepta valores conocidos', () => {
-    expect(resolveKiosk(undefined).faceDistance).toBe('normal')
+  it('la distancia del reloj viene en automática y solo acepta valores conocidos', () => {
+    expect(resolveKiosk(undefined).faceDistance).toBe('auto')
     expect(resolveKiosk({ kiosk: { faceDistance: 'near' } } as never).faceDistance).toBe('near')
-    expect(resolveKiosk({ kiosk: { faceDistance: 'cerquita' } } as never).faceDistance).toBe('normal')
+    expect(resolveKiosk({ kiosk: { faceDistance: 'normal' } } as never).faceDistance).toBe('normal')
+    expect(resolveKiosk({ kiosk: { faceDistance: 'cerquita' } } as never).faceDistance).toBe('auto')
   })
 
   it('prueba primero un cuarto de vuelta cuando la imagen no coincide con la pantalla', () => {
@@ -309,5 +311,55 @@ describe('cámara según cómo esté la tablet', () => {
     expect(gainFor(10)).toBe(2.4) // casi a oscuras: nunca más de 2,4×
     expect(gainFor(0)).toBe(1)
     expect(gainFor(Number.NaN)).toBe(1)
+  })
+})
+
+describe('encuadre automático', () => {
+  const aspect = 16 / 9
+  const target = targetFaceRatio(aspect)
+  const opts = { min: 1, max: AUTO_MAX_ZOOM, target, aspect }
+  const centred = { x: 0, y: 0 }
+
+  it('la cara objetivo cabe dentro del óvalo en cualquier forma de ventana', () => {
+    for (const a of [0.75, 1, 4 / 3, 16 / 9]) {
+      const t = targetFaceRatio(a)
+      expect(t).toBeGreaterThan(0.2)
+      expect(t).toBeLessThanOrEqual(0.55)
+    }
+  })
+
+  it('acerca la imagen cuando la cara se ve chica, sin pasar el tope', () => {
+    let zoom = 1
+    for (let i = 0; i < 12; i++) zoom = nextAutoZoom(zoom, 0.1, centred, opts)
+    expect(zoom).toBeGreaterThan(1.8)
+    expect(zoom).toBeLessThanOrEqual(AUTO_MAX_ZOOM)
+    // Muy lejos: llega al tope y ahí se queda.
+    for (let i = 0; i < 40; i++) zoom = nextAutoZoom(zoom, 0.02, centred, opts)
+    expect(zoom).toBe(AUTO_MAX_ZOOM)
+  })
+
+  it('aleja la imagen cuando la cara se ve enorme, sin bajar de la base', () => {
+    let zoom = 2
+    for (let i = 0; i < 12; i++) zoom = nextAutoZoom(zoom, 0.8, centred, opts)
+    expect(zoom).toBeLessThan(1.2)
+    for (let i = 0; i < 40; i++) zoom = nextAutoZoom(zoom, 0.95, centred, opts)
+    expect(zoom).toBe(1)
+    // La base configurada manda como mínimo.
+    expect(nextAutoZoom(1.4, 0.95, centred, { ...opts, min: 1.4 })).toBe(1.4)
+  })
+
+  it('no se mueve por diferencias pequeñas ni cambia de golpe', () => {
+    expect(nextAutoZoom(1.5, target * 1.1, centred, opts)).toBe(1.5)
+    expect(nextAutoZoom(1.5, target * 0.9, centred, opts)).toBe(1.5)
+    const jump = nextAutoZoom(1, 0.05, centred, opts)
+    expect(jump).toBeLessThanOrEqual(1.2 + 1e-9)
+  })
+
+  it('no acerca tanto que la cara salga de la ventana', () => {
+    // Cara pegada a la orilla izquierda: acercar la sacaría; no debe acercar de más.
+    const edge = nextAutoZoom(1, 0.15, { x: -0.38, y: 0 }, opts)
+    expect(edge).toBeLessThan(1.1)
+    // Cara chica y centrada sí puede acercarse.
+    expect(nextAutoZoom(1, 0.15, centred, opts)).toBeGreaterThan(1.1)
   })
 })

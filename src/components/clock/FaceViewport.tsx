@@ -63,6 +63,8 @@ export function FaceViewport({
         style={{
           ...videoStyle,
           transform: `translate(-50%, -50%) scale(${-zoom}, ${zoom}) rotate(${rotation}deg)`,
+          // The automatic zoom glides instead of jumping.
+          transition: 'transform 350ms ease-out',
         }}
       />
       {ready ? (

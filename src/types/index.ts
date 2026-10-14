@@ -84,7 +84,7 @@ export interface AttendanceSettings {
 export type FaceStrictness = 'strict' | 'balanced' | 'relaxed'
 
 /** How far from the camera people stand: a tablet on a wall at arm's reach, a normal desk or counter, or far. */
-export type FaceDistance = 'near' | 'normal' | 'far'
+export type FaceDistance = 'auto' | 'near' | 'normal' | 'far'
 
 export interface KioskSettings {
   /** After identifying, register the next movement on its own (with a short cancel window). */

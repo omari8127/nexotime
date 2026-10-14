@@ -28,8 +28,16 @@ export function uprightAspect(width: number, height: number, rotation: Rotation)
  * and when people are at arm's reach ("near") the whole picture is shown, because anything cut away
  * would be part of the face. A picture that already has the screen's shape is always shown whole.
  */
-export function windowAspect(upright: number, screen: Orientation, distance: 'near' | 'normal' | 'far' = 'normal'): number {
-  if (screen === 'portrait' && upright > 1) return distance === 'near' ? upright : distance === 'far' ? 3 / 4 : 4 / 3
+export function windowAspect(
+  upright: number,
+  screen: Orientation,
+  distance: 'auto' | 'near' | 'normal' | 'far' = 'auto',
+): number {
+  // Automatic and near show the whole picture: the zoom does the framing, and a face at arm's reach must
+  // never be cut by the window.
+  if (screen === 'portrait' && upright > 1) {
+    return distance === 'auto' || distance === 'near' ? upright : distance === 'far' ? 3 / 4 : 4 / 3
+  }
   if (screen === 'landscape' && upright < 1) return 4 / 3
   return upright
 }

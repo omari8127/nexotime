@@ -118,6 +118,9 @@ export const MAX_FACE_RATIO = 0.85
  * away, is not "close enough"). Far counters need the opposite: faces are small, so smaller is accepted.
  */
 export function distanceProfile(distance: FaceDistance, tuning: Tuning): { minFace: number; maxFace: number } {
+  // Automatic: the zoom follows the face (autoFrame), so "small" and "close" only matter once the zoom
+  // has reached its limit; at 1× a face may fill almost the whole picture.
+  if (distance === 'auto') return { minFace: 0.12, maxFace: 0.93 }
   if (distance === 'near') return { minFace: Math.max(tuning.minFace, 0.25), maxFace: 0.93 }
   if (distance === 'far') return { minFace: Math.min(tuning.minFace, 0.08), maxFace: MAX_FACE_RATIO }
   return { minFace: tuning.minFace, maxFace: MAX_FACE_RATIO }

@@ -20,7 +20,7 @@ import {
  *    when nobody can be seen (see `useRotationSearch`), can be set by hand, and is remembered per
  *    way of holding the device.
  */
-export function useCameraView(size: { width: number; height: number }, distance: FaceDistance = 'normal') {
+export function useCameraView(size: { width: number; height: number }, distance: FaceDistance = 'auto') {
   const [screen, setScreen] = useState<Orientation>(() => screenOrientation())
   useEffect(() => {
     const update = () => setScreen(screenOrientation())

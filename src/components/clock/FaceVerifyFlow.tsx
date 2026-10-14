@@ -5,6 +5,7 @@ import { FaceViewport } from '@/components/clock/FaceViewport'
 import { VoiceToggle } from '@/components/shared/VoiceToggle'
 import { useCameraStream } from '@/hooks/useCameraStream'
 import { useCameraView, useRotationSearch } from '@/hooks/useCameraView'
+import { useAutoFrame } from '@/hooks/useAutoFrame'
 import { GetReadyOverlay, useGetReady } from '@/hooks/useGetReady'
 import { videoFrameCanvas } from '@/lib/camera'
 import {
@@ -99,6 +100,12 @@ export function FaceVerifyFlow({
   const { left, ready, skip } = useGetReady(cameraState === 'ready', attempt)
   // The picture as it must be shown and read on this device, held this way (sideways cameras included).
   const view = useCameraView(size, settings.faceDistance)
+  // Automatic framing: the zoom follows how close the face is (or stays at the configured zoom).
+  const frame = useAutoFrame({ distance: settings.faceDistance, baseZoom: settings.faceZoom, aspect: view.aspect })
+  const frameRef = useRef(frame)
+  useEffect(() => {
+    frameRef.current = frame
+  })
   const rotationRef = useRef(view.rotation)
   const aspectRef = useRef(view.aspect)
   const apiRef = useRef<FaceApi | null>(null)
@@ -215,11 +222,11 @@ export function FaceVerifyFlow({
         if (!alive) return
         let delay = ACTIVE_DELAY_MS
         try {
-          const { faceStrictness, faceThreshold, faceZoom } = settingsRef.current
+          const { faceStrictness, faceThreshold } = settingsRef.current
           const tuning = tuningFor(faceStrictness, faceThreshold)
           const started = performance.now()
           const result = await readFace(api, video, mode === 'verify', 'accurate', {
-            zoom: faceZoom,
+            zoom: frameRef.current.zoomRef.current,
             minConfidence: tuning.minConfidence,
             sharpness: true,
             rotation: rotationRef.current,
@@ -228,6 +235,7 @@ export function FaceVerifyFlow({
           if (!alive) return
           errors = 0
           noteReadingRef.current(result.kind !== 'none')
+          frameRef.current.note(result)
           delay = paceDelay(performance.now() - started, result.kind === 'none' ? IDLE_DELAY_MS : ACTIVE_DELAY_MS, 600, result.kind === 'none' ? 1.5 : 0.8)
 
           if (result.kind === 'none') {
@@ -239,7 +247,9 @@ export function FaceVerifyFlow({
             clearSince = goodSince = mismatches = 0
             setHint('Debe haber una sola persona frente a la cámara')
           } else {
-            const issues = qualityIssues(result.reading, { blur: true, ...distanceProfile(settings.faceDistance, tuning) })
+            const issues = frameRef.current.relevant(
+              qualityIssues(result.reading, { blur: true, ...distanceProfile(settingsRef.current.faceDistance, tuning) }),
+            )
             const descriptor = result.reading.descriptor
             if (issues.length > 0 || (mode === 'verify' && !descriptor)) {
               session.reset()
@@ -321,7 +331,7 @@ export function FaceVerifyFlow({
           loadingModels={stage === 'loading' && ready}
           overlay={!ready ? <GetReadyOverlay left={left} /> : undefined}
           ok={stage === 'verified'}
-          zoom={settings.faceZoom}
+          zoom={frame.zoom}
           rotation={view.rotation}
           aspect={view.aspect}
         />

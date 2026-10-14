@@ -22,7 +22,7 @@ export const KIOSK_DEFAULTS: ResolvedKioskSettings = {
   faceStrictness: 'balanced',
   faceThreshold: null,
   faceZoom: 1,
-  faceDistance: 'normal',
+  faceDistance: 'auto',
   minGapMinutes: 2,
   faceCheckOnPin: true,
   // Sólo se usa mientras la empresa no fija el suyo propio en Configuración → Reloj checador.
@@ -65,7 +65,10 @@ export function resolveKiosk(settings: AttendanceSettings | undefined): Resolved
     faceStrictness: k.faceStrictness ?? KIOSK_DEFAULTS.faceStrictness,
     faceThreshold: typeof k.faceThreshold === 'number' ? Math.min(0.75, Math.max(0.35, k.faceThreshold)) : null,
     faceZoom: typeof k.faceZoom === 'number' ? Math.min(2.5, Math.max(1, k.faceZoom)) : KIOSK_DEFAULTS.faceZoom,
-    faceDistance: k.faceDistance === 'near' || k.faceDistance === 'far' ? k.faceDistance : KIOSK_DEFAULTS.faceDistance,
+    faceDistance:
+      k.faceDistance === 'near' || k.faceDistance === 'normal' || k.faceDistance === 'far' || k.faceDistance === 'auto'
+        ? k.faceDistance
+        : KIOSK_DEFAULTS.faceDistance,
     minGapMinutes: Math.min(30, Math.max(0, k.minGapMinutes ?? KIOSK_DEFAULTS.minGapMinutes)),
     faceCheckOnPin: k.faceCheckOnPin ?? KIOSK_DEFAULTS.faceCheckOnPin,
     exitPin: /^\d{4,8}$/.test(k.exitPin ?? '') ? (k.exitPin as string) : KIOSK_DEFAULTS.exitPin,

@@ -33,6 +33,11 @@ const STRICTNESS: Record<FaceStrictness, { label: string; text: string }> = {
 
 const DISTANCE_OPTIONS: Array<{ value: FaceDistance; label: string; text: string }> = [
   {
+    value: 'auto',
+    label: 'Automática (recomendada)',
+    text: 'El reloj mide qué tan cerca está la cara y acerca o aleja la imagen solo, para que siempre llene el óvalo. Sirve igual para quien se pega a la tablet y para quien se queda lejos.',
+  },
+  {
     value: 'near',
     label: 'Muy cerca (10–40 cm)',
     text: 'Tablet en la pared y la persona casi pegada a ella. Muestra la imagen completa y acepta rostros grandes.',
