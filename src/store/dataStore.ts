@@ -47,6 +47,7 @@ import {
   weekdayFromISO,
 } from '@/lib/attendance'
 import { formatTime12 } from '@/lib/utils'
+import { applyDayEdit, type DayTimes } from '@/lib/dayEdit'
 import { toast } from '@/components/ui/toast'
 import { INCIDENCIA_META } from '@/data/incidencias'
 import { buildMockDatabase } from '@/data/mock'
@@ -135,6 +136,13 @@ export interface CorrectionInput {
   actor: User
 }
 
+export interface DayEditInput {
+  employeeId: string
+  date: string
+  times: DayTimes
+  reason: string
+}
+
 export interface CorrectionRequestInput {
   employeeId: string
   date: string
@@ -204,6 +212,8 @@ interface DataState {
   registerPunchWithPhoto: (input: PunchInput, photo: PhotoCapture) => Promise<{ record: AttendanceRecord; punch: Punch }>
   /** Applies a correction directly (RH/admin). Returns an error message, or null when applied. */
   applyCorrection: (input: CorrectionInput) => string | null
+  /** "Editar día completo": sets, changes or removes any movement of one day in a single step. */
+  editAttendanceDay: (input: DayEditInput) => { error: string } | { added: number; edited: number; removed: number }
   /** Bulk corrections from an imported spreadsheet. Skips rows with an error, applies the rest. */
   importAttendanceCorrections: (
     changes: Array<{ employeeId: string; date: string; type: PunchType; time: string; reason: string }>,
@@ -867,6 +877,60 @@ export const useDataStore = create<DataState>((set, get) => {
         get().currentUser,
       )
       return null
+    },
+
+    editAttendanceDay: ({ employeeId, date, times, reason }) => {
+      requirePermission('attendance.edit')
+      const state = get()
+      const employee = state.employees.find((e) => e.id === employeeId)
+      requireEmployeeScope(employee)
+      if (!employee) return { error: 'Empleado no encontrado.' }
+      if (!reason.trim()) return { error: 'Escribe el motivo del cambio: queda en la auditoría.' }
+      if (date > getToday(state.mode)) return { error: 'No puedes registrar asistencia de un día futuro.' }
+
+      const existing = state.attendance.find((r) => r.employeeId === employeeId && r.date === date)
+      const result = applyDayEdit(existing?.punches ?? [], times)
+      if ('error' in result) return result
+      if (result.changes.length === 0) return { error: 'No cambiaste ninguna hora.' }
+
+      const schedule = scheduleOf(state.schedules, employee.scheduleId)
+      const base: AttendanceRecord = existing ?? {
+        id: nextId(),
+        companyId: state.company.id,
+        branchId: employee.branchId,
+        employeeId,
+        date,
+        scheduleId: schedule.id,
+        punches: [],
+        status: 'present',
+        workedMinutes: 0,
+        scheduledMinutes: 0,
+        lateMinutes: 0,
+        overtimeMinutes: 0,
+        missingMinutes: 0,
+      }
+      const updated = recomputeRecord(
+        { ...base, punches: result.punches, note: reason.trim() },
+        schedule,
+        state.company.attendanceSettings,
+        getToday(state.mode),
+      )
+      set((s) => ({
+        attendance: existing ? s.attendance.map((r) => (r.id === updated.id ? updated : r)) : [updated, ...s.attendance],
+      }))
+      persist(get().mode, () => liveUpsertAttendance(updated), { kind: 'attendance', payload: updated })
+      writeAudit(
+        {
+          action: 'attendance.edit',
+          entityType: 'AttendanceRecord',
+          entityId: updated.id,
+          entityLabel: `${employee.fullName} · ${date}`,
+          reason: reason.trim(),
+          changes: result.changes,
+        },
+        get().currentUser,
+      )
+      return { added: result.added.length, edited: result.edited.length, removed: result.removed.length }
     },
 
     importAttendanceCorrections: (changes, actor) => {

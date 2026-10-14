@@ -11,6 +11,7 @@ Ejecuta en el **SQL Editor** de tu proyecto de Supabase, en este orden y una sol
 5. `migrations/005_sucursales_coordenadas.sql` — latitud/longitud de cada sucursal, para que el reloj checador muestre la ubicación real registrada en vez de depender del GPS del dispositivo.
 6. `migrations/006_integracion_google_drive.sql` — tabla donde cada empresa guarda su propia conexión a Google Drive (ver § Integraciones más abajo).
 7. `migrations/007_empleados_rfc.sql` — RFC opcional de cada empleado, que se imprime en su gafete junto al QR y al número de empleado.
+8. `migrations/008_portal_empleado.sql` — portal del empleado: entrar desde el celular con código de empresa + número de empleado + PIN, checar con foto y pedir vacaciones. Requiere antes `patches/NX01_fotos_entrada.sql`. Al terminar, el código de tu empresa aparece en **Configuración → Portal de empleados**.
 
 Las migraciones se pueden volver a correr sin dañar nada.
 
@@ -21,6 +22,16 @@ Después de correrlas:
 - **Authentication → Users:** crea un usuario y entra con él en la app; el alta de empresa crea su perfil de propietario.
 - Con un usuario de **RRHH**, intenta registrar un rostro: la app ya no muestra el botón, y si se intenta por API la base rechaza el cambio.
 - Con un usuario **empleado**, comprueba que solo ve su propia asistencia.
+
+## Portal del empleado: cómo está protegido
+
+El empleado no tiene cuenta de Supabase. Todo pasa por las funciones `employee_portal_*` de la migración 008, que el navegador llama sin sesión:
+
+- `employee_portal_login` comprueba código de empresa, número y PIN, y entrega una llave de sesión de 12 horas (en la base solo se guarda su huella). Cinco intentos fallidos bloquean a ese empleado 15 minutos.
+- Con esa llave, las demás funciones solo leen y escriben lo de **ese** empleado: su día de hoy, sus registros recientes y sus solicitudes de vacaciones.
+- Cada movimiento exige una foto tomada en ese momento y se compara con la hora del servidor (±5 minutos): cambiar el reloj del teléfono no sirve para checar a otra hora.
+- Las tablas `employee_portal_sessions` y `employee_portal_attempts` no son legibles desde el navegador.
+- Para apagarlo: **Configuración → Portal de empleados**. El reloj checador no se ve afectado.
 
 ## Datos biométricos: qué se guarda y quién lo lee
 

@@ -106,6 +106,8 @@ const company: Company = {
     trialEndsAt: '2021-05-02T00:00:00',
     currentPeriodEnd: '2026-10-10T00:00:00',
   },
+  portalCode: 'DEMO2026',
+  portalEnabled: true,
 }
 
 const branches: Branch[] = BRANCHES.map((b) => ({

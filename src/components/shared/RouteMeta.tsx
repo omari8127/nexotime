@@ -23,7 +23,11 @@ const PUBLIC: Record<string, Meta> = {
     description: 'Crea la cuenta de tu empresa en NEXOTIME: configura sucursales, empleados y horarios, y conecta tu reloj checador en minutos.',
     index: true,
   },
-  '/login': { title: `Iniciar sesión · ${SITE_NAME}` },
+  '/login': { title: `Portal de administración · ${SITE_NAME}` },
+  '/activar': {
+    title: `Activar este equipo · ${SITE_NAME}`,
+    description: 'Activa NEXOTIME en este equipo: como reloj checador para todos los empleados o como portal de un empleado.',
+  },
   [LEGAL_PATHS.aviso]: {
     title: `Aviso legal · ${SITE_NAME}`,
     description: 'Titular del sitio y condiciones generales de uso de NEXOTIME.',
@@ -50,11 +54,13 @@ const PUBLIC: Record<string, Meta> = {
 /** Tab titles for the private screens (they are never indexed). */
 const PRIVATE_TITLES: [prefix: string, title: string][] = [
   ['/clock', 'Reloj checador'],
+  ['/empleado', 'Portal de empleados'],
   ['/onboarding', 'Configuración inicial'],
   ['/mi-asistencia', 'Mi asistencia'],
   ['/empleados', 'Empleados'],
   ['/asistencia', 'Asistencia'],
   ['/incidencias', 'Incidencias'],
+  ['/vacaciones', 'Vacaciones'],
   ['/horarios', 'Horarios'],
   ['/sucursales', 'Sucursales'],
   ['/reportes', 'Reportes'],

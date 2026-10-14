@@ -33,6 +33,9 @@ export interface Company {
   /** Read-only: only a service-role process (a payment webhook, or you recording
    *  a manual payment) can change this — see supabase/migrations/004_suscripciones.sql. */
   subscription: Subscription
+  /** Portal del empleado (número + PIN desde su celular). Absent until migration 008 is run. */
+  portalCode?: string
+  portalEnabled?: boolean
 }
 
 /** Same plan names as license-server/src/plans.js, kept during the migration off licenses. */

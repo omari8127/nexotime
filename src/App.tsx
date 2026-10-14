@@ -58,6 +58,10 @@ const SettingsPage = page(() => import('@/pages/SettingsPage'), 'SettingsPage')
 const OnboardingPage = page(() => import('@/pages/OnboardingPage'), 'OnboardingPage')
 const MyAttendancePage = page(() => import('@/pages/MyAttendancePage'), 'MyAttendancePage')
 const IncidenciasPage = page(() => import('@/pages/IncidenciasPage'), 'IncidenciasPage')
+const VacationsPage = page(() => import('@/pages/VacationsPage'), 'VacationsPage')
+const ActivationPage = page(() => import('@/pages/portal/ActivationPage'), 'ActivationPage')
+const EmployeePortalPage = page(() => import('@/pages/portal/EmployeePortalPage'), 'EmployeePortalPage')
+const EmployeePortalLink = page(() => import('@/pages/portal/EmployeePortalPage'), 'EmployeePortalLink')
 const NotFoundPage = page(() => import('@/pages/NotFoundPage'), 'NotFoundPage')
 const ClockPage = page(() => import('@/pages/clock/ClockPage'), 'ClockPage')
 const AvisoLegalPage = page(() => import('@/pages/legal/LegalPages'), 'AvisoLegalPage')
@@ -89,6 +93,9 @@ export function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
+          <Route path="/activar" element={<ActivationPage />} />
+          <Route path="/empleado" element={<EmployeePortalPage />} />
+          <Route path="/empleado/:code" element={<EmployeePortalLink />} />
           <Route path={LEGAL_PATHS.aviso} element={<AvisoLegalPage />} />
           <Route path={LEGAL_PATHS.privacidad} element={<PrivacidadPage />} />
           <Route path={LEGAL_PATHS.terminos} element={<TerminosPage />} />
@@ -115,6 +122,7 @@ export function App() {
             <Route path="/empleados/:id" element={guard('employees.view', <EmployeeProfilePage />)} />
             <Route path="/asistencia" element={guard('attendance.view', <AttendancePage />)} />
             <Route path="/incidencias" element={guard('incidencias.view', <IncidenciasPage />)} />
+            <Route path="/vacaciones" element={guard('incidencias.view', <VacationsPage />)} />
             <Route path="/horarios" element={guard('schedules.view', <SchedulesPage />)} />
             <Route path="/sucursales" element={guard('branches.view', <BranchesPage />)} />
             <Route path="/sucursales/:id" element={guard('branches.view', <BranchDetailPage />)} />

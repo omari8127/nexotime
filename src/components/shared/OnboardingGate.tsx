@@ -11,10 +11,11 @@ import type { Permission } from '@/types'
 /** Shared by any route that requires a real (live-mode) session: while the
  *  session restore check is running show a loader, then either let the route
  *  through or send the visitor to /login. No-ops in demo mode. */
-function LiveSessionGate({ children }: { children: ReactNode }) {
+function LiveSessionGate({ children, next }: { children: ReactNode; next?: string }) {
   const status = useAuthStore((s) => s.status)
   if (status === 'checking') return <FullScreenLoader />
-  if (status !== 'authenticated') return <Navigate to="/login" replace />
+  // `next`: where to land after signing in (the kiosk comes back to the kiosk, not to the panel).
+  if (status !== 'authenticated') return <Navigate to={next ? `/login?next=${encodeURIComponent(next)}` : '/login'} replace />
   return <>{children}</>
 }
 
@@ -42,7 +43,7 @@ export function ClockAccessGate({ children }: { children: ReactNode }) {
   const status = useAuthStore((s) => s.status)
   // Same reason as above: don't show (or let anyone punch into) demo data while the saved session loads.
   if (status === 'checking') return <FullScreenLoader />
-  if (mode === 'live') return <LiveSessionGate>{children}</LiveSessionGate>
+  if (mode === 'live') return <LiveSessionGate next="/clock">{children}</LiveSessionGate>
   return <>{children}</>
 }
 

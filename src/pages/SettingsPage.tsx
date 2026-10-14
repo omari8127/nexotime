@@ -14,6 +14,7 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { WeeklyHoursPicker } from '@/components/shared/WeeklyHoursPicker'
 import { MX_TIMEZONES } from '@/data/timezones'
 import { KioskSettingsPanel } from '@/components/settings/KioskSettingsPanel'
+import { EmployeePortalPanel } from '@/components/settings/EmployeePortalPanel'
 import { GoogleDriveIntegrationPanel } from '@/components/settings/GoogleDriveIntegrationPanel'
 import { useDataStore } from '@/store/dataStore'
 import { usePermissions } from '@/hooks/useScopedData'
@@ -83,6 +84,7 @@ export function SettingsPage() {
           <TabsTrigger value="jornada">Jornada laboral</TabsTrigger>
           <TabsTrigger value="asistencia">Asistencia</TabsTrigger>
           <TabsTrigger value="reloj">Reloj checador</TabsTrigger>
+          <TabsTrigger value="portal">Portal de empleados</TabsTrigger>
           <TabsTrigger value="cumplimiento">Cumplimiento LFT</TabsTrigger>
           {mode === 'live' ? <TabsTrigger value="integraciones">Integraciones</TabsTrigger> : null}
           {mode === 'live' ? <TabsTrigger value="plan">Plan y pago</TabsTrigger> : null}
@@ -213,6 +215,10 @@ export function SettingsPage() {
 
         <TabsContent value="reloj">
           <KioskSettingsPanel />
+        </TabsContent>
+
+        <TabsContent value="portal">
+          <EmployeePortalPanel />
         </TabsContent>
 
         <TabsContent value="cumplimiento">

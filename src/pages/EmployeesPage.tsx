@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Download, MoreHorizontal, Printer, QrCode, Search, Upload, UserPlus, Users } from 'lucide-react'
+import { Download, MoreHorizontal, Printer, QrCode, ScanFace, Search, Upload, UserPlus, Users } from 'lucide-react'
 import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,6 +19,10 @@ import { Dropdown, DropdownItem } from '@/components/ui/dropdown'
 import { EmployeeStatusBadge } from '@/components/shared/badges'
 import { EmployeeFormDialog } from '@/components/employees/EmployeeFormDialog'
 import { QrPreviewDialog } from '@/components/employees/QrPreviewDialog'
+import { FaceEnrollDialog } from '@/components/employees/FaceEnrollDialog'
+import { FACE_SAMPLE_TARGET, faceSampleCount } from '@/lib/faceSamples'
+import { useFeature } from '@/lib/license/features'
+import { cn } from '@/lib/utils'
 import { useScopedData, usePermissions } from '@/hooks/useScopedData'
 import { useDataStore } from '@/store/dataStore'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -28,6 +32,41 @@ import { buildWorkbookPayload, downloadCSV } from '@/services/exportService'
 import { printCredentials } from '@/lib/credentialPrint'
 import { formatTime12 } from '@/lib/utils'
 import type { Employee } from '@/types'
+
+/** "3/5 muestras": how much of the face registration is done — red none, amber partial, green complete. */
+function FaceSamples({ count, onClick }: { count: number; onClick?: () => void }) {
+  const done = Math.min(count, FACE_SAMPLE_TARGET)
+  const tone =
+    done === 0
+      ? 'bg-rose-500/12 text-rose-700 dark:text-rose-300'
+      : done < FACE_SAMPLE_TARGET
+        ? 'bg-amber-400/20 text-amber-800 dark:text-amber-200'
+        : 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300'
+  const label = `${done}/${FACE_SAMPLE_TARGET} muestras`
+  const className = cn(
+    'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold tabular-nums',
+    tone,
+  )
+  if (!onClick) {
+    return (
+      <span className={className}>
+        <ScanFace className="h-3.5 w-3.5" />
+        {label}
+      </span>
+    )
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={done === 0 ? 'Registrar rostro' : 'Volver a registrar el rostro'}
+      className={cn(className, 'transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring')}
+    >
+      <ScanFace className="h-3.5 w-3.5" />
+      {label}
+    </button>
+  )
+}
 
 export function EmployeesPage() {
   const navigate = useNavigate()
@@ -68,6 +107,10 @@ export function EmployeesPage() {
   // Kept as an id so the dialog shows the fresh codes right after "Regenerar códigos".
   const [badgeId, setBadgeId] = useState<string | undefined>()
   const badgeEmployee = useMemo(() => employees.find((e) => e.id === badgeId), [employees, badgeId])
+  const [faceId, setFaceId] = useState<string | undefined>()
+  const faceEmployee = useMemo(() => employees.find((e) => e.id === faceId), [employees, faceId])
+  const faceInPlan = useFeature('face')
+  const canEnrollFaces = faceInPlan && can('biometrics.manage')
 
   const scheduleById = useMemo(() => new Map(schedules.map((s) => [s.id, s])), [schedules])
   const branchById = useMemo(() => new Map(allBranches.map((b) => [b.id, b])), [allBranches])
@@ -235,6 +278,7 @@ export function EmployeesPage() {
                 <TableHead className="hidden md:table-cell">Departamento</TableHead>
                 <TableHead className="hidden lg:table-cell">Sucursal</TableHead>
                 <TableHead className="hidden lg:table-cell">Horario</TableHead>
+                <TableHead className="hidden sm:table-cell">Rostro</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead className="w-20" />
               </TableRow>
@@ -270,6 +314,12 @@ export function EmployeesPage() {
                       {workday
                         ? `${formatTime12(workday.entry)} - ${formatTime12(workday.exit)}`
                         : '—'}
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell" onClick={(ev) => ev.stopPropagation()}>
+                      <FaceSamples
+                        count={faceSampleCount(e)}
+                        onClick={canEnrollFaces && e.status === 'active' ? () => setFaceId(e.id) : undefined}
+                      />
                     </TableCell>
                     <TableCell>
                       <EmployeeStatusBadge status={e.status} />
@@ -327,7 +377,8 @@ export function EmployeesPage() {
       )}
 
       <p className="text-xs text-muted-foreground">
-        {filtered.length} de {employees.length} empleados
+        {filtered.length} de {employees.length} empleados · Las muestras faciales se guardan en cada reloj checador: el
+        rostro se reconoce aunque se vaya el Internet.
       </p>
 
       <EmployeeFormDialog open={addOpen} onOpenChange={setAddOpen} />
@@ -349,6 +400,9 @@ export function EmployeesPage() {
         }}
       />
       <ImportEmployeesDialog open={importOpen} onOpenChange={setImportOpen} />
+      {faceEmployee ? (
+        <FaceEnrollDialog open onOpenChange={(o) => !o && setFaceId(undefined)} employee={faceEmployee} />
+      ) : null}
       {badgeEmployee ? (
         <QrPreviewDialog
           open

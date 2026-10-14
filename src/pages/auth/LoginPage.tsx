@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Loader2, TriangleAlert } from 'lucide-react'
 import { AuthShell } from '@/pages/auth/AuthShell'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,11 @@ import { toast } from '@/components/ui/toast'
 
 export function LoginPage() {
   const navigate = useNavigate()
+  // Where to go after signing in (e.g. "/clock" when this equipment is being set up as the reloj
+  // checador). Only paths inside the app are honoured.
+  const [params] = useSearchParams()
+  const requested = params.get('next') ?? ''
+  const next = /^\/[a-z-]*$/.test(requested) ? requested : '/'
   const hydrateLive = useDataStore((s) => s.hydrateLive)
   const setAuthStatus = useAuthStore((s) => s.setStatus)
 
@@ -33,7 +38,7 @@ export function LoginPage() {
       hydrateLive(bundle)
       setAuthStatus('authenticated')
       toast.success('Bienvenido de nuevo', bundle.company.name)
-      navigate('/')
+      navigate(next)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo iniciar sesión.')
     } finally {
@@ -43,14 +48,24 @@ export function LoginPage() {
 
   return (
     <AuthShell
-      title="Iniciar sesión"
-      description="Entra al panel de tu empresa en NEXOTIME."
+      title={next === '/clock' ? 'Activar el reloj checador' : 'Portal de administración'}
+      description={
+        next === '/clock'
+          ? 'Entra con la cuenta de tu empresa: este equipo quedará como reloj checador para todos los empleados.'
+          : 'Entra al panel de tu empresa en NEXOTIME.'
+      }
       footer={
         <>
           ¿Tu empresa no tiene cuenta todavía?{' '}
           <Link to="/signup" className="font-medium text-sky-300 hover:underline">
             Crear cuenta
           </Link>
+          <span className="mt-1.5 block">
+            ¿Eres empleado?{' '}
+            <Link to="/activar?modo=empleado" className="font-medium text-sky-300 hover:underline">
+              Entra con tu número y PIN
+            </Link>
+          </span>
         </>
       }
     >

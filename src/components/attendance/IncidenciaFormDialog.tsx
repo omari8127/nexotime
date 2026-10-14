@@ -21,18 +21,21 @@ export function IncidenciaFormDialog({
   open,
   onOpenChange,
   employeeId,
+  defaultType = 'permiso_con_goce',
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   /** Pre-selecciona al empleado (p. ej. abierto desde su perfil). */
   employeeId?: string
+  /** Tipo con el que abre (p. ej. «vacaciones» desde la sección de Vacaciones). */
+  defaultType?: IncidenciaType
 }) {
   const { employees } = useScopedData()
   const addIncidencia = useDataStore((s) => s.addIncidencia)
   const currentUser = useDataStore((s) => s.currentUser)
 
   const [empId, setEmpId] = useState(employeeId ?? employees[0]?.id ?? '')
-  const [type, setType] = useState<IncidenciaType>('permiso_con_goce')
+  const [type, setType] = useState<IncidenciaType>(defaultType)
   const today = useToday()
   const [from, setFrom] = useState(today)
   const [to, setTo] = useState(today)

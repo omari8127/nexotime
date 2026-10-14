@@ -61,6 +61,8 @@ export function FaceVerifyFlow({
   settings,
   mode,
   keepPhoto,
+  stepLabel,
+  photoNote,
   onVerified,
   onCancel,
 }: {
@@ -71,6 +73,10 @@ export function FaceVerifyFlow({
   mode: 'verify' | 'evidence'
   /** The photo is saved with the movement (an entry); otherwise it is only shown once, never stored. */
   keepPhoto: boolean
+  /** Replaces the "Paso 3 de 3 · …" line where this is not the third step of the kiosk (employee portal). */
+  stepLabel?: string
+  /** Replaces the sentence that says what happens with the photo. */
+  photoNote?: string
   onVerified: (result: FaceVerification) => void
   onCancel: () => void
 }) {
@@ -321,7 +327,7 @@ export function FaceVerifyFlow({
       <div className="flex w-full min-w-0 flex-col items-center gap-4 landscape:flex-1 landscape:items-stretch">
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            {mode === 'verify' ? 'Paso 3 de 3 · Verificación de identidad' : 'Paso 3 de 3 · Foto de entrada'}
+            {stepLabel ?? (mode === 'verify' ? 'Paso 3 de 3 · Verificación de identidad' : 'Paso 3 de 3 · Foto de entrada')}
           </p>
           <p className="text-2xl font-bold tracking-tight text-slate-900">{title}</p>
 
@@ -354,9 +360,9 @@ export function FaceVerifyFlow({
           )}
 
           <p className="text-sm text-slate-500">
-            {keepPhoto
+            {photoNote ?? (keepPhoto
               ? 'Esta foto se guarda con tu entrada como evidencia.'
-              : 'La foto solo sirve para comprobar que eres tú y no se guarda.'}
+              : 'La foto solo sirve para comprobar que eres tú y no se guarda.')}
           </p>
         </div>
 

@@ -22,6 +22,13 @@
 - Integración con Google Drive (Configuración → Integraciones): cada empresa conecta su propia cuenta y recibe ahí, una vez al día, un CSV con la asistencia del día anterior. Falta la puesta en marcha única del proyecto (ver pendiente #8).
 - Sitio público y SEO: páginas de Aviso legal, Privacidad, Términos y Cookies (`/aviso-legal`, `/privacidad`, `/terminos`, `/cookies`) con enlaces en bienvenida, login y registro; aviso de cookies informativo; casilla «acepto» en el registro (guarda la versión aceptada en el usuario); título, descripción, canonical y Open Graph por ruta; `robots.txt` y `sitemap.xml` reales (se generan en cada build); datos estructurados; imagen de vista previa al compartir; íconos PNG; contraste revisado (WCAG AA) y zoom del móvil habilitado.
 
+- Tres accesos desde la página pública: **Administrador** (`/login`), **Empleado** y **Reloj checador** (ambos pasan por «Activar este equipo», `/activar`, donde se elige cómo se usará ese dispositivo).
+- **Portal del empleado** (`/empleado`): entra con código de empresa + número de empleado + PIN; registra entrada, comida y salida con foto obligatoria (y comparación de rostro si lo tiene registrado) y ubicación; consulta sus días y pide vacaciones. Requiere la migración `008`.
+- **Vacaciones** (`/vacaciones`): las solicitudes del portal llegan como pendientes; se aprueban o rechazan, y se ven los días por ley (Art. 76 LFT), tomados y disponibles de cada persona.
+- **Asistencia** con dos vistas: resumen diario por periodo (horas en píldoras de colores) y **registro de checadas** (Entradas / Salidas / Comidas / Todos, con foto, ubicación y medio), ambas con búsqueda por nombre y rango de fechas.
+- **Editar día completo**: un administrador agrega, cambia o quita cualquier movimiento de un día en un solo paso, con motivo obligatorio y registro en auditoría; también captura un día que no tenía checadas.
+- Gafete vertical (QR grande arriba, RFC e ID debajo) y, en Empleados, cuántas muestras faciales tiene cada persona.
+
 ## Pendiente — depende de ti (no se puede hacer desde el código)
 
 | # | Pendiente | Por qué importa |
@@ -36,6 +43,9 @@
 | 8 | **Puesta en marcha de la integración con Google Drive** (`supabase/README.md` § Integraciones): crear la credencial OAuth en Google Cloud Console, correr la migración `006`, desplegar las dos Edge Functions y programar el cron diario | Mientras no se haga, el botón "Conectar con Google Drive" existe pero no puede completarse |
 | 9 | **Completar los datos legales** en `src/data/legal.ts` (`LEGAL_ENTITY`: RFC, domicilio y correo de contacto/ARCO). Mientras estén vacíos, las páginas legales muestran «pendiente de completar». Un abogado debe revisar los textos publicados (aviso legal, privacidad, términos, cookies) | El aviso legal y el de privacidad exigen titular, domicilio y medio para ejercer derechos ARCO |
 | 10 | **Pendientes de la web que necesitan tu decisión o datos**: botón de WhatsApp (número y mensaje), analítica (si es Google Analytics, el aviso de cookies debe pasar a aceptar/rechazar), ficha de Google Business, dominio propio (poner `SITE_URL` en Vercel; el sitemap y las vistas previas lo toman solo) y captcha en el registro (Turnstile + Supabase Auth) | Completan la lista de revisión de un sitio profesional |
+| 11 | **Ejecutar en Supabase** `migrations/008_portal_empleado.sql` y **probar el portal en un celular real** (cámara, foto, ubicación, PIN equivocado 5 veces) | La cámara no se puede probar en un entorno de desarrollo sin cámara; las reglas de la base sí se probaron (46 comprobaciones en un Postgres de prueba) |
+| 12 | **Poner precios y forma de pago reales** en `src/data/pricing.ts` (hoy la página pública dice «Solicita tu cotización» y «transferencia o depósito») | La página pública no inventa precios |
+| 13 | **Revisión legal** de que el aviso de privacidad cubre lo nuevo del portal: foto en cada movimiento y ubicación tomada desde el teléfono personal del empleado | Son datos personales sensibles (LFPDPPP) |
 
 ## Migración en curso: de licencia por dispositivo a cuenta de empresa con suscripción
 
@@ -97,4 +107,6 @@ avisa para priorizarlo aparte.
 - Los vectores faciales viajan al navegador de quien tenga acceso a los empleados (el reconocimiento se hace ahí, sin enviar fotos). Escritura protegida a propietario/administrador en la base de datos (migración 003).
 - Sin conexión, el reloj abre con una copia de los últimos 62 días (o menos si el navegador no le da espacio). Una checada hecha sin conexión se conserva hasta poder enviarse; si el servidor la rechaza varias veces se aparta en el equipo (`nexotime.syncRejected`) y se avisa, no se pierde en silencio.
 - La hora se corrige con la del servidor mientras haya conexión. Si el equipo arranca sin conexión usa su propio reloj hasta reconectar.
+- Portal del empleado: el PIN es de 4 dígitos; lo que impide adivinarlo es el bloqueo (5 intentos, 15 minutos) y que cada movimiento deja una foto. La comparación de rostro en el teléfono corre en el navegador del empleado: disuade y deja evidencia, pero la revisión de las fotos es lo que realmente lo comprueba.
+- Cada equipo guarda el día completo de un empleado al registrar un movimiento. Un reloj checador que lleve mucho tiempo sin refrescar sus datos y registre a alguien que ya checó desde su celular (o al revés) puede dejar el día con lo que ese equipo conocía; el reloj se refresca al volver a primer plano, y el portal siempre lee el día antes de guardar.
 - Antes de cada entrega a un cliente: `docs/QA-PRUEBAS.md`, en el equipo real.

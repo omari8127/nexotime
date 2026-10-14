@@ -42,6 +42,12 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     navigate('/bienvenida')
   }
 
+  // Vacation requests waiting for a decision (employees send them from their portal).
+  const pendingVacations = useDataStore(
+    (s) => s.incidencias.filter((i) => i.type === 'vacaciones' && i.status === 'pending').length,
+  )
+  const badgeFor = (to: string) => (to === '/vacaciones' && can('incidencias.review') ? pendingVacations : 0)
+
   const hasReports = useFeature('reports')
   const hasAudit = useFeature('audit')
   const items = NAV_ITEMS.filter(
@@ -86,6 +92,16 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                 ) : null}
                 <item.icon className="h-[18px] w-[18px] shrink-0" />
                 {!collapsed && <span>{item.label}</span>}
+                {badgeFor(item.to) > 0 ? (
+                  <span
+                    className={cn(
+                      'flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-400 px-1.5 text-[11px] font-bold tabular-nums text-amber-950',
+                      collapsed ? 'absolute right-1.5 top-0.5 h-4 min-w-4 px-1 text-[10px]' : 'ml-auto',
+                    )}
+                  >
+                    {badgeFor(item.to)}
+                  </span>
+                ) : null}
               </>
             )}
           </NavLink>

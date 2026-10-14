@@ -65,44 +65,40 @@ export function QrPreviewDialog({
           <DialogHeader>
             <DialogTitle>Gafete de {employee.firstName}</DialogTitle>
             <DialogDescription>
-              Así se imprime: su código QR para el reloj checador, su ID de empleado y su RFC.
+              Así se imprime (tamaño tarjeta, vertical): el código QR grande arriba y debajo su RFC y su ID de empleado.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex gap-4 rounded-lg border border-slate-200 bg-white p-4 text-slate-900">
-            <div className="flex min-w-0 flex-1 flex-col">
-              <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                {companyName}
-              </p>
-              <p className="mt-2 text-base font-semibold leading-tight">{employee.fullName}</p>
-              <p className="mt-0.5 truncate text-[13px] text-slate-500">{employee.position}</p>
-              <dl className="mt-2 space-y-0.5">
-                {credentialFacts(employee).map((f) => (
-                  <div key={f.label} className="flex items-baseline gap-2">
-                    <dt className="w-7 text-[10px] font-bold tracking-wide text-slate-500">{f.label}</dt>
-                    <dd className="text-sm font-semibold tabular-nums">{f.value}</dd>
-                  </div>
-                ))}
-              </dl>
-              {bar ? (
-                <div
-                  className="mt-auto pt-3 [&_svg]:h-auto [&_svg]:max-h-14 [&_svg]:w-full"
-                  dangerouslySetInnerHTML={{ __html: barcodeSvg(bar, { height: 34 }) }}
-                />
-              ) : (
-                <p className="mt-auto pt-4 text-xs text-slate-500">Código de barras desactivado</p>
-              )}
-            </div>
+          {/* Same order and proportions as the printed card (54 × 85.6 mm). */}
+          <div className="mx-auto flex aspect-[54/85.6] w-[236px] flex-col items-center rounded-xl border border-slate-300 bg-white px-4 pb-3 pt-4 text-center text-slate-900 shadow-md">
+            <p className="w-full truncate text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              {companyName}
+            </p>
             {qr ? (
               <div
-                className="h-32 w-32 shrink-0 [&_svg]:h-full [&_svg]:w-full"
+                className="mt-2 h-[176px] w-[176px] shrink-0 [&_svg]:h-full [&_svg]:w-full"
                 dangerouslySetInnerHTML={{ __html: qrMarkup }}
               />
             ) : (
-              <p className="w-32 self-center text-center text-xs text-slate-500">
+              <p className="mt-2 flex h-[176px] w-[176px] items-center justify-center rounded-lg bg-slate-100 text-xs text-slate-500">
                 Código QR desactivado
               </p>
             )}
+            <dl className="mt-2 w-full space-y-1">
+              {credentialFacts(employee).map((f) => (
+                <div key={f.label}>
+                  <dt className="text-[8px] font-bold tracking-[0.14em] text-slate-500">{f.label}</dt>
+                  <dd className="text-[17px] font-bold leading-tight tracking-wide tabular-nums">{f.value}</dd>
+                </div>
+              ))}
+            </dl>
+            <p className="mt-1.5 w-full truncate text-[11px] text-slate-600">{employee.fullName}</p>
+            {bar ? (
+              <div
+                className="mt-auto w-full [&_svg]:h-auto [&_svg]:max-h-9 [&_svg]:w-full"
+                dangerouslySetInnerHTML={{ __html: barcodeSvg(bar, { height: 26 }) }}
+              />
+            ) : null}
           </div>
 
           {!employee.rfc && can('employees.edit') ? (

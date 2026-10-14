@@ -4,32 +4,32 @@ import { barcodeSvg, credentialValue, qrSvg } from '@/lib/credentials'
 const esc = (t: string) =>
   t.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] as string)
 
-/** The labelled lines of a badge, shared by the on-screen preview and the printed card. */
+/** The labelled lines under the QR, in the order they are printed: RFC first, then the employee ID. */
 export function credentialFacts(employee: Employee): Array<{ label: string; value: string }> {
   return [
-    { label: 'ID', value: employee.employeeNumber },
     ...(employee.rfc ? [{ label: 'RFC', value: employee.rfc }] : []),
+    { label: 'ID', value: employee.employeeNumber },
   ]
 }
 
-/** One badge in CR80 format (85.6 × 54 mm), the standard PVC card size. */
+/**
+ * One badge, upright, in CR80 size (54 × 85.6 mm, the standard PVC card): the QR large on top —
+ * it is what the reloj checador reads — then the RFC and the employee ID.
+ */
 export async function credentialCardHtml(employee: Employee, companyName: string): Promise<string> {
   const qr = credentialValue(employee, 'qr')
   const bar = credentialValue(employee, 'barcode')
   const qrHtml = qr ? await qrSvg(qr) : ''
-  const barHtml = bar ? barcodeSvg(bar, { height: 34 }) : ''
+  const barHtml = bar ? barcodeSvg(bar, { height: 26 }) : ''
   const facts = credentialFacts(employee)
     .map((f) => `<div><dt>${esc(f.label)}</dt><dd>${esc(f.value)}</dd></div>`)
     .join('')
   return `<section class="card">
-  <div class="left">
-    <p class="company">${esc(companyName)}</p>
-    <p class="name">${esc(employee.fullName)}</p>
-    <p class="meta">${esc(employee.position)}</p>
-    <dl class="facts">${facts}</dl>
-    <div class="bar">${barHtml}</div>
-  </div>
+  <p class="company">${esc(companyName)}</p>
   <div class="qr">${qrHtml}</div>
+  <dl class="facts">${facts}</dl>
+  <p class="name">${esc(employee.fullName)}</p>
+  ${barHtml ? `<div class="bar">${barHtml}</div>` : ''}
 </section>`
 }
 
@@ -49,20 +49,21 @@ export async function printCredentials(
   @page { size: A4; margin: 10mm }
   * { box-sizing: border-box }
   body { margin: 0; font-family: Inter, Arial, sans-serif; color: #0f172a; background: #fff }
-  .sheet { display: grid; grid-template-columns: repeat(2, 85.6mm); gap: 6mm; justify-content: center }
-  .card { width: 85.6mm; height: 54mm; border: 0.3mm solid #94a3b8; border-radius: 3mm; padding: 4mm;
-          display: flex; gap: 3mm; break-inside: avoid; overflow: hidden }
-  .left { flex: 1; min-width: 0; display: flex; flex-direction: column }
-  .company { margin: 0; font-size: 7pt; letter-spacing: .08em; text-transform: uppercase; color: #64748b;
-             white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
-  .name { margin: 2mm 0 0; font-size: 11pt; font-weight: 700; line-height: 1.15 }
-  .meta { margin: 0.8mm 0 0; font-size: 8pt; color: #475569;
+  .sheet { display: grid; grid-template-columns: repeat(3, 54mm); gap: 6mm; justify-content: center }
+  .card { width: 54mm; height: 85.6mm; border: 0.3mm solid #94a3b8; border-radius: 3mm; padding: 4mm 4mm 3mm;
+          display: flex; flex-direction: column; align-items: center; text-align: center;
+          break-inside: avoid; overflow: hidden }
+  .company { margin: 0; width: 100%; font-size: 7pt; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+             color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+  .qr { margin-top: 2mm; width: 42mm; height: 42mm } .qr svg { display: block; width: 42mm; height: 42mm }
+  .facts { margin: 2mm 0 0; width: 100% }
+  .facts div + div { margin-top: 1mm }
+  .facts dt { font-size: 6pt; font-weight: 700; letter-spacing: .12em; color: #64748b; line-height: 1.2 }
+  .facts dd { margin: 0; font-size: 12pt; font-weight: 700; letter-spacing: .03em; line-height: 1.15;
+              font-variant-numeric: tabular-nums; white-space: nowrap }
+  .name { margin: 1.6mm 0 0; width: 100%; font-size: 7.5pt; color: #475569; line-height: 1.2;
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
-  .facts { margin: 1.8mm 0 0 } .facts div { display: flex; gap: 1.5mm; align-items: baseline; line-height: 1.3 }
-  .facts dt { width: 7mm; font-size: 6.5pt; font-weight: 700; letter-spacing: .06em; color: #64748b }
-  .facts dd { margin: 0; font-size: 9pt; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: .02em }
-  .bar { margin-top: auto } .bar svg { display: block; width: 100%; height: auto; max-height: 12mm }
-  .qr { width: 30mm; display: flex; align-items: center } .qr svg { width: 30mm; height: 30mm }
+  .bar { margin-top: auto; width: 100% } .bar svg { display: block; width: 100%; height: auto; max-height: 9mm }
   @media screen { body { padding: 16px; background: #f1f5f9 } .card { background: #fff } }
 </style></head><body><main class="sheet">${cards}</main>
 <script>window.onload = function () { setTimeout(function () { window.print() }, 300) }<\/script></body></html>`)

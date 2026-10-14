@@ -38,6 +38,9 @@ export function companyFromRow(row: Record<string, unknown>): Company {
     attendanceSettings: row.attendance_settings as AttendanceSettings,
     createdAt: (row.created_at as string) ?? new Date().toISOString(),
     subscription: subscriptionFromRow(row),
+    // Absent until migration 008 is run: the panel then shows how to switch the portal on.
+    portalCode: (row.portal_code as string | null) ?? undefined,
+    portalEnabled: typeof row.portal_enabled === 'boolean' ? row.portal_enabled : undefined,
   }
 }
 
@@ -76,6 +79,7 @@ export function companyToRow(patch: Partial<Company>): Record<string, unknown> {
   if (patch.timezone !== undefined) row.timezone = patch.timezone
   if (patch.weeklyTargetHours !== undefined) row.weekly_target_hours = patch.weeklyTargetHours
   if (patch.attendanceSettings !== undefined) row.attendance_settings = patch.attendanceSettings
+  if (patch.portalEnabled !== undefined) row.portal_enabled = patch.portalEnabled
   return row
 }
 
