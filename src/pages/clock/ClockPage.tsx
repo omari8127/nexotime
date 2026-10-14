@@ -218,15 +218,29 @@ export function ClockPage() {
 
   // No hay botón visible para salir del reloj checador (lo debe usar cualquier
   // empleado). Mantener presionado el logo 3 segundos pide el código de salida.
+  // Dos formas, porque en una pantalla táctil "mantener presionado" falla con facilidad: el navegador lo toma
+  // por un gesto propio (menú, arrastre) y cancela el toque. Por eso el botón no deja gestos al navegador
+  // (touch-action: none) y, además, 5 toques seguidos al logo también piden el código.
   const holdTimer = useRef<number | null>(null)
+  const taps = useRef<number[]>([])
+  const openExitGate = () => {
+    taps.current = []
+    setShowExitGate(true)
+  }
   const startHold = () => {
-    holdTimer.current = window.setTimeout(() => setShowExitGate(true), 3000)
+    cancelHold()
+    holdTimer.current = window.setTimeout(openExitGate, 3000)
   }
   const cancelHold = () => {
     if (holdTimer.current !== null) {
       window.clearTimeout(holdTimer.current)
       holdTimer.current = null
     }
+  }
+  const tapLogo = () => {
+    const now = Date.now()
+    taps.current = [...taps.current.filter((t) => now - t < 4000), now]
+    if (taps.current.length >= 5) openExitGate()
   }
 
   // Falls back to the first branch once real data loads — a brand-new live
@@ -451,9 +465,17 @@ export function ClockPage() {
         <button
           type="button"
           onPointerDown={startHold}
-          onPointerUp={cancelHold}
-          onPointerLeave={cancelHold}
+          onPointerUp={() => {
+            cancelHold()
+            tapLogo()
+          }}
+          // Con el dedo, "salirse" del botón o cancelarse el toque no es soltar: solo el mouse cancela al salir.
+          onPointerLeave={(e) => {
+            if (e.pointerType === 'mouse') cancelHold()
+          }}
           onContextMenu={(e) => e.preventDefault()}
+          onDragStart={(e) => e.preventDefault()}
+          style={{ touchAction: 'none', WebkitTouchCallout: 'none', WebkitUserSelect: 'none' }}
           className="w-fit select-none"
           aria-label="Nexotime"
         >

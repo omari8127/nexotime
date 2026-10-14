@@ -330,9 +330,9 @@ export function KioskSettingsPanel() {
                   Código de salida del reloj
                 </Label>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  El reloj checador no tiene botón para salir: se sale manteniendo presionado el logo 3
-                  segundos y escribiendo este código (4 a 8 dígitos). Solo compártelo con quien administra
-                  la tablet.
+                  El reloj checador no tiene botón para salir: se sale tocando el logo 5 veces seguidas
+                  (o manteniéndolo presionado 3 segundos) y escribiendo este código (4 a 8 dígitos). Solo
+                  compártelo con quien administra la tablet.
                 </p>
               </div>
               <Input

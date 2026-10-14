@@ -44,7 +44,7 @@ Marca cada punto; si alguno falla, no se entrega.
 ### 3.4 Cuenta dedicada del reloj
 - [ ] Usuarios → Nuevo usuario con rol «Reloj checador (tablet)» (correo propio, sucursal asignada). Entrar con ella en la tablet: abre directo en el reloj y registra checadas con rostro, QR y número + PIN.
 - [ ] Con esa cuenta, abrir `/`, `/empleados` o `/configuracion` en la tablet regresa al reloj.
-- [ ] Mantener el logo 3 s y escribir el código de salida cierra la sesión (no abre ningún panel).
+- [ ] Tocar el logo 5 veces seguidas (o mantenerlo 3 s) pide el código de salida; al escribirlo cierra la sesión (no abre ningún panel). Probar en la tablet táctil, no solo con el mouse.
 - [ ] Con esa cuenta no se puede editar nada: desde la consola del navegador, un `update` a empleados o a empresas es rechazado por la base.
 - [ ] Una checada hecha con la cuenta del reloj aparece con su foto en Asistencia → Registro de checadas.
 
