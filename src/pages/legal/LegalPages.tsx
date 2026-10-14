@@ -224,7 +224,9 @@ export function PrivacidadPage() {
             QR, código de barras o número de empleado y PIN, se toma y conserva una fotografía de evidencia
             vinculada al empleado, fecha y hora. Se guarda en el dispositivo mientras se sincroniza y en el servidor
             de la empresa para consulta con los permisos de asistencia. La foto permite revisar quién checó;
-            no demuestra por sí sola la identidad.
+            no demuestra por sí sola la identidad. Las fotografías se conservan <strong>90 días</strong> contados
+            desde la fecha del movimiento y después se eliminan automáticamente; el registro de asistencia
+            permanece.
           </li>
           <li>
             La ubicación se toma con el permiso del navegador, solo al registrar la asistencia, para validar la

@@ -24,7 +24,7 @@ import {
   viewKey,
   windowAspect,
 } from '@/lib/cameraView'
-import { photoIsFresh, type PhotoCapture } from '@/lib/photoEvidence'
+import { photoExpired, photoIsFresh, type PhotoCapture } from '@/lib/photoEvidence'
 import { kioskDevice, pickKioskBranch, punchableEmployees, resolveKiosk } from '@/lib/kiosk'
 import type { Employee } from '@/types'
 
@@ -209,6 +209,14 @@ describe('verificación después de número y PIN (1:1)', () => {
     expect(photoIsFresh(at(now - 20_000), now)).toBe(true)
     expect(photoIsFresh(at(now - 90_000), now)).toBe(false)
     expect(photoIsFresh({ capturedAt: 'no es fecha' } as PhotoCapture, now)).toBe(false)
+  })
+
+  it('una foto de más de 90 días ya no existe: el panel lo dice en vez de "no disponible"', () => {
+    const now = Date.parse('2026-10-13T12:00:00Z')
+    expect(photoExpired('2026-10-12', now)).toBe(false)
+    expect(photoExpired('2026-07-20', now)).toBe(false) // 85 días
+    expect(photoExpired('2026-07-10', now)).toBe(true) // 95 días
+    expect(photoExpired('no es fecha', now)).toBe(false)
   })
 
   it('verificar el rostro con número y PIN viene activado y se puede apagar', () => {

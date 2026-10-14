@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useDataStore } from '@/store/dataStore'
 import { isValidTimeZone } from '@/lib/today'
+import { PHOTO_RETENTION_DAYS, photoExpired } from '@/lib/photoEvidence'
 import { canAccessEmployee } from '@/lib/scope'
 import { getLocalPhoto } from '@/services/evidence/localPhotos'
 import { liveReadAttendancePhoto } from '@/services/live/liveApi'
@@ -28,6 +29,9 @@ export function AttendancePhotoPanel({ record, open }: { record: AttendanceRecor
     const load = async () => {
       const local = await getLocalPhoto(photo.id).catch(() => undefined)
       const result = local ?? (mode === 'live' ? await liveReadAttendancePhoto(photo.id, record.companyId, record.employeeId) : undefined)
+      if (!result && photoExpired(record.date)) {
+        throw new Error(`La foto ya se eliminó: las fotos de checada se conservan ${PHOTO_RETENTION_DAYS} días.`)
+      }
       if (!result || result.companyId !== record.companyId || result.employeeId !== record.employeeId || result.date !== record.date) {
         throw new Error('La foto todavía no está disponible en este equipo. Revisa la sincronización del reloj que tomó la entrada.')
       }

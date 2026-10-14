@@ -14,6 +14,14 @@ export interface AttendancePhoto extends PhotoCapture {
   date: string
 }
 export const PHOTO_MAX_CHARS = 180_000
+/** The database deletes the photo of a checada this many days after its date (migration 009). */
+export const PHOTO_RETENTION_DAYS = 90
+
+/** True when the photo of a movement of that day has already been (or is about to be) deleted. */
+export function photoExpired(date: string, now = Date.now()): boolean {
+  const day = Date.parse(`${date}T00:00:00Z`)
+  return Number.isFinite(day) && now - day > PHOTO_RETENTION_DAYS * 86_400_000
+}
 export const PHOTO_MAX_AGE_MS = 90_000
 export const needsEntryPhoto = (method: CaptureMethod, type: PunchType) =>
   type === 'entry' && (method === 'employee_number' || method === 'pin')

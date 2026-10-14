@@ -6,6 +6,7 @@ import { useDataStore } from '@/store/dataStore'
 import { getLocalPhoto } from '@/services/evidence/localPhotos'
 import { liveReadAttendancePhoto } from '@/services/live/liveApi'
 import { isValidTimeZone } from '@/lib/today'
+import { PHOTO_RETENTION_DAYS, photoExpired } from '@/lib/photoEvidence'
 import { formatTime12 } from '@/lib/utils'
 import type { AttendanceRecord, Employee, Punch } from '@/types'
 
@@ -90,7 +91,13 @@ export function PunchPhoto({ record, punch, employee }: { record: AttendanceReco
           e.stopPropagation()
           setOpen(true)
         }}
-        title={failed ? 'La foto todavía no está disponible' : 'Ver foto'}
+        title={
+          failed
+            ? photoExpired(record.date)
+              ? `La foto se eliminó: se conservan ${PHOTO_RETENTION_DAYS} días`
+              : 'La foto todavía no está disponible'
+            : 'Ver foto'
+        }
         className="group relative flex h-11 w-11 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted text-muted-foreground transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:hover:scale-100"
       >
         {image ? (

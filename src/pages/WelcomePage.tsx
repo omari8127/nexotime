@@ -119,7 +119,7 @@ const FAQ = [
   },
   {
     q: '¿Guardan fotos del rostro?',
-    a: 'Del reconocimiento facial solo se guardan medidas numéricas, no fotografías. La foto de verificación de una checada sí se guarda, como evidencia para tu empresa.',
+    a: 'Del reconocimiento facial solo se guardan medidas numéricas, no fotografías. La foto de verificación de una checada sí se guarda, como evidencia para tu empresa, y se elimina sola a los 90 días.',
   },
 ]
 
