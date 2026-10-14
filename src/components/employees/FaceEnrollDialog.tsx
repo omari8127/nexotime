@@ -18,6 +18,8 @@ import { useCameraStream } from '@/hooks/useCameraStream'
 import { useVoice } from '@/lib/speech'
 import { useDataStore } from '@/store/dataStore'
 import {
+  FACE_DISTANCE,
+  faceSampleState,
   QUALITY_TEXT,
   tuningFor,
   descriptorDistance,
@@ -64,17 +66,19 @@ const RETRY_MS = 400
 const ASSIST_AFTER_MS = 10_000
 /** Head-turn gates are relative to the person's own straight-ahead yaw (learned on step 1):
  *  natural faces are not symmetric, so an absolute "yaw ≈ 1" can never be met by some people. */
-const TURN_MIN = 0.13
+// Measured with the face mesh (468 points), which reads a turn a little more strongly than the old 68-point
+// outline did: slightly wider gates so a plain glance to the side counts and a clear turn is not refused.
+const TURN_MIN = 0.15
 /** Turning further than this stops being a usable sample (the face is mostly in profile). */
-const TURN_MAX = 0.65
+const TURN_MAX = 0.9
 /** Step 1 only has to rule out a face in profile: it defines the person's own "straight ahead" (a laptop
  *  camera below the eyes, or an off-axis tablet, makes a perfectly normal face read as slightly turned). */
 const FIRST_FRONT_TOL = 0.5
 const FIRST_FRONT_TOL_ASSISTED = 0.7
 /** The sample must be this close to at least one already saved (same person). Turned faces differ more. */
-const SAME_PERSON_FRONT = 0.45
-const SAME_PERSON_TURNED = 0.6
-const DUPLICATE_DISTANCE = 0.42
+const SAME_PERSON_FRONT = FACE_DISTANCE.samePersonFront
+const SAME_PERSON_TURNED = FACE_DISTANCE.samePersonTurned
+const DUPLICATE_DISTANCE = FACE_DISTANCE.duplicate
 const TEST_TIMEOUT_MS = 30_000
 
 type Stage = 'intro' | 'capture' | 'test'
@@ -110,7 +114,7 @@ export function FaceEnrollDialog({
   const settings = useDataStore((s) => s.company.attendanceSettings)
   const { say, beep } = useVoice('enroll')
 
-  const hasFace = !!employee.identifications.find((i) => i.method === 'face')?.descriptors?.length
+  const hasFace = faceSampleState(employee).usable > 0
 
   const [stage, setStage] = useState<Stage>(testOnly ? 'test' : 'intro')
   const [consent, setConsent] = useState(false)
@@ -334,7 +338,7 @@ export function FaceEnrollDialog({
                   }
                 }
                 if (!alive) return
-                if (frames.length < SAMPLE_FRAMES || frames.some((d) => descriptorDistance(d, frames[0]) > 0.35)) {
+                if (frames.length < SAMPLE_FRAMES || frames.some((d) => descriptorDistance(d, frames[0]) > FACE_DISTANCE.sameFrame)) {
                   retry('No alcanzamos a verte bien. Mantén la posición.')
                 } else {
                   const d = meanDescriptor(frames)

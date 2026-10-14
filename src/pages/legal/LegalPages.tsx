@@ -217,7 +217,7 @@ export function PrivacidadPage() {
         <List>
           <li>
             El reconocimiento facial se procesa <strong>en el propio dispositivo</strong>. Solo se conserva una
-            representación numérica (un conjunto de 128 valores) para identificar el rostro; la evidencia de entrada descrita abajo se guarda por separado.
+            representación numérica (un conjunto de 1024 valores) para identificar el rostro; la evidencia de entrada descrita abajo se guarda por separado.
           </li>
           <li>
             Al registrar cualquier movimiento (entrada, comida o salida) en el reloj checador, con rostro, credencial

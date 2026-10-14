@@ -20,6 +20,7 @@ import { useScopedData } from '@/hooks/useScopedData'
 import { useToday } from '@/hooks/useToday'
 import { generateBarcodeValue, generateQrValue, takenBarcodes } from '@/lib/credentials'
 import { normalizeRfc } from '@/lib/importNormalize'
+import { faceSampleState } from '@/lib/face'
 import { SelectWithCustom } from '@/components/shared/SelectWithCustom'
 import { DEPARTMENTS, POSITIONS } from '@/data/catalog'
 import type { Employee, IdentificationMethod } from '@/types'
@@ -111,7 +112,7 @@ export function EmployeeFormDialog({ open, onOpenChange, employee, onSaved }: Pr
     }
   }, [open, employee, nextNumber, today, allBranches, schedules])
 
-  const hasFace = !!employee?.identifications.find((i) => i.method === 'face')?.descriptors?.length
+  const hasFace = !!employee && faceSampleState(employee).usable > 0
 
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }))
 

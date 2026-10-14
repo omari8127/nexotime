@@ -1,10 +1,15 @@
 /**
- * Face recognition, fully in the browser (face-api / TensorFlow.js).
+ * Face recognition, fully in the browser, with the Human library (TensorFlow.js).
  *
- * Nothing leaves the device: the camera frames are processed locally and only a
- * 128-number descriptor per sample is stored for each enrolled employee — never
- * a photo. The models are served from /models and cached by the browser.
+ * Nothing leaves the device: the camera frames are processed locally and only a numeric
+ * descriptor per sample (1024 numbers) is stored for each enrolled employee — never a photo.
+ * Three models are used, served from /models/human and cached by the browser and the service worker:
+ * BlazeFace (finds the face), FaceMesh (468 points: alignment and head turn) and FaceRes (the descriptor).
+ *
+ * Replaced face-api (archived by its author in 2025) because it stalled the camera on tablets: its
+ * detector alone took 100+ ms a frame there. BlazeFace takes a few.
  */
+import type { Config, Human } from '@vladmandic/human'
 import type { Employee, FaceDistance, FaceStrictness } from '@/types'
 import { waitForFreshFrame } from './camera'
 import {
@@ -15,59 +20,79 @@ import {
   type Rotation,
 } from './cameraView'
 
-export type FaceApi = typeof import('@vladmandic/face-api')
+/** The loaded engine. Kept under its old name so the screens did not have to change. */
+export type FaceApi = Human
+
+/** Numbers in one descriptor of this engine (FaceRes). Samples of the old engine had 128: they no longer count. */
+export const DESCRIPTOR_LENGTH = 1024
+
+const CONFIG: Partial<Config> = {
+  backend: 'webgl',
+  modelBasePath: `${import.meta.env.BASE_URL}models/human/`,
+  async: true,
+  warmup: 'none',
+  // Never answer with a cached result because the picture "barely changed": every reading must be a
+  // real one (a frozen frame must not count as another confirmation).
+  cacheSensitivity: 0,
+  filter: { enabled: false },
+  face: {
+    enabled: true,
+    detector: {
+      modelPath: 'blazeface.json',
+      rotation: true,
+      maxDetected: 3,
+      minConfidence: 0.35,
+      skipFrames: 0,
+      skipTime: 0,
+      return: false,
+    },
+    mesh: { enabled: true, modelPath: 'facemesh.json' },
+    attention: { enabled: false },
+    iris: { enabled: false },
+    description: { enabled: true, modelPath: 'faceres.json', skipFrames: 0, skipTime: 0, minConfidence: 0.1 },
+    emotion: { enabled: false },
+    antispoof: { enabled: false },
+    liveness: { enabled: false },
+  },
+  body: { enabled: false },
+  hand: { enabled: false },
+  object: { enabled: false },
+  gesture: { enabled: false },
+  segmentation: { enabled: false },
+} as Partial<Config>
 
 let apiPromise: Promise<FaceApi> | null = null
+/** Downloading the models on a slow connection plus compiling them on a weak tablet: generous, but finite. */
+const LOAD_TIMEOUT_MS = 90_000
 
-/** Lazy-loads the library (≈1.3 MB) and the four models (≈12 MB) once. */
+/** Lazy-loads the library and the three models (≈9 MB) once, and compiles their GPU programs. */
 export function loadFaceApi(): Promise<FaceApi> {
   if (!apiPromise) {
     apiPromise = (async () => {
-      const api = await import('@vladmandic/face-api')
-      const tf = api.tf as unknown as { setBackend(name: string): Promise<boolean>; ready(): Promise<void> }
+      const { Human } = await import('@vladmandic/human')
+      const start = async (backend: 'webgl' | 'cpu') => {
+        const human = new Human({ ...CONFIG, backend } as Partial<Config>)
+        await human.load()
+        // The first inference of each network compiles its GPU programs (seconds on a tablet). Pay it here,
+        // on the "Preparando…" screen, not on the first real camera frames.
+        await human.warmup({ warmup: 'face' } as Partial<Config>)
+        return human
+      }
+      // Never leave the reloj on "Preparando…" forever: past this, give up so the screen offers a retry.
+      const inTime = <T,>(work: Promise<T>) =>
+        Promise.race([
+          work,
+          new Promise<never>((_, reject) =>
+            window.setTimeout(() => reject(new Error('El reconocimiento facial tardó demasiado en prepararse.')), LOAD_TIMEOUT_MS),
+          ),
+        ])
       try {
-        if (!(await tf.setBackend('webgl'))) throw new Error('WebGL no disponible')
-        await tf.ready()
-      } catch {
-        if (!(await tf.setBackend('cpu'))) throw new Error('No hay un motor facial compatible')
+        return await inTime(start('webgl'))
+      } catch (err) {
+        if (err instanceof Error && err.message.includes('tardó demasiado')) throw err
+        // Some tablets have no usable WebGL (or fail compiling): slower, but it works.
+        return inTime(start('cpu'))
       }
-      await tf.ready()
-      const base = `${import.meta.env.BASE_URL}models`
-      await Promise.all([
-        // Two detectors: the tiny one is several times faster and handles the normal case;
-        // SSD MobileNet is slower but finds faces in poor light, at an angle or farther away,
-        // so it is the fallback (and what enrollment uses for its saved samples).
-        api.nets.tinyFaceDetector.loadFromUri(base),
-        api.nets.ssdMobilenetv1.loadFromUri(base),
-        api.nets.faceLandmark68Net.loadFromUri(base),
-        api.nets.faceRecognitionNet.loadFromUri(base),
-      ])
-      // The first inference of each network compiles its GPU shaders (seconds on a tablet), and the
-      // resize step compiles one per input size. Pay all of that here, on the "Preparando…" screen,
-      // instead of on the first real camera frames: run every network once on blank input, at the sizes
-      // the reloj actually feeds them (a 16:9 camera is always 1280×720 once scaled, and 4:3 is 640×480).
-      const warmup = async () => {
-        const canvas = (w: number, h = w) => Object.assign(document.createElement('canvas'), { width: w, height: h })
-        for (const [w, h] of [[160, 160], [1280, 720], [640, 480]]) {
-          const c = canvas(w, h)
-          await api.detectAllFaces(c, new api.TinyFaceDetectorOptions({ inputSize: 224 })) // "is anyone there?"
-          await api.detectAllFaces(c, new api.SsdMobilenetv1Options({ minConfidence: 0.5 }))
-        }
-        for (const [w, h] of [[160, 160], [640, 360], [1280, 720]]) {
-          await api.detectAllFaces(canvas(w, h), new api.TinyFaceDetectorOptions({ inputSize: 320 })) // guidance + enrollment
-        }
-        await api.nets.faceLandmark68Net.detectLandmarks(canvas(112))
-        await api.nets.faceRecognitionNet.computeFaceDescriptor(canvas(150))
-      }
-      try {
-        await warmup()
-      } catch {
-        // Some mobile GPUs initialize but fail while compiling/running the networks.
-        if (!(await tf.setBackend('cpu'))) throw new Error('No se pudo iniciar el motor facial')
-        await tf.ready()
-        await warmup()
-      }
-      return api
     })().catch((err) => {
       apiPromise = null // let the next attempt retry
       throw err
@@ -80,8 +105,16 @@ export function loadFaceApi(): Promise<FaceApi> {
 /*  Strictness                                                                 */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Distances are Euclidean distance between descriptors ÷ 20 (Human's own normalised similarity is
+ * `(0.8 − distance) ÷ 0.6`). Calibrated on real photos (Human's face-match sample: 13 photos of one person
+ * taken years apart vs 71 photos of other people, scored like the reloj — mean of the two closest of 5
+ * enrolled samples): no other person came closer than 0.456; at 0.44 none was accepted, at 0.50 14 of 71
+ * were. The library's suggested 0.5 is therefore NOT used. At the reloj (same camera, same light) the same
+ * person reads 0.10–0.30 from their own samples.
+ */
 export interface Tuning {
-  /** Euclidean distance below this counts as the same person (lower = stricter). */
+  /** Distance below this counts as the same person (lower = stricter). */
   threshold: number
   /** The best match must beat the runner-up by this much, to avoid look-alikes. */
   margin: number
@@ -93,18 +126,35 @@ export interface Tuning {
   minConfidence: number
 }
 
-/** Existing distance limits are preserved; basic cameras get more independent confirmations.
- * Profiles are operating policies, not a guarantee tied to megapixels. */
 export const TUNING: Record<FaceStrictness, Tuning> = {
-  strict: { threshold: 0.5, margin: 0.07, streak: 3, minFace: 0.15, minConfidence: 0.5 },
-  balanced: { threshold: 0.675, margin: 0.04, streak: 3, minFace: 0.15, minConfidence: 0.5 },
-  relaxed: { threshold: 0.72, margin: 0.03, streak: 4, minFace: 0.1, minConfidence: 0.4 },
+  strict: { threshold: 0.38, margin: 0.05, streak: 3, minFace: 0.15, minConfidence: 0.5 },
+  balanced: { threshold: 0.42, margin: 0.04, streak: 3, minFace: 0.15, minConfidence: 0.45 },
+  relaxed: { threshold: 0.45, margin: 0.03, streak: 3, minFace: 0.1, minConfidence: 0.35 },
+}
+
+/** Limits of the administrator's own distance setting (Configuración → Reloj checador). */
+export const THRESHOLD_MIN = 0.3
+export const THRESHOLD_MAX = 0.5
+
+/**
+ * Distances the rest of the app reasons with, on this engine's scale.
+ *  - sameFrame: two readings a moment apart that differ more than this are not the same person.
+ *  - duplicate: a new sample this close to SOMEONE ELSE's is refused at enrollment (same face twice).
+ *  - samePersonFront / samePersonTurned: an enrollment sample must stay this close to the person's first one.
+ */
+export const FACE_DISTANCE = {
+  sameFrame: 0.36,
+  duplicate: 0.32,
+  samePersonFront: 0.4,
+  samePersonTurned: 0.46,
 }
 
 /** Strictness level, optionally with an explicit distance limit set by the administrator. */
 export function tuningFor(strictness: FaceStrictness, threshold: number | null = null): Tuning {
   const base = TUNING[strictness]
-  return threshold == null || !Number.isFinite(threshold) ? base : { ...base, threshold: Math.max(0.35, Math.min(0.75, threshold)) }
+  return threshold == null || !Number.isFinite(threshold)
+    ? base
+    : { ...base, threshold: Math.max(THRESHOLD_MIN, Math.min(THRESHOLD_MAX, threshold)) }
 }
 
 /** Minimum face width as a fraction of the frame, so the descriptor is reliable. */
@@ -146,7 +196,7 @@ export interface FaceReading {
   /** Face centre offset from the frame centre, −0.5…0.5 on each axis. */
   offset: { x: number; y: number }
   /**
-   * Head turn: distance nose→left jaw ÷ nose→right jaw, in image coordinates.
+   * Head turn: distance nose→one side of the face ÷ nose→the other side, in image coordinates.
    * ≈1 looking straight, <1 / >1 when turned to either side.
    */
   yaw: number
@@ -158,6 +208,7 @@ export interface FaceReading {
 export type ReadResult = { kind: 'none' } | { kind: 'multiple' } | { kind: 'face'; reading: FaceReading }
 
 type Point = { x: number; y: number }
+type Box = { x: number; y: number; width: number; height: number }
 const dist = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y)
 
 let sampler: HTMLCanvasElement | null = null
@@ -166,7 +217,7 @@ let focusSampler: HTMLCanvasElement | null = null
 const FOCUS = 64
 
 /** Average luminance of the face box, from a tiny downscaled copy of the frame. */
-function faceBrightness(video: HTMLVideoElement | HTMLCanvasElement, box: { x: number; y: number; width: number; height: number }) {
+function faceBrightness(video: HTMLVideoElement | HTMLCanvasElement, box: Box) {
   sampler ??= Object.assign(document.createElement('canvas'), { width: 24, height: 24 })
   const ctx = sampler.getContext('2d', { willReadFrequently: true })
   if (!ctx) return 128
@@ -181,7 +232,7 @@ function faceBrightness(video: HTMLVideoElement | HTMLCanvasElement, box: { x: n
  * Focus of the face: a central crop of the face taken at (almost) native resolution,
  * so blur is not averaged away by downscaling; mean absolute Laplacian of its luminance.
  */
-function faceSharpness(video: HTMLVideoElement | HTMLCanvasElement, box: { x: number; y: number; width: number; height: number }) {
+function faceSharpness(video: HTMLVideoElement | HTMLCanvasElement, box: Box) {
   focusSampler ??= Object.assign(document.createElement('canvas'), { width: FOCUS, height: FOCUS })
   const ctx = focusSampler.getContext('2d', { willReadFrequently: true })
   if (!ctx) return MIN_SHARPNESS * 4
@@ -203,11 +254,8 @@ function faceSharpness(video: HTMLVideoElement | HTMLCanvasElement, box: { x: nu
 }
 
 /**
- * 'accurate' (default): SSD MobileNet. Every descriptor that is saved or compared (enrollment
- * samples, the reloj, the recognition test) must come from this one: a different detector
- * can shift alignment and descriptors, so enrollment and matching use the same detector.
- * 'fast': the tiny detector, with SSD as a fallback when it finds nothing. Only for readings
- * that never leave the screen (enrollment pose guidance), where speed is free.
+ * Kept for the callers. With face-api 'fast' meant the light detector for on-screen guidance; this
+ * engine has a single detector that is fast enough for both, so the two now read the same way.
  */
 export type DetectorKind = 'fast' | 'accurate'
 
@@ -218,7 +266,7 @@ export interface ReadOptions {
    * (the descriptor is computed from the same native pixels either way).
    */
   zoom?: number
-  /** SSD minimum confidence (default 0.5). Lower finds smaller or noisier faces. */
+  /** Detector minimum confidence (default 0.45). Lower finds smaller or noisier faces. */
   minConfidence?: number
   /**
    * Measure focus (default true). It costs an extra read of the frame, so the reloj, which does not
@@ -241,28 +289,18 @@ let lastWideAt = 0
 const WIDE_STICKY_MS = 3000
 /** The margin copy is never larger than this on its long side (the detector shrinks it anyway). */
 const WIDE_MAX_SIDE = 640
-/** Longest side of the image the networks work on. SSD resizes to 512 px internally, so a 1080p frame only
- *  cost memory, upload time and garbage collection (the "stutter every second" on weak tablets). */
-const MAX_WORK_SIDE = 1280
-/** A device whose full detector takes longer than this works on a smaller image (less to copy and upload). */
-const SLOW_SSD_MS = 140
-const SLOW_WORK_SIDE = 800
-/** After a face was seen this recently the cheap "is anyone there?" probe is skipped. */
-const WARM_MS = 1500
-/** With nobody in view, the full detector still runs on every Nth frame (faces the probe misses in dim light). */
-const COLD_FULL_EVERY = 3
+/** Longest side of the image the networks work on. The detector looks at 256 px and the descriptor at a
+ *  224 px crop of the face: a bigger copy only costs memory, upload time and garbage collection. */
+const MAX_WORK_SIDE = 960
+/** A device whose reading takes longer than this works on a smaller image (less to copy and upload). */
+const SLOW_READ_MS = 120
+const SLOW_WORK_SIDE = 640
 
-let lastFaceAt = 0
-let coldFrames = 0
-/** How long the "is anyone there?" probe and the full detector take on THIS device (moving averages). The probe
- *  is only used where it is clearly cheaper than the detector it saves; on a device where it is not, the
- *  full detector simply runs every time, as it always did. */
-let probeMs = 0
-let ssdMs = 0
+/** How long a reading takes on THIS device (moving average). */
+let readMs = 0
 /** Brightening applied to what the networks see (1 = none): follows how dark the faces seen lately were. */
 let autoGain = 1
 const ema = (previous: number, sample: number) => (previous === 0 ? sample : previous * 0.7 + sample * 0.3)
-const probeIsCheap = () => probeMs > 0 && ssdMs > 0 && probeMs < ssdMs * 0.6
 let workCanvas: HTMLCanvasElement | null = null
 let wideCanvas: HTMLCanvasElement | null = null
 
@@ -282,8 +320,15 @@ export function paceDelay(lastMs: number, minMs: number, maxMs = 400, ratio = 0.
   return Math.round(Math.min(maxMs, Math.max(minMs, lastMs * ratio)))
 }
 
+/** Detector-only reading (no mesh, no descriptor): just "is there a face, and where". */
+const BOXES_ONLY = {
+  face: { mesh: { enabled: false }, description: { enabled: false } },
+} as unknown as Partial<Config>
+
+const boxOf = (b: [number, number, number, number] | number[]): Box => ({ x: b[0], y: b[1], width: b[2], height: b[3] })
+
 /**
- * Which quarter turn, other than the current one, makes a face visible? Cheap (the light detector on a
+ * Which quarter turn, other than the current one, makes a face visible? Cheap (the detector only, on a
  * small copy), one rotation at a time; null when none does. Run when readings keep finding nobody.
  */
 export function findFaceRotation(api: FaceApi, video: HTMLVideoElement, current: Rotation): Promise<Rotation | null> {
@@ -307,8 +352,8 @@ export function findFaceRotation(api: FaceApi, video: HTMLVideoElement, current:
       g.translate(canvas.width / 2, canvas.height / 2)
       g.rotate((rot * Math.PI) / 180)
       g.drawImage(video, -dw / 2, -dh / 2, dw, dh)
-      const found = await api.detectAllFaces(canvas, new api.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.35 }))
-      return found.length === 1 ? found[0].score : 0
+      const found = (await api.detect(canvas, BOXES_ONLY)).face
+      return found.length === 1 ? found[0].boxScore : 0
     }
     const here = await scoreAt(current)
     if (here >= 0.35) return null
@@ -338,19 +383,28 @@ export function readFace(
   return run
 }
 
+/** Mesh points used for the head turn: the nose tip and the two sides of the face. */
+const NOSE = 1
+const SIDE_A = 234
+const SIDE_B = 454
+
+/** A descriptor as stored: 3 decimals keep it exact enough (≈0.1% of a match distance) at half the size. */
+const compact = (embedding: ArrayLike<number>) => Array.from(embedding, (n) => Math.round(n * 1000) / 1000)
+
 async function readFaceNow(
   api: FaceApi,
   video: HTMLVideoElement | HTMLCanvasElement,
   withDescriptor: boolean,
-  detector: DetectorKind,
+  _detector: DetectorKind,
   options: ReadOptions,
 ): Promise<ReadResult> {
   if ('videoWidth' in video) await waitForFreshFrame(video)
   const sw = 'videoWidth' in video ? video.videoWidth : video.width
   const sh = 'videoHeight' in video ? video.videoHeight : video.height
   if (!sw || !sh) throw new Error('No se pudo leer la cámara')
+  const started = performance.now()
   // Freeze once, straight from the camera: the central 1/zoom of the frame, at no more than
-  // MAX_WORK_SIDE. Detector, landmarks, descriptor and quality all see this SAME image.
+  // MAX_WORK_SIDE. Detector, mesh, descriptor and quality all see this SAME image.
   const zoom = options.zoom && options.zoom > 1 ? options.zoom : 1
   // A sideways picture is turned upright here, so the networks (which only know upright faces) see
   // the same thing the person sees on the screen.
@@ -367,7 +421,7 @@ async function readFaceNow(
   else if (uw / uh < fit) upH = uw / fit
   const cw = Math.max(1, Math.round((quarter ? upH : upW) / zoom))
   const ch = Math.max(1, Math.round((quarter ? upW : upH) / zoom))
-  const k = Math.min(1, (ssdMs > SLOW_SSD_MS ? SLOW_WORK_SIDE : MAX_WORK_SIDE) / Math.max(cw, ch))
+  const k = Math.min(1, (readMs > SLOW_READ_MS ? SLOW_WORK_SIDE : MAX_WORK_SIDE) / Math.max(cw, ch))
   const dw = Math.max(1, Math.round(cw * k))
   const dh = Math.max(1, Math.round(ch * k))
   const vw = quarter ? dh : dw
@@ -384,54 +438,23 @@ async function readFaceNow(
   ctx.restore()
   const source = workCanvas
 
-  const detectOn = (input: HTMLCanvasElement, detection: Parameters<FaceApi['detectAllFaces']>[1]) => {
-    const task = api.detectAllFaces(input, detection).withFaceLandmarks()
-    return withDescriptor ? task.withFaceDescriptors() : task
-  }
-  const ssdOptions = () =>
-    new api.SsdMobilenetv1Options({ minConfidence: options.minConfidence ?? 0.5, maxResults: 3 })
-  const tinyOptions = (inputSize: number, scoreThreshold: number) =>
-    new api.TinyFaceDetectorOptions({ inputSize, scoreThreshold })
+  const minConfidence = Math.max(0.2, Math.min(0.8, options.minConfidence ?? 0.45))
+  const result = await api.detect(source, {
+    face: {
+      detector: { minConfidence },
+      description: { enabled: withDescriptor },
+    },
+  } as unknown as Partial<Config>)
+  const faces = result.face.filter((f) => f.boxScore >= minConfidence)
+  readMs = ema(readMs, performance.now() - started)
 
-  let faces: Awaited<ReturnType<typeof detectOn>> = []
-  if (detector === 'accurate') {
-    // The camera is on all day with usually nobody in front of it, and SSD is the expensive network.
-    // A cheap probe says whether anyone is there; SSD still runs on every Nth empty frame so a face the
-    // probe misses (poor light, an angle) is found a moment later instead of never.
-    let run = Date.now() - lastFaceAt < WARM_MS
-    if (!run) {
-      if (ssdMs === 0) {
-        run = true // measure the full detector first
-      } else if (probeMs === 0 || probeIsCheap()) {
-        const started = performance.now()
-        const probe = await api.detectAllFaces(source, tinyOptions(224, 0.3))
-        probeMs = ema(probeMs, performance.now() - started)
-        run = probe.length > 0 || ++coldFrames % COLD_FULL_EVERY === 0
-      } else {
-        run = true
-      }
-    }
-    if (run) {
-      const started = performance.now()
-      faces = await detectOn(source, ssdOptions())
-      if (faces.length === 0) ssdMs = ema(ssdMs, performance.now() - started)
-    }
-  } else {
-    faces = await detectOn(source, tinyOptions(320, 0.45))
-    if (faces.length === 0) faces = await detectOn(source, ssdOptions())
-  }
+  if (faces.length > 0) emptyFrames = 0
 
-  if (faces.length > 0) {
-    emptyFrames = 0
-    coldFrames = 0
-    lastFaceAt = Date.now()
-  }
-
-  // The detectors cannot find a face that fills (or overflows) the frame: the person is simply too close,
+  // The detector cannot find a face that fills (or overflows) the frame: the person is simply too close,
   // and the screen used to say "place your face in the oval" while it was already filling it. Every few
   // empty frames look again on a copy with a wide margin; a face found that way is reported with its real
   // (oversized) measures, so the quality check can say "aléjate" instead. Only the box is needed for that,
-  // so it uses the cheap detector and never produces a descriptor (nobody is compared or saved from it).
+  // so it never produces a descriptor (nobody is compared or saved from it).
   if (faces.length === 0) {
     const retryWide = ++emptyFrames % WIDE_RETRY_EVERY === 0 || Date.now() - lastWideAt < WIDE_STICKY_MS
     if (!retryWide) return { kind: 'none' }
@@ -444,12 +467,10 @@ async function readFaceNow(
     g.fillStyle = '#808080'
     g.fillRect(0, 0, ww, wh)
     g.drawImage(source, (vw / 2) * scale, (vh / 2) * scale, vw * scale, vh * scale)
-    const found = probeIsCheap()
-      ? await api.detectAllFaces(wideCanvas, tinyOptions(320, 0.4))
-      : await api.detectAllFaces(wideCanvas, ssdOptions())
+    const found = (await api.detect(wideCanvas, BOXES_ONLY)).face.filter((f) => f.boxScore >= Math.min(minConfidence, 0.4))
     if (found.length !== 1) return { kind: 'none' }
     lastWideAt = Date.now()
-    const raw = found[0].box
+    const raw = boxOf(found[0].box)
     const box = { x: raw.x / scale - vw / 2, y: raw.y / scale - vh / 2, width: raw.width / scale, height: raw.height / scale }
     return {
       kind: 'face',
@@ -466,11 +487,15 @@ async function readFaceNow(
   }
   if (faces.length > 1) return { kind: 'multiple' }
   const f = faces[0]
-  const box = f.detection.box
-  const pts = f.landmarks.positions
-  const yaw = dist(pts[30], pts[0]) / Math.max(1, dist(pts[30], pts[16]))
+  const box = boxOf(f.box)
+  const mesh = f.mesh
+  const yaw =
+    mesh && mesh.length > SIDE_B
+      ? dist({ x: mesh[NOSE][0], y: mesh[NOSE][1] }, { x: mesh[SIDE_A][0], y: mesh[SIDE_A][1] }) /
+        Math.max(1, dist({ x: mesh[NOSE][0], y: mesh[NOSE][1] }, { x: mesh[SIDE_B][0], y: mesh[SIDE_B][1] }))
+      : 1
   const descriptor =
-    withDescriptor && 'descriptor' in f ? Array.from((f as { descriptor: Float32Array }).descriptor) : undefined
+    withDescriptor && f.embedding && f.embedding.length === DESCRIPTOR_LENGTH ? compact(f.embedding) : undefined
   const brightness = faceBrightness(source, box)
   // Follow the light: a face seen darker than ~105 raises the gain for the next frames (smoothly).
   autoGain = autoGain * 0.6 + gainFor(brightness / gain) * 0.4
@@ -528,15 +553,28 @@ export function qualityIssues(
 /*  Matching                                                                   */
 /* -------------------------------------------------------------------------- */
 
+/** A sample of THIS engine. Samples saved by the previous one (128 numbers) are not comparable and do not count. */
 export function isFaceDescriptor(value: unknown): value is number[] {
-  return Array.isArray(value) && value.length === 128 && value.every((n) => typeof n === 'number' && Number.isFinite(n))
+  return (
+    Array.isArray(value) &&
+    value.length === DESCRIPTOR_LENGTH &&
+    value.every((n) => typeof n === 'number' && Number.isFinite(n))
+  )
 }
 
+/** Usable samples an employee has, and whether only samples of the previous engine are stored (re-register). */
+export function faceSampleState(employee: Pick<Employee, 'identifications'>): { usable: number; outdated: boolean } {
+  const stored = employee.identifications.find((i) => i.method === 'face')?.descriptors ?? []
+  const usable = stored.filter(isFaceDescriptor).length
+  return { usable, outdated: usable === 0 && stored.length > 0 }
+}
+
+/** Euclidean distance ÷ 20 (see Tuning for what the numbers mean). */
 export function descriptorDistance(a: number[], b: number[]): number {
   if (!isFaceDescriptor(a) || !isFaceDescriptor(b)) return Infinity
   let sum = 0
   for (let i = 0; i < a.length; i++) sum += (a[i] - b[i]) ** 2
-  return Math.sqrt(sum)
+  return Math.sqrt(sum) / 20
 }
 
 /** Component-wise mean of several descriptors: averages out frame-to-frame noise. */
@@ -631,7 +669,7 @@ export function isConfidentMatch(m: FaceMatch | null, t: Tuning = TUNING.balance
   return !!m && Number.isFinite(m.distance) && m.distance >= 0 && m.distance < t.threshold && m.runnerUp - m.distance >= t.margin
 }
 
-/** 0–100 for display; only a friendly reading of the distance. */
+/** 0–100 for display: Human's own normalised similarity, (0.8 − distance) ÷ 0.6. */
 export function matchPercent(distance: number): number {
-  return Math.max(0, Math.min(99, Math.round((1 - distance / 0.9) * 100)))
+  return Math.max(0, Math.min(99, Math.round(((0.8 - distance) / 0.6) * 100)))
 }

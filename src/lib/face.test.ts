@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  DESCRIPTOR_LENGTH,
   descriptorDistance,
   distanceProfile,
   faceCandidates,
+  faceSampleState,
   isConfidentMatch,
   meanDescriptor,
   nearestFace,
@@ -29,39 +31,47 @@ import { photoExpired, photoIsFresh, photoRetentionDays, type PhotoCapture } fro
 import { kioskDevice, pickKioskBranch, punchableEmployees, resolveKiosk } from '@/lib/kiosk'
 import type { Employee } from '@/types'
 
-/** A 128-number "face": the base plus a small offset moves it a known distance. */
-const face = (seed: number, shift = 0) => Array.from({ length: 128 }, (_, i) => Math.sin(seed * 7 + i) * 0.1 + shift)
+/**
+ * A 1024-number "face" (like Human's FaceRes). Two different seeds are ≈0.96 apart — different people;
+ * `d` moves it exactly that distance from its seed (distance = Euclidean ÷ 20, see lib/face).
+ */
+const face = (seed: number, d = 0) =>
+  Array.from({ length: DESCRIPTOR_LENGTH }, (_, i) => Math.sin(i * (0.7 + seed * 0.53) + seed) * 0.6 + (d * 20) / Math.sqrt(DESCRIPTOR_LENGTH))
 const emp = (id: string, samples: number[][] | null, enabled = true, status: Employee['status'] = 'active') =>
   ({ id, status, identifications: samples ? [{ method: 'face', enabled, descriptors: samples }] : [] }) as unknown as Employee
 
 describe('coincidencia facial', () => {
-  const ana = emp('ana', [face(1), face(1, 0.005)])
-  const beto = emp('beto', [face(2), face(2, 0.005)])
+  const ana = emp('ana', [face(1), face(1, 0.06)])
+  const beto = emp('beto', [face(2), face(2, 0.06)])
   const candidates = faceCandidates([ana, beto])
 
   it('la distancia entre el mismo vector es 0', () => {
     expect(descriptorDistance(face(1), face(1))).toBe(0)
+    expect(descriptorDistance(face(1), face(1, 0.3))).toBeCloseTo(0.3)
+    expect(descriptorDistance(face(1), face(2))).toBeGreaterThan(0.8) // dos personas distintas
   })
   it('reconoce a la persona registrada', () => {
-    const m = nearestFace(candidates, face(1, 0.01))
+    const m = nearestFace(candidates, face(1, 0.11))
     expect(m?.employee.id).toBe('ana')
     expect(isConfidentMatch(m, tuningFor('balanced'))).toBe(true)
   })
   it('rechaza a una persona no registrada', () => {
-    const stranger = face(1, 0.2) // lejos de todos los registrados
+    const stranger = face(1, 2.2) // lejos de todos los registrados
     const m = nearestFace(candidates, stranger)
     expect(isConfidentMatch(m, tuningFor('balanced'))).toBe(false)
   })
   it('exige que gane por margen frente al segundo más parecido', () => {
-    const twin = emp('gemelo', [face(1, 0.03)])
-    const m = nearestFace(faceCandidates([ana, twin]), face(1, 0.015))
+    const twin = emp('gemelo', [face(1, 0.3)])
+    const m = nearestFace(faceCandidates([ana, twin]), face(1, 0.16))
     expect(isConfidentMatch(m, tuningFor('balanced'))).toBe(false)
   })
   it('un umbral más estricto rechaza lo que uno flexible acepta', () => {
-    const m = { employee: ana, distance: 0.5, runnerUp: Infinity }
+    const m = { employee: ana, distance: 0.44, runnerUp: Infinity }
     expect(isConfidentMatch(m, tuningFor('strict'))).toBe(false)
     expect(isConfidentMatch(m, tuningFor('relaxed'))).toBe(true)
-    expect(isConfidentMatch(m, tuningFor('strict', 0.55))).toBe(true) // umbral fijado por el administrador
+    expect(isConfidentMatch(m, tuningFor('strict', 0.46))).toBe(true) // umbral fijado por el administrador
+    // Nunca más permisivo que el tope calibrado, aunque se guarde otra cosa.
+    expect(tuningFor('relaxed', 0.9).threshold).toBe(0.5)
   })
   it('solo considera empleados activos, con rostro activado y con muestras', () => {
     const list = faceCandidates([
@@ -71,6 +81,15 @@ describe('coincidencia facial', () => {
       emp('inactivo', [face(4)], true, 'inactive'),
     ])
     expect(list.map((c) => c.employee.id)).toEqual(['ana'])
+  })
+  it('las muestras del motor anterior (128 números) no cuentan: hay que registrar de nuevo', () => {
+    const viejo = Array.from({ length: 128 }, (_, i) => Math.sin(i) * 0.1)
+    const antes = emp('antes', [viejo, viejo])
+    expect(faceCandidates([antes])).toEqual([])
+    expect(faceSampleState(antes)).toEqual({ usable: 0, outdated: true })
+    expect(faceSampleState(ana)).toEqual({ usable: 2, outdated: false })
+    expect(faceSampleState(emp('nadie', null))).toEqual({ usable: 0, outdated: false })
+    expect(descriptorDistance(viejo, face(1))).toBe(Infinity)
   })
   it('promedia varios cuadros', () => {
     expect(meanDescriptor([[0, 2], [2, 4]])).toEqual([1, 3])
@@ -127,9 +146,11 @@ describe('ajustes del reloj', () => {
     const d = resolveKiosk(undefined)
     expect(d).toMatchObject({ autoRegister: true, autoRegisterSeconds: 5, faceStrictness: 'balanced', minGapMinutes: 2 })
     expect(d.faceThreshold).toBeNull()
-    const k = resolveKiosk({ kiosk: { autoRegisterSeconds: 99, faceThreshold: 0.95, minGapMinutes: -5 } } as never)
+    const k = resolveKiosk({ kiosk: { autoRegisterSeconds: 99, faceMatchLimit: 0.95, minGapMinutes: -5 } } as never)
     expect(k.autoRegisterSeconds).toBe(10)
-    expect(k.faceThreshold).toBe(0.75)
+    expect(k.faceThreshold).toBe(0.5)
+    // Un límite guardado para el motor anterior (otra escala) se ignora: aplicado aquí dejaría pasar a extraños.
+    expect(resolveKiosk({ kiosk: { faceThreshold: 0.72 } } as never).faceThreshold).toBeNull()
     expect(k.minGapMinutes).toBe(0)
   })
   it('el zoom va de 1× a 2,5×', () => {
@@ -150,13 +171,13 @@ describe('ajustes del reloj', () => {
 })
 
 describe('verificación después de número y PIN (1:1)', () => {
-  const ana = emp('ana', [face(1), face(1, 0.005)])
-  const beto = emp('beto', [face(2), face(2, 0.005)])
+  const ana = emp('ana', [face(1), face(1, 0.06)])
+  const beto = emp('beto', [face(2), face(2, 0.06)])
   const candidates = faceCandidates([ana, beto])
   const t = TUNING.balanced
 
   it('acepta el rostro de quien dijo ser', () => {
-    const v = verifyClaimed(candidates, 'ana', face(1, 0.002), t)
+    const v = verifyClaimed(candidates, 'ana', face(1, 0.02), t)
     expect(v.kind).toBe('match')
   })
 
@@ -168,7 +189,7 @@ describe('verificación después de número y PIN (1:1)', () => {
 
   it('distingue "no eres tú" de "eres otra persona del equipo"', () => {
     // Beto escribe el número y PIN de Ana: su rostro se parece claramente más al de Beto.
-    const v = verifyClaimed(candidates, 'ana', face(2, 0.002), t)
+    const v = verifyClaimed(candidates, 'ana', face(2, 0.02), t)
     expect(v.kind).toBe('other')
     if (v.kind === 'other') expect(v.other.id).toBe('beto')
   })
@@ -178,7 +199,7 @@ describe('verificación después de número y PIN (1:1)', () => {
   })
 
   it('el umbral configurado manda: uno estricto rechaza lo que el flexible acepta', () => {
-    const near = face(1, 0.04) // ≈ 0.45 de distancia
+    const near = face(1, 0.45) // ≈ 0.41 de distancia a sus muestras
     expect(verifyClaimed(candidates, 'ana', near, tuningFor('balanced', 0.6)).kind).toBe('match')
     expect(verifyClaimed(candidates, 'ana', near, tuningFor('balanced', 0.4)).kind).toBe('mismatch')
   })
@@ -186,11 +207,11 @@ describe('verificación después de número y PIN (1:1)', () => {
   it('pide varias lecturas seguidas y reinicia con una que no coincide', () => {
     const session = new ClaimSession(candidates, 'ana')
     const now = 1_000_000
-    const first = session.push(face(1, 0.001), t, now)
+    const first = session.push(face(1, 0.01), t, now)
     expect(first.accepted).toBe(false)
     expect(first.progress).toBe(1)
-    session.push(face(1, 0.002), t, now + 200)
-    const third = session.push(face(1, 0.001), t, now + 400)
+    session.push(face(1, 0.02), t, now + 200)
+    const third = session.push(face(1, 0.01), t, now + 400)
     expect(third.accepted).toBe(true)
     // Un cuadro de otra persona deja el avance en cero.
     const bad = session.push(face(2), t, now + 600)

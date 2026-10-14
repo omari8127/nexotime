@@ -20,7 +20,7 @@ import { EmployeeStatusBadge } from '@/components/shared/badges'
 import { EmployeeFormDialog } from '@/components/employees/EmployeeFormDialog'
 import { QrPreviewDialog } from '@/components/employees/QrPreviewDialog'
 import { FaceEnrollDialog } from '@/components/employees/FaceEnrollDialog'
-import { FACE_SAMPLE_TARGET, faceSampleCount } from '@/lib/faceSamples'
+import { FACE_SAMPLE_TARGET, faceNeedsReenroll, faceSampleCount } from '@/lib/faceSamples'
 import { useFeature } from '@/lib/license/features'
 import { cn } from '@/lib/utils'
 import { useScopedData, usePermissions } from '@/hooks/useScopedData'
@@ -34,15 +34,18 @@ import { formatTime12 } from '@/lib/utils'
 import type { Employee } from '@/types'
 
 /** "3/5 muestras": how much of the face registration is done — red none, amber partial, green complete. */
-function FaceSamples({ count, onClick }: { count: number; onClick?: () => void }) {
+function FaceSamples({ count, outdated, onClick }: { count: number; outdated?: boolean; onClick?: () => void }) {
   const done = Math.min(count, FACE_SAMPLE_TARGET)
   const tone =
-    done === 0
+    outdated
+      ? 'bg-amber-400/20 text-amber-800 dark:text-amber-200'
+      : done === 0
       ? 'bg-rose-500/12 text-rose-700 dark:text-rose-300'
       : done < FACE_SAMPLE_TARGET
         ? 'bg-amber-400/20 text-amber-800 dark:text-amber-200'
         : 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300'
-  const label = `${done}/${FACE_SAMPLE_TARGET} muestras`
+  // Samples of the previous face engine cannot be compared with the new one: the person registers again.
+  const label = outdated ? 'Registrar de nuevo' : `${done}/${FACE_SAMPLE_TARGET} muestras`
   const className = cn(
     'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold tabular-nums',
     tone,
@@ -318,6 +321,7 @@ export function EmployeesPage() {
                     <TableCell className="hidden sm:table-cell" onClick={(ev) => ev.stopPropagation()}>
                       <FaceSamples
                         count={faceSampleCount(e)}
+                        outdated={faceNeedsReenroll(e)}
                         onClick={canEnrollFaces && e.status === 'active' ? () => setFaceId(e.id) : undefined}
                       />
                     </TableCell>

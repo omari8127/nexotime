@@ -1,5 +1,5 @@
 import {
-  descriptorDistance, isConfidentMatch, meanDescriptor, nearestFace, verifyClaimed,
+  FACE_DISTANCE, descriptorDistance, isConfidentMatch, meanDescriptor, nearestFace, verifyClaimed,
   type ClaimVerdict, type FaceCandidate, type FaceMatch, type Tuning,
 } from './face'
 
@@ -30,7 +30,7 @@ export class FaceSession {
       return { match, accepted: null, progress: 0, required }
     }
     const previous = this.frames.at(-1)
-    if (match.employee.id !== this.id || (previous && descriptorDistance(previous, descriptor) > 0.35)) {
+    if (match.employee.id !== this.id || (previous && descriptorDistance(previous, descriptor) > FACE_DISTANCE.sameFrame)) {
       this.frames = []
     }
     this.id = match.employee.id
@@ -81,7 +81,7 @@ export class ClaimSession {
       return { verdict, progress: 0, required, accepted: false }
     }
     const previous = this.frames.at(-1)
-    if (previous && descriptorDistance(previous, descriptor) > 0.35) this.frames = []
+    if (previous && descriptorDistance(previous, descriptor) > FACE_DISTANCE.sameFrame) this.frames = []
     this.lastAt = now
     this.frames = [...this.frames, descriptor].slice(-required)
     const smoothed = verifyClaimed(this.candidates, this.employeeId, meanDescriptor(this.frames), tuning)

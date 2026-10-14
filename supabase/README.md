@@ -12,6 +12,10 @@ Ejecuta en el **SQL Editor** de tu proyecto de Supabase, en este orden y una sol
 6. `migrations/006_integracion_google_drive.sql` — tabla donde cada empresa guarda su propia conexión a Google Drive (ver § Integraciones más abajo).
 7. `migrations/007_empleados_rfc.sql` — RFC opcional de cada empleado, que se imprime en su gafete junto al QR y al número de empleado.
 8. `migrations/008_portal_empleado.sql` — portal del empleado: entrar desde el celular con código de empresa + número de empleado + PIN, checar con foto y pedir vacaciones. Requiere antes `patches/NX01_fotos_entrada.sql`. Al terminar, el código de tu empresa aparece en **Configuración → Portal de empleados**.
+9. `migrations/009_borrado_fotos_90_dias.sql` — borrado automático de las fotos de checada pasado el plazo de la empresa.
+10. `migrations/010_portal_bloqueo_progresivo_y_topes.sql` — portal del empleado: bloqueo progresivo por intentos y topes.
+11. `migrations/011_cuenta_reloj_checador.sql` — rol «Reloj checador (tablet)» para la cuenta dedicada de la tablet.
+12. `migrations/012_borrar_rostros_motor_anterior.sql` — **una sola vez, al cambiar a Human**: borra las muestras de rostro del motor anterior (ya no se pueden comparar). Esos empleados quedan como «No registrado» y registran su rostro de nuevo. No toca los rostros ya registrados con Human.
 
 Las migraciones se pueden volver a correr sin dañar nada.
 

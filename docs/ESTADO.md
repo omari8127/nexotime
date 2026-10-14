@@ -28,6 +28,7 @@
 - **Asistencia** con dos vistas: resumen diario por periodo (horas en píldoras de colores) y **registro de checadas** (Entradas / Salidas / Comidas / Todos, con foto, ubicación y medio), ambas con búsqueda por nombre y rango de fechas.
 - **Editar día completo**: un administrador agrega, cambia o quita cualquier movimiento de un día en un solo paso, con motivo obligatorio y registro en auditoría; también captura un día que no tenía checadas.
 - Gafete vertical (QR grande arriba, RFC e ID debajo) y, en Empleados, cuántas muestras faciales tiene cada persona.
+- **Reconocimiento facial con Human** (antes face-api, que su autor archivó en 2025): el reloj ya no se traba buscando la cara (el detector tarda unos milisegundos en vez de 100 ms o más en una tablet). Los límites de «misma persona» se calibraron con fotos reales: con el perfil equilibrado (0.42) ninguna otra persona pasó en la prueba. **Cada empleado debe volver a registrar su rostro una vez**: las muestras del motor anterior no se pueden comparar con las nuevas (Empleados y Configuración → Reloj checador lo marcan como «Registrar de nuevo»). Modelos: BlazeFace y FaceMesh (MediaPipe, Apache-2.0) y FaceRes (Apache-2.0), servidos desde `/models/human` y guardados para funcionar sin Internet.
 
 ## Pendiente — depende de ti (no se puede hacer desde el código)
 
@@ -101,6 +102,7 @@ avisa para priorizarlo aparte.
 
 ## Límites conocidos
 
+- Las muestras faciales de Human pesan unos 23 KB por empleado (5 muestras). La copia sin Internet del reloj vive en el almacenamiento del navegador (≈5 MB): hasta unos 100–150 empleados con rostro cabe junto con la asistencia reciente; para más, habría que guardar las muestras aparte (IndexedDB).
 - Una app web puede ser alterada por una persona técnica; la licencia frena el uso normal no autorizado, no a un atacante decidido.
 - El reconocimiento facial no es infalible ni detiene un video grabado del empleado; por eso hay umbral ajustable, margen contra personas parecidas, foto de verificación en pantalla y métodos alternos. Se quitó la prueba de vida por parpadeo porque estorbaba más de lo que protegía; si algún cliente la necesita, habría que volver a incorporarla.
 - Los PIN de empleado se guardan tal cual y se comparan en el navegador del reloj (como en muchos relojes checadores); quien administra los puede ver. Para una versión posterior: guardarlos con hash y verificar en el servidor.

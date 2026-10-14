@@ -16,7 +16,7 @@ import { useDeviceUse } from '@/hooks/useDeviceUse'
 import { PANEL_UNLOCK_MS } from '@/lib/deviceUse'
 import { photoRetentionDays } from '@/lib/photoEvidence'
 import { useFeature } from '@/lib/license/features'
-import { TUNING } from '@/lib/face'
+import { THRESHOLD_MAX, THRESHOLD_MIN, TUNING, faceSampleState } from '@/lib/face'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import type { Employee, FaceDistance, FaceStrictness } from '@/types'
 
@@ -65,8 +65,9 @@ const fmt = (iso: string) => new Date(iso).toLocaleString('es-MX', { dateStyle: 
 
 const faceState = (e: Employee) => {
   const face = e.identifications.find((i) => i.method === 'face')
-  const n = face?.descriptors?.length ?? 0
-  return { enrolled: n > 0, enabled: !!face?.enabled && n > 0, samples: n, enrolledAt: n > 0 ? face?.enrolledAt : undefined }
+  // Only samples of the current engine count; older ones need a new registration.
+  const { usable: n, outdated } = faceSampleState(e)
+  return { enrolled: n > 0, enabled: !!face?.enabled && n > 0, samples: n, enrolledAt: n > 0 ? face?.enrolledAt : undefined, outdated }
 }
 
 /** Kiosk behaviour + the roll-out of face enrollment across the team. */
@@ -131,7 +132,7 @@ export function KioskSettingsPanel() {
           autoRegister,
           autoRegisterSeconds: Number(seconds),
           faceStrictness: strictness,
-          faceThreshold: threshold ?? undefined,
+          faceMatchLimit: threshold ?? undefined,
           faceZoom: Number(zoom),
           minGapMinutes: Number(gap),
           faceCheckOnPin,
@@ -252,8 +253,8 @@ export function KioskSettingsPanel() {
             </div>
             <input
               type="range"
-              min={0.35}
-              max={0.75}
+              min={THRESHOLD_MIN}
+              max={THRESHOLD_MAX}
               step={0.01}
               value={threshold ?? TUNING[strictness].threshold}
               onChange={(e) => setThreshold(Number(e.target.value))}
@@ -407,6 +408,8 @@ export function KioskSettingsPanel() {
                     </div>
                     {st.enrolled ? (
                       <Badge variant={st.enabled ? 'success' : 'muted'}>{st.enabled ? 'Registrado' : 'Desactivado'}</Badge>
+                    ) : st.outdated ? (
+                      <Badge variant="warning">Registrar de nuevo</Badge>
                     ) : (
                       <Badge variant="warning">No registrado</Badge>
                     )}

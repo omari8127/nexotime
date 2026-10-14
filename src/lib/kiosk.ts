@@ -63,7 +63,8 @@ export function resolveKiosk(settings: AttendanceSettings | undefined): Resolved
     autoRegister: k.autoRegister ?? KIOSK_DEFAULTS.autoRegister,
     autoRegisterSeconds: Math.min(10, Math.max(1, k.autoRegisterSeconds ?? KIOSK_DEFAULTS.autoRegisterSeconds)),
     faceStrictness: k.faceStrictness ?? KIOSK_DEFAULTS.faceStrictness,
-    faceThreshold: typeof k.faceThreshold === 'number' ? Math.min(0.75, Math.max(0.35, k.faceThreshold)) : null,
+    // Read from faceMatchLimit (current engine). A faceThreshold saved for the previous engine is ignored.
+    faceThreshold: typeof k.faceMatchLimit === 'number' ? Math.min(0.5, Math.max(0.3, k.faceMatchLimit)) : null,
     faceZoom: typeof k.faceZoom === 'number' ? Math.min(2.5, Math.max(1, k.faceZoom)) : KIOSK_DEFAULTS.faceZoom,
     faceDistance:
       k.faceDistance === 'near' || k.faceDistance === 'normal' || k.faceDistance === 'far' || k.faceDistance === 'auto'

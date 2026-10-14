@@ -95,6 +95,9 @@ export interface KioskSettings {
   faceStrictness?: FaceStrictness
   /** Exact match distance (0.35–0.75, lower = stricter). Overrides the strictness level when set. */
   faceThreshold?: number
+  /** Explicit match limit on the CURRENT face engine's scale (0.30–0.50). The old `faceThreshold` belonged to
+   *  the previous engine's scale and is ignored: reused, it would let strangers in. */
+  faceMatchLimit?: number
   /** Digital zoom on the face camera at the reloj (1–2.5×): for tablets with a wide, basic camera. */
   faceZoom?: number
   /** How far from the camera people stand when they check in; decides the view and how close is "too close". */
@@ -200,7 +203,7 @@ export interface EmployeeIdentification {
   enabled: boolean
   /** For QR / barcode: the encoded value. For PIN: masked. */
   value?: string
-  /** Face method: 128-number descriptors of the enrolled samples (never photos). */
+  /** Face method: numeric descriptors of the enrolled samples (1024 numbers each; never photos). */
   descriptors?: number[][]
   enrolledAt?: ISODateTime
 }

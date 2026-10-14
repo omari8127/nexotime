@@ -1,3 +1,4 @@
+import { faceSampleState } from '@/lib/face'
 import type { Employee } from '@/types'
 
 /**
@@ -7,6 +8,12 @@ import type { Employee } from '@/types'
  */
 export const FACE_SAMPLE_TARGET = 5
 
+/** Usable samples of the current face engine (older samples need a new registration and do not count). */
 export function faceSampleCount(employee: Pick<Employee, 'identifications'>): number {
-  return employee.identifications.find((i) => i.method === 'face')?.descriptors?.length ?? 0
+  return faceSampleState(employee).usable
+}
+
+/** Has face samples, but only from the previous engine: needs to register again. */
+export function faceNeedsReenroll(employee: Pick<Employee, 'identifications'>): boolean {
+  return faceSampleState(employee).outdated
 }
