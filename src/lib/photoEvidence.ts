@@ -41,17 +41,23 @@ export function validatePhotoCapture(photo: PhotoCapture, now = trueNow().getTim
   }
 }
 
+/**
+ * Longest side of a kiosk photo. Every checada keeps one now, so they are small (about 25–40 KB): enough
+ * to recognise the person, and a year of a 10-person company stays well under a gigabyte.
+ */
+export const KIOSK_PHOTO_MAX_SIDE = 480
+
 /** Encode the very frame that passed the face/quality check. No upload/file picker. */
-export function encodePhotoCapture(frame: HTMLCanvasElement): PhotoCapture {
+export function encodePhotoCapture(frame: HTMLCanvasElement, maxSide = 640): PhotoCapture {
   const image = document.createElement('canvas')
-  const ratio = Math.min(1, 640 / Math.max(frame.width, frame.height))
+  const ratio = Math.min(1, maxSide / Math.max(frame.width, frame.height))
   image.width = Math.round(frame.width * ratio)
   image.height = Math.round(frame.height * ratio)
   const ctx = image.getContext('2d')
   if (!ctx) throw new Error('No se pudo preparar la fotografía.')
   ctx.drawImage(frame, 0, 0, image.width, image.height)
   let dataUrl = ''
-  for (const quality of [0.78, 0.65, 0.5]) {
+  for (const quality of [0.72, 0.6, 0.5]) {
     dataUrl = image.toDataURL('image/jpeg', quality)
     if (dataUrl.length <= PHOTO_MAX_CHARS) break
   }

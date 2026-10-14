@@ -26,7 +26,7 @@ export const LEGAL_ENTITY = {
 }
 
 /** Shown on every public legal page and stored with the acceptance at sign-up. */
-export const LEGAL_VERSION = '2026-10-04'
+export const LEGAL_VERSION = '2026-10-13'
 export const LEGAL_UPDATED = '4 de octubre de 2026'
 
 export const LEGAL_PATHS = {

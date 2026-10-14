@@ -2,7 +2,8 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 're
 import { BrowserMultiFormatReader } from '@zxing/browser'
 import { BarcodeFormat, DecodeHintType } from '@zxing/library'
 import { CameraOff, LoaderCircle } from 'lucide-react'
-import { captureVideoFrame } from '@/lib/camera'
+import { videoFrameCanvas } from '@/lib/camera'
+import { encodePhotoCapture, KIOSK_PHOTO_MAX_SIDE, type PhotoCapture } from '@/lib/photoEvidence'
 
 type ScanKind = 'qr' | 'barcode'
 
@@ -45,8 +46,8 @@ function describeCameraError(err: unknown): string {
 }
 
 export interface CameraScannerHandle {
-  /** A still frame of the live feed, for the fleeting verification photo (see ClockPage). */
-  capture: () => string | undefined
+  /** A still frame of the live feed, kept as the evidence photo of the movement (see ClockPage). */
+  capture: () => PhotoCapture | undefined
 }
 
 /**
@@ -63,7 +64,13 @@ export const CameraScanner = forwardRef<CameraScannerHandle, { kind: ScanKind; o
     decodeRef.current = onDecode
   })
   useImperativeHandle(ref, () => ({
-    capture: () => (videoRef.current ? captureVideoFrame(videoRef.current) : undefined),
+    capture: () => {
+      try {
+        return videoRef.current ? encodePhotoCapture(videoFrameCanvas(videoRef.current, KIOSK_PHOTO_MAX_SIDE), KIOSK_PHOTO_MAX_SIDE) : undefined
+      } catch {
+        return undefined // the movement is registered without a photo rather than not at all
+      }
+    },
   }))
 
   useEffect(() => {

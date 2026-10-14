@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { FaceViewport } from '@/components/clock/FaceViewport'
-import { captureVideoFrame } from '@/lib/camera'
+import { videoFrameCanvas } from '@/lib/camera'
+import { encodePhotoCapture, KIOSK_PHOTO_MAX_SIDE, type PhotoCapture } from '@/lib/photoEvidence'
 import { VoiceToggle } from '@/components/shared/VoiceToggle'
 import { useCameraStream } from '@/hooks/useCameraStream'
 import { useCameraView, useRotationSearch } from '@/hooks/useCameraView'
@@ -50,8 +51,8 @@ export function FaceScanFlow({
 }: {
   employees: Employee[]
   settings: ResolvedKioskSettings
-  /** `photo` is a fleeting, in-memory snapshot for the success screen only — not stored. */
-  onConfirmed: (employee: Employee, photo?: string) => void
+  /** `photo` is the frame the person was recognised in: it is saved with the movement. */
+  onConfirmed: (employee: Employee, photo?: PhotoCapture) => void
   onCancel: () => void
 }) {
   const candidates = useMemo(() => faceCandidates(employees), [employees])
@@ -161,7 +162,13 @@ export function FaceScanFlow({
 
       const accept = (m: FaceMatch) => {
         alive = false
-        confirmRef.current(m.employee, captureVideoFrame(video, rotationRef.current))
+        let photo: PhotoCapture | undefined
+        try {
+          photo = encodePhotoCapture(videoFrameCanvas(video, KIOSK_PHOTO_MAX_SIDE, rotationRef.current), KIOSK_PHOTO_MAX_SIDE)
+        } catch {
+          photo = undefined // recognised: the movement goes through even if the photo could not be made
+        }
+        confirmRef.current(m.employee, photo)
       }
 
       let nextDelay = ACTIVE_DELAY_MS
@@ -287,7 +294,7 @@ export function FaceScanFlow({
                   : stage === 'loading' ? 'Preparando…' : hint || 'Mira a la cámara'}
             </p>
             <p className="text-sm text-slate-500">
-              Se procesa en este equipo. Al identificarte verás una foto de verificación que no se guarda.
+              El reconocimiento se hace en este equipo. Se toma una foto y se guarda con tu registro.
             </p>
             {resolution ? <p className="text-xs text-slate-500">Cámara: {resolution}</p> : null}
             {reading && stage === 'searching' && can('biometrics.manage') ? <p className="font-mono text-[11px] text-slate-400">{reading}</p> : null}

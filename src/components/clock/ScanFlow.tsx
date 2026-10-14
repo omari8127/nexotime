@@ -3,6 +3,7 @@ import { Keyboard } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { CameraScanner, type CameraScannerHandle } from '@/components/clock/CameraScanner'
 import { KioskAlert } from '@/components/clock/KioskAlert'
+import type { PhotoCapture } from '@/lib/photoEvidence'
 
 /**
  * Reads a QR or barcode credential from the camera, a USB scanner
@@ -20,9 +21,9 @@ export function ScanFlow({
   demoCode,
 }: {
   mode: 'qr' | 'barcode'
-  /** `photo` is a fleeting, in-memory snapshot for the success screen only — not stored.
+  /** `photo` is the frame grabbed when the code was read: it is saved with the movement.
    *  Returns an error message to show, or null when the code was accepted. */
-  onCode: (code: string, photo?: string) => string | null
+  onCode: (code: string, photo?: PhotoCapture) => string | null
   onCancel: () => void
   /** Demo mode only: a valid code to use when there is no badge at hand. */
   demoCode?: string
@@ -67,7 +68,7 @@ export function ScanFlow({
             ? 'Se registra automáticamente al leerlo.'
             : 'También funciona con un lector USB: escanea con este campo activo.'}
         </p>
-        <p className="text-xs text-slate-400">Se toma una foto de verificación que no se guarda.</p>
+        <p className="text-xs text-slate-400">Se toma una foto y se guarda con tu registro.</p>
       </div>
 
       {error ? <KioskAlert message={error} shakeKey={errorTick} /> : null}

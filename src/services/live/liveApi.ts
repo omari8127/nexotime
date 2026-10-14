@@ -297,10 +297,33 @@ export async function liveUpsertAttendance(record: AttendanceRecord) {
     }
   }
   if (pending.length) {
-    // One database transaction: evidence and attendance commit together, or neither does.
-    check(await db.rpc('save_attendance_with_photos', {
-      p_record: { id: record.id, ...attendanceToRow(record) }, p_photos: pending,
-    }))
+    // Entries by number/PIN must commit together with their photo (the database refuses them otherwise):
+    // that is what the atomic function is for, and it only accepts photos of entries. The photo of any
+    // other movement is plain evidence: stored first (a replay is harmless), then the day is saved.
+    const entryIds = new Set(
+      record.punches.filter((p) => p.type === 'entry' && p.photoEvidence).map((p) => p.photoEvidence!.id),
+    )
+    const atomic = pending.filter((p) => entryIds.has(p.id))
+    const plain = pending.filter((p) => !entryIds.has(p.id))
+    if (plain.length) {
+      const rows = plain.map((p) => ({
+        id: p.id, company_id: p.companyId, employee_id: p.employeeId, attendance_date: p.date,
+        captured_at: p.capturedAt, width: p.width, height: p.height, data_url: p.dataUrl,
+      }))
+      const { error } = await db.from('attendance_photos').upsert(rows, { onConflict: 'id', ignoreDuplicates: true })
+      if (error) throw new Error(error.message)
+    }
+    if (atomic.length) {
+      // One database transaction: evidence and attendance commit together, or neither does.
+      check(await db.rpc('save_attendance_with_photos', {
+        p_record: { id: record.id, ...attendanceToRow(record) }, p_photos: atomic,
+      }))
+    } else {
+      const { error } = await db.from('attendance_records').upsert(
+        { id: record.id, ...attendanceToRow(record) }, { onConflict: 'employee_id,date' },
+      )
+      if (error) throw new Error(error.message)
+    }
     // Remote evidence is now durable. Failure to clean a local copy is harmless and retryable.
     for (const photo of pending) await removeLocalPhoto(photo.id).catch(() => undefined)
     return

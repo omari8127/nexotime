@@ -20,7 +20,7 @@ import {
   type FaceApi,
 } from '@/lib/face'
 import { ClaimSession } from '@/lib/faceSession'
-import { encodePhotoCapture, type PhotoCapture } from '@/lib/photoEvidence'
+import { encodePhotoCapture, KIOSK_PHOTO_MAX_SIDE, type PhotoCapture } from '@/lib/photoEvidence'
 import type { ResolvedKioskSettings } from '@/lib/kiosk'
 import { useVoice } from '@/lib/speech'
 import { useDataStore } from '@/store/dataStore'
@@ -60,7 +60,7 @@ export function FaceVerifyFlow({
   employees,
   settings,
   mode,
-  keepPhoto,
+  onSkip,
   stepLabel,
   photoNote,
   onVerified,
@@ -73,6 +73,9 @@ export function FaceVerifyFlow({
   mode: 'verify' | 'evidence'
   /** The photo is saved with the movement (an entry); otherwise it is only shown once, never stored. */
   keepPhoto: boolean
+  /** Only where the photo is not required (anything but an entry by number/PIN): register without it
+   *  when the camera cannot be used. Offered once the camera or the reading has failed. */
+  onSkip?: () => void
   /** Replaces the "Paso 3 de 3 · …" line where this is not the third step of the kiosk (employee portal). */
   stepLabel?: string
   /** Replaces the sentence that says what happens with the photo. */
@@ -153,7 +156,7 @@ export function FaceVerifyFlow({
     const finish = (distance?: number) => {
       alive = false
       try {
-        const photo = encodePhotoCapture(videoFrameCanvas(video, 640, rotationRef.current))
+        const photo = encodePhotoCapture(videoFrameCanvas(video, KIOSK_PHOTO_MAX_SIDE, rotationRef.current), KIOSK_PHOTO_MAX_SIDE)
         setStage('verified')
         setHint(mode === 'verify' ? 'Rostro verificado' : 'Foto tomada')
         beep()
@@ -360,9 +363,7 @@ export function FaceVerifyFlow({
           )}
 
           <p className="text-sm text-slate-500">
-            {photoNote ?? (keepPhoto
-              ? 'Esta foto se guarda con tu entrada como evidencia.'
-              : 'La foto solo sirve para comprobar que eres tú y no se guarda.')}
+            {photoNote ?? 'Esta foto se guarda con tu registro, para que la empresa pueda comprobar quién checó.'}
           </p>
         </div>
 
@@ -401,6 +402,11 @@ export function FaceVerifyFlow({
               }}
             >
               Cambiar cámara
+            </Button>
+          ) : null}
+          {onSkip && mode === 'evidence' && (stage === 'failed' || cameraState === 'error') ? (
+            <Button variant="secondary" size="lg" className="flex-1" onClick={onSkip}>
+              Registrar sin foto
             </Button>
           ) : null}
           {stage !== 'verified' ? (

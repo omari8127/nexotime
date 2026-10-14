@@ -170,7 +170,7 @@ export function ClockPage() {
   const [lastPunch, setLastPunch] = useState<
     { type: PunchType; time: string; location?: PunchLocation; photo?: string } | null
   >(null)
-  // Other methods keep a fleeting preview. Number/PIN entries persist evidence separately.
+  // The photo of the person at this movement (shown on the confirmation and the success screen).
   const [pendingPhoto, setPendingPhoto] = useState<string | undefined>(undefined)
   // The photo taken at the number + PIN step (it is what gets saved with an entry), what that step was
   // (compare with the enrolled face, or only a photo for the record) and whether the face matched.
@@ -243,7 +243,7 @@ export function ClockPage() {
   }, [branchEmployees])
 
   /** Badge codes work at any branch of the company, not only this kiosk's. */
-  function handleCode(kind: 'qr' | 'barcode', code: string, photo?: string): string | null {
+  function handleCode(kind: 'qr' | 'barcode', code: string, photo?: PhotoCapture): string | null {
     const match = findEmployeeByCode(allEmployees, code)
     if (!match.ok) return CODE_ERROR_TEXT[match.reason]
     identify(match.employee, kind, photo)
@@ -334,14 +334,14 @@ export function ClockPage() {
   /**
    * Once someone is identified: validate the movement they picked on the first screen
    * against today's record, then go to a short confirmation before registering it.
-   * Photos here are fleeting previews, except the one taken at the number + PIN step, which is saved
-   * with an entry as evidence.
+   * Every movement keeps the photo of who clocked it (face, badge or number + PIN alike): it was taken
+   * when the person was identified, and is saved together with the movement.
    */
-  function identify(emp: Employee, capture: CaptureMethod, photo?: string) {
+  function identify(emp: Employee, capture: CaptureMethod, photo?: PhotoCapture) {
     setEmployee(emp)
     setMethod(capture)
-    setPendingPhoto(photo)
-    setEvidence(null)
+    setPendingPhoto(photo?.dataUrl)
+    setEvidence(photo ?? null)
     setFaceVerified(false)
     const record = attendance.find((r) => r.employeeId === emp.id && r.date === today)
     const type = selectedPunchType ?? detectNextPunch(record?.punches ?? [], company.attendanceSettings.trackLunch)?.type
@@ -356,26 +356,24 @@ export function ClockPage() {
       }
     }
     // Number + PIN: the PIN says who they claim to be, the camera step checks it is really them. An
-    // employee with an enrolled face is compared with it; one without gets a photo for the record
-    // (entries by number/PIN require one). Only then does the movement go through.
+    // employee with an enrolled face is compared with it; one without gets a photo for the record.
+    // Every movement keeps its photo. Only then does the movement go through.
     if (capture === 'employee_number') {
       const enrolled = faceAllowed && kiosk.faceCheckOnPin && faceCandidates([emp]).length > 0
-      if (enrolled || needsEntryPhoto(capture, type ?? 'entry')) {
-        setVerifyMode(enrolled ? 'verify' : 'evidence')
-        setPhase('verify')
-        return
-      }
+      setVerifyMode(enrolled ? 'verify' : 'evidence')
+      setPhase('verify')
+      return
     }
     setPhase(kiosk.autoRegister && type ? 'confirm' : 'punch')
   }
 
   async function doPunch(type: PunchType, freshEvidence?: PhotoCapture) {
     if (!employee || punchBusy.current) return
-    // An entry by number/PIN is saved with the photo taken at the camera step; if that photo is gone or
-    // too old (someone walked away and came back), the camera step is shown again.
-    let photo: PhotoCapture | undefined
+    // The movement is saved with the photo taken when the person was identified. An entry by number/PIN
+    // cannot be saved without one: if it is gone or too old (someone walked away and came back), the
+    // camera step is shown again. Any other movement simply goes through without a photo if it has none.
+    const photo: PhotoCapture | undefined = freshEvidence ?? (evidence && photoIsFresh(evidence) ? evidence : undefined)
     if (needsEntryPhoto(method, type)) {
-      photo = freshEvidence ?? (evidence && photoIsFresh(evidence) ? evidence : undefined)
       if (!photo) {
         resumeType.current = type
         setVerifyMode(faceAllowed && kiosk.faceCheckOnPin && faceCandidates([employee]).length > 0 ? 'verify' : 'evidence')
@@ -682,7 +680,7 @@ export function ClockPage() {
               <FlowCard key="number" onBack={backToMethod}>
                 <NumberPinFlow
                   employees={punchable}
-                  steps={selectedPunchType === 'entry' || (faceAllowed && kiosk.faceCheckOnPin && hasEnrolledFaces) ? 3 : 2}
+                  steps={3}
                   onCancel={backToMethod}
                   onIdentified={(emp) => identify(emp, 'employee_number')}
                 />
@@ -701,7 +699,17 @@ export function ClockPage() {
                   employees={allEmployees}
                   settings={kiosk}
                   mode={verifyMode}
-                  keepPhoto={needsEntryPhoto('employee_number', resumeType.current ?? selectedPunchType ?? 'entry')}
+                  keepPhoto
+                  // An entry cannot be saved without its photo; any other movement can, if the camera fails.
+                  onSkip={
+                    needsEntryPhoto('employee_number', resumeType.current ?? selectedPunchType ?? 'entry')
+                      ? undefined
+                      : () => {
+                          setEvidence(null)
+                          setPendingPhoto(undefined)
+                          setPhase(kiosk.autoRegister && confirmPunch ? 'confirm' : 'punch')
+                        }
+                  }
                   onCancel={reset}
                   onVerified={({ photo }) => {
                     setEvidence(photo)
@@ -1011,10 +1019,8 @@ export function ClockPage() {
                       <div className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-medium text-slate-500">
                         <Camera className="h-3.5 w-3.5" />
                         {faceVerified
-                          ? needsEntryPhoto(method, lastPunch.type)
-                            ? 'Rostro verificado · foto guardada como evidencia'
-                            : 'Rostro verificado'
-                          : needsEntryPhoto(method, lastPunch.type) ? 'Foto de evidencia de entrada' : 'Foto de verificación'}
+                          ? 'Rostro verificado · foto guardada con tu registro'
+                          : 'Foto guardada con tu registro'}
                       </div>
                       <img src={lastPunch.photo} alt="Foto de verificación" className="h-40 w-full object-cover" />
                     </div>

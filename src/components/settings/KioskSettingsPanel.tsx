@@ -174,7 +174,7 @@ export function KioskSettingsPanel() {
                 <p className="mt-1 text-sm text-muted-foreground">
                   Después del PIN, el reloj toma una foto y la compara con el rostro registrado de ese
                   empleado; solo registra si coincide. Quien aún no tiene rostro registrado checa como antes
-                  (en las entradas se guarda su foto como evidencia).
+                  (igual se toma y se guarda su foto).
                 </p>
               </div>
               <Switch checked={faceCheckOnPin} onCheckedChange={setFaceCheckOnPin} disabled={!canManage} />

@@ -744,7 +744,6 @@ export const useDataStore = create<DataState>((set, get) => {
       photoWriteInFlight = true
       let written = false
       try {
-        if (!needsEntryPhoto(input.method, input.type)) throw new PunchError('La foto corresponde a una entrada por número.')
         validatePhotoCapture(photo)
         const state = get()
         const companyId = state.company.id

@@ -220,10 +220,11 @@ export function PrivacidadPage() {
             representación numérica (un conjunto de 128 valores) para identificar el rostro; la evidencia de entrada descrita abajo se guarda por separado.
           </li>
           <li>
-            Al registrar una entrada por número de empleado o PIN, se toma y conserva una fotografía de evidencia
+            Al registrar cualquier movimiento (entrada, comida o salida) en el reloj checador, con rostro, credencial
+            QR, código de barras o número de empleado y PIN, se toma y conserva una fotografía de evidencia
             vinculada al empleado, fecha y hora. Se guarda en el dispositivo mientras se sincroniza y en el servidor
             de la empresa para consulta con los permisos de asistencia. La foto permite revisar quién checó;
-            no demuestra por sí sola la identidad. Las vistas previas de otros métodos siguen siendo temporales.
+            no demuestra por sí sola la identidad.
           </li>
           <li>
             La ubicación se toma con el permiso del navegador, solo al registrar la asistencia, para validar la
