@@ -59,6 +59,11 @@ export function KioskSetupPrompt({
           </Button>
         </div>
 
+        <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
+          Lo más seguro: en la tablet entra con una cuenta de rol <strong>«Reloj checador (tablet)»</strong> (Usuarios →
+          Nuevo usuario), en lugar de una de administrador. Esa cuenta solo puede registrar checadas.
+        </p>
+
         {usingDefaultCode ? (
           <p className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
             <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />

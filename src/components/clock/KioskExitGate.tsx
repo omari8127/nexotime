@@ -17,11 +17,14 @@ export function KioskExitGate({
   expectedPin,
   onClose,
   onSuccess,
+  signsOut = false,
 }: {
   open: boolean
   expectedPin: string
   onClose: () => void
   onSuccess: () => void
+  /** The device has a dedicated account: the code signs it out (there is no panel behind it). */
+  signsOut?: boolean
 }) {
   const [value, setValue] = useState('')
   const [error, setError] = useState(false)
@@ -75,7 +78,11 @@ export function KioskExitGate({
           <LockKeyhole className="h-6 w-6" />
         </div>
         <p className="mt-3 text-base font-semibold text-slate-900">Código de salida</p>
-        <p className="mt-1 text-sm text-muted-foreground">Solo el administrador puede salir del reloj checador.</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {signsOut
+            ? 'Solo el administrador puede cerrar la sesión de esta tablet.'
+            : 'Solo el administrador puede salir del reloj checador.'}
+        </p>
 
         <div
           className={cn(
@@ -142,7 +149,7 @@ export function KioskExitGate({
             Cancelar
           </Button>
           <Button className="flex-1" disabled={!value} onClick={() => submitRef.current()}>
-            Entrar
+            {signsOut ? 'Cerrar sesión' : 'Entrar'}
           </Button>
         </div>
       </DialogContent>

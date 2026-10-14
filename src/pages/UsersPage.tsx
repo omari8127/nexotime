@@ -41,6 +41,7 @@ const PERMISSION_GROUPS: Array<{ label: string; permissions: Array<{ key: Permis
       { key: 'incidencias.review', label: 'Aprobar / rechazar incidencias' },
       { key: 'corrections.review', label: 'Aprobar / rechazar correcciones' },
       { key: 'self.view', label: 'Portal "Mi asistencia" (solo lo propio)' },
+      { key: 'clock.use', label: 'Reloj checador (cuenta de la tablet)' },
     ],
   },
   {

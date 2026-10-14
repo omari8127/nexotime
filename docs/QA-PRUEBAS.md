@@ -41,6 +41,13 @@ Marca cada punto; si alguno falla, no se entrega.
 - [ ] En un cuarto con poca luz: pantalla blanca al máximo de brillo, la persona a ~40 cm. Debe leerla; si dice "poca luz", acercarse a la pantalla.
 - [ ] La cámara del reloj (rostro, QR y verificación) no se entrecorta ni se congela cada segundo en la tablet real. Si pasa, anotar el modelo de la tablet.
 
+### 3.4 Cuenta dedicada del reloj
+- [ ] Usuarios → Nuevo usuario con rol «Reloj checador (tablet)» (correo propio, sucursal asignada). Entrar con ella en la tablet: abre directo en el reloj y registra checadas con rostro, QR y número + PIN.
+- [ ] Con esa cuenta, abrir `/`, `/empleados` o `/configuracion` en la tablet regresa al reloj.
+- [ ] Mantener el logo 3 s y escribir el código de salida cierra la sesión (no abre ningún panel).
+- [ ] Con esa cuenta no se puede editar nada: desde la consola del navegador, un `update` a empleados o a empresas es rechazado por la base.
+- [ ] Una checada hecha con la cuenta del reloj aparece con su foto en Asistencia → Registro de checadas.
+
 ### 3.3 Portal del empleado: bloqueo
 - [ ] Con el empleado de prueba, 5 PIN equivocados seguidos: bloquea 15 min y lo dice. Otros 5 al terminar ese plazo: bloquea 1 h ("Espera 1 h").
 - [ ] Entrar bien reinicia el conteo (el siguiente error vuelve a contar desde 1).

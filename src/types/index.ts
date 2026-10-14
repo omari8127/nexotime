@@ -128,7 +128,7 @@ export interface Branch {
 /*  Identity & access                                                          */
 /* -------------------------------------------------------------------------- */
 
-export type RoleKey = 'owner' | 'admin' | 'hr' | 'supervisor' | 'employee'
+export type RoleKey = 'owner' | 'admin' | 'hr' | 'supervisor' | 'employee' | 'kiosk'
 
 export interface Role {
   key: RoleKey
@@ -165,6 +165,8 @@ export type Permission =
   | 'corrections.review'
   /** Portal del empleado ("Mi asistencia"): solo sus propios datos. */
   | 'self.view'
+  /** Cuenta dedicada de la tablet: solo el reloj checador, ninguna pantalla del panel. */
+  | 'clock.use'
   /** Registrar, actualizar y eliminar datos biométricos (rostro). Solo administración. */
   | 'biometrics.manage'
 

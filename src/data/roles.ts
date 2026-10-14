@@ -94,15 +94,23 @@ export const ROLES: Record<RoleKey, Role> = {
       'Registra su asistencia y consulta únicamente sus propios registros. Solicita correcciones; no puede modificarlas directamente.',
     permissions: ['self.view'],
   },
+  kiosk: {
+    key: 'kiosk',
+    label: 'Reloj checador (tablet)',
+    description:
+      'Cuenta solo para la tablet del reloj. Registra las checadas del personal y nada más: no abre el panel, no edita empleados ni configuración y no puede corregir registros. Úsala en lugar de la sesión de un administrador.',
+    permissions: ['clock.use'],
+  },
 }
 
-export const ROLE_LIST: Role[] = [ROLES.owner, ROLES.admin, ROLES.hr, ROLES.supervisor, ROLES.employee]
+export const ROLE_LIST: Role[] = [ROLES.owner, ROLES.admin, ROLES.hr, ROLES.supervisor, ROLES.employee, ROLES.kiosk]
 
-/** Roles con acceso al panel administrativo (todos menos el empleado). */
-export const isStaffRole = (role: RoleKey): boolean => role !== 'employee'
+/** Roles con acceso al panel administrativo (todos menos el empleado y la cuenta del reloj). */
+export const isStaffRole = (role: RoleKey): boolean => role !== 'employee' && role !== 'kiosk'
 
 /** Pantalla de inicio de cada rol. */
-export const homePathFor = (role: RoleKey): string => (role === 'employee' ? '/mi-asistencia' : '/')
+export const homePathFor = (role: RoleKey): string =>
+  role === 'employee' ? '/mi-asistencia' : role === 'kiosk' ? '/clock' : '/'
 
 export function can(role: RoleKey, permission: Permission): boolean {
   return ROLES[role]?.permissions.includes(permission) ?? false

@@ -34,6 +34,7 @@ import { LiveTime } from '@/components/clock/LiveTime'
 import { KioskSetupPrompt } from '@/components/clock/KioskSetupPrompt'
 import { useDeviceUse } from '@/hooks/useDeviceUse'
 import { lockPanel, unlockPanel } from '@/lib/deviceUse'
+import { signOutLive } from '@/services/live/liveApi'
 import { can as roleCan } from '@/data/roles'
 import { needsEntryPhoto, photoIsFresh, type PhotoCapture } from '@/lib/photoEvidence'
 import { NumberPinFlow } from '@/components/clock/NumberPinFlow'
@@ -204,10 +205,13 @@ export function ClockPage() {
   const [deviceUse, setDeviceUse] = useDeviceUse()
   const [setupLater, setSetupLater] = useState(false)
   const currentUserRole = useDataStore((s) => s.currentUser.role)
+  // The company's dedicated clock account has no panel to unlock: the device is a kiosk by definition and
+  // the exit code signs it out, so an administrator can sign in with their own account.
+  const dedicatedAccount = mode === 'live' && currentUserRole === 'kiosk'
   useEffect(() => {
     // Arriving at the clock closes the panel again on a kiosk device.
-    if (deviceUse === 'kiosk') lockPanel()
-  }, [deviceUse])
+    if (deviceUse === 'kiosk' || dedicatedAccount) lockPanel()
+  }, [deviceUse, dedicatedAccount])
   // Why a movement could not be registered, shown as a full screen instead of a corner toast.
   const [blockedMessage, setBlockedMessage] = useState('')
   const pendingSync = useSyncStore((s) => s.pending)
@@ -1133,7 +1137,9 @@ export function ClockPage() {
       </section>
 
       <KioskSetupPrompt
-        open={mode === 'live' && deviceUse === null && !setupLater && roleCan(currentUserRole, 'settings.manage')}
+        open={
+          mode === 'live' && deviceUse === null && !setupLater && !dedicatedAccount && roleCan(currentUserRole, 'settings.manage')
+        }
         usingDefaultCode={kiosk.exitPin === KIOSK_DEFAULTS.exitPin}
         onKiosk={() => setDeviceUse('kiosk')}
         onPanel={() => setDeviceUse('panel')}
@@ -1143,10 +1149,17 @@ export function ClockPage() {
       <KioskExitGate
         open={showExitGate}
         expectedPin={kiosk.exitPin}
+        signsOut={dedicatedAccount}
         onClose={() => setShowExitGate(false)}
         // A full load, not a route change: the tablet's page may be days old, and the panel must come from the current build.
         // The code was typed correctly: the panel opens for the next 15 minutes.
         onSuccess={() => {
+          if (dedicatedAccount) {
+            void signOutLive()
+              .catch(() => undefined)
+              .finally(() => window.location.assign('/login'))
+            return
+          }
           unlockPanel()
           window.location.assign('/')
         }}

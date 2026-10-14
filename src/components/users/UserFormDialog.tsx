@@ -172,6 +172,13 @@ export function UserFormDialog({
             />
             <p className="text-xs text-muted-foreground">{ROLES[role].description}</p>
             {isSelf ? <p className="text-xs text-warning">No puedes cambiar tu propio rol.</p> : null}
+            {role === 'kiosk' ? (
+              <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900">
+                Pensada para la tablet que usa el personal. Ponle un correo propio (por ejemplo
+                reloj.sucursal@tuempresa.com), una contraseña que no uses en otro lado y, abajo, la sucursal que
+                atiende. Entra con ella en la tablet en lugar de tu cuenta.
+              </p>
+            ) : null}
           </div>
 
           {role === 'employee' ? (
