@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import {
   CalendarDays,
   Camera,
+  Check,
   Clock3,
   Loader2,
   LogOut,
@@ -27,6 +28,7 @@ import { AttendanceStatusBadge, IncidenciaStatusBadge } from '@/components/share
 import { PunchPill } from '@/components/attendance/PunchPill'
 import { FaceVerifyFlow } from '@/components/clock/FaceVerifyFlow'
 import { MiniMap } from '@/components/shared/MiniMap'
+import { ColorStrip, PUBLIC_VARS } from '@/components/shared/PublicChrome'
 import { useGeolocation } from '@/hooks/useGeolocation'
 import { useLightTheme } from '@/hooks/useLightTheme'
 import { PUNCH_TYPE_LABEL, WEEKDAY_LABEL, canRegisterPunch, presenceOf, weekdayFromISO } from '@/lib/attendance'
@@ -201,12 +203,12 @@ export function EmployeePortalPage() {
   }
 
   return (
-    <div className="min-h-dvh bg-white pb-24 font-sans text-slate-900">
+    <div className="min-h-dvh bg-white pb-28 font-sans text-slate-900 antialiased" style={PUBLIC_VARS}>
       <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/90 backdrop-blur-md">
         <div className="mx-auto flex max-w-xl items-center gap-3 px-4 py-3.5">
           <NexotimeMark className="h-9 w-9 shrink-0" />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-slate-900">{employee.fullName}</p>
+            <p className="truncate text-[15px] font-semibold leading-tight text-slate-900">{employee.fullName}</p>
             <p className="truncate text-xs text-slate-500">
               {employee.employeeNumber} · {company.name}
             </p>
@@ -228,7 +230,7 @@ export function EmployeePortalPage() {
 
       <main className="mx-auto max-w-xl px-4 pt-5">
         {portalApi.demo ? (
-          <p className="mb-4 rounded-lg border border-dashed border-border bg-card px-3 py-2 text-xs text-muted-foreground">
+          <p className="mb-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-600">
             Demostración: los movimientos se guardan solo en este navegador.
           </p>
         ) : null}
@@ -272,7 +274,7 @@ export function EmployeePortalPage() {
         </AnimatePresence>
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card/95 backdrop-blur">
+      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md">
         <div className="mx-auto grid max-w-xl grid-cols-3">
           {TABS.map((t) => {
             const active = tab === t.value
@@ -283,12 +285,12 @@ export function EmployeePortalPage() {
                 onClick={() => setTab(t.value)}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'relative flex flex-col items-center gap-1 px-2 pb-3 pt-2.5 text-[11px] font-medium transition-colors',
-                  active ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
+                  'relative flex flex-col items-center gap-1 px-2 pb-3 pt-2.5 text-[11px] font-semibold transition-colors',
+                  active ? 'text-slate-900' : 'text-slate-500 hover:text-slate-800',
                 )}
               >
                 {active ? (
-                  <motion.span layoutId="portal-tab" className="absolute inset-x-6 top-0 h-0.5 rounded-full bg-primary" />
+                  <motion.span layoutId="portal-tab" className="absolute inset-x-6 top-0 h-[3px] rounded-b-full bg-slate-900" />
                 ) : null}
                 <t.icon className="h-5 w-5" />
                 {t.label}
@@ -347,12 +349,12 @@ export function EmployeePortalPage() {
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, opacity: 0 }}
               transition={{ type: 'spring', stiffness: 300, damping: 24 }}
-              className="w-full max-w-sm rounded-2xl bg-card p-6 text-center shadow-2xl"
+              className="w-full max-w-sm overflow-hidden rounded-2xl bg-white p-6 text-center shadow-2xl ring-1 ring-slate-200"
               onClick={(e) => e.stopPropagation()}
             >
               <AnimatedCheck className="mx-auto h-20 w-20" />
-              <h2 className="mt-3 text-xl font-semibold tracking-tight">¡{PUNCH_STYLE[done.type].label} registrada!</h2>
-              <p className="mt-1 font-mono text-3xl font-bold tabular-nums">{formatTime12(done.time)}</p>
+              <h2 className="mt-3 font-display text-xl font-semibold tracking-[-0.02em]">¡{PUNCH_STYLE[done.type].label} registrada!</h2>
+              <p className="mt-1 font-display text-4xl font-semibold tabular-nums tracking-[-0.03em]">{formatTime12(done.time)}</p>
               <div className={cn('mt-4 grid gap-2.5', done.location ? 'grid-cols-2' : 'grid-cols-1')}>
                 <img src={done.photo} alt="Tu foto de verificación" className="h-32 w-full rounded-xl border border-border object-cover" />
                 {done.location ? (
@@ -386,10 +388,10 @@ function LiveClock({ now }: { now: () => Date }) {
   const date = now()
   const seconds = String(date.getSeconds()).padStart(2, '0')
   return (
-    <p className="font-mono text-5xl font-bold tabular-nums tracking-tight">
+    <p className="font-display text-[3.25rem] font-semibold leading-none tabular-nums tracking-[-0.04em] text-slate-900">
       {formatTime12(formatClock24(date)).replace(/ [ap]\.m\.$/, '')}
-      <span className="text-2xl text-muted-foreground">:{seconds}</span>
-      <span className="ml-2 text-xl font-semibold text-muted-foreground">{date.getHours() < 12 ? 'a.m.' : 'p.m.'}</span>
+      <span className="text-2xl font-medium tracking-normal text-slate-400">:{seconds}</span>
+      <span className="ml-2 text-xl font-semibold tracking-normal text-slate-500">{date.getHours() < 12 ? 'a.m.' : 'p.m.'}</span>
     </p>
   )
 }
@@ -426,12 +428,17 @@ function PunchPanel({
 
   return (
     <div className="space-y-5">
-      <section className="rounded-2xl border border-border bg-card p-5 text-center shadow-sm">
-        <LiveClock now={now} />
-        <p className="mt-1.5 text-sm text-muted-foreground">{formatLongDate(new Date(`${state.today}T00:00:00`))}</p>
-        <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-          <Badge variant={PRESENCE[presence].variant}>{PRESENCE[presence].label}</Badge>
-          <ZoneChip zone={zone} anywhere={anywhere} denied={locationDenied} />
+      <section className="overflow-hidden rounded-2xl bg-white text-center shadow-sm ring-1 ring-slate-200">
+        <ColorStrip />
+        <div className="px-5 pb-5 pt-5">
+          <LiveClock now={now} />
+          <p className="mt-2 text-sm text-slate-500">{formatLongDate(new Date(`${state.today}T00:00:00`))}</p>
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+            <Badge variant={PRESENCE[presence].variant} className="rounded-full px-3 py-1 text-xs font-semibold">
+              {PRESENCE[presence].label}
+            </Badge>
+            <ZoneChip zone={zone} anywhere={anywhere} denied={locationDenied} />
+          </div>
         </div>
       </section>
 
@@ -443,20 +450,27 @@ function PunchPanel({
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             className={cn(
-              'flex items-start gap-2.5 overflow-hidden rounded-xl border px-3.5 py-3 text-sm leading-snug',
+              'flex items-start gap-3 overflow-hidden rounded-2xl px-4 py-3.5 text-sm leading-snug ring-1',
               zone.kind === 'outside'
-                ? 'border-rose-300 bg-rose-50 text-rose-900 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-200'
-                : 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200',
+                ? 'bg-rose-50 text-rose-900 ring-rose-200'
+                : 'bg-amber-50 text-amber-900 ring-amber-200',
             )}
           >
-            {zone.kind === 'outside' ? <MapPinX className="mt-0.5 h-5 w-5 shrink-0" /> : <MapPinOff className="mt-0.5 h-5 w-5 shrink-0" />}
+            <span
+              className={cn(
+                'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white shadow-sm ring-1',
+                zone.kind === 'outside' ? 'text-rose-600 ring-rose-200' : 'text-amber-600 ring-amber-200',
+              )}
+            >
+              {zone.kind === 'outside' ? <MapPinX className="h-5 w-5" /> : <MapPinOff className="h-5 w-5" />}
+            </span>
             <div className="min-w-0 flex-1">
               <p>{zoneProblem}</p>
               {locationDenied ? null : (
                 <button
                   type="button"
                   onClick={onRefreshLocation}
-                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-white/70 px-2.5 py-1 text-xs font-semibold shadow-sm ring-1 ring-black/10 active:scale-95 dark:bg-white/10"
+                  className="mt-2.5 inline-flex h-9 items-center gap-1.5 rounded-xl bg-white px-3 text-xs font-semibold text-slate-800 shadow-sm ring-1 ring-slate-300 transition-transform active:scale-95"
                 >
                   <RefreshCw className="h-3.5 w-3.5" />
                   Volver a leer mi ubicación
@@ -485,16 +499,23 @@ function PunchPanel({
               transition={{ delay: index * 0.05, duration: 0.25 }}
               whileTap={blocked ? undefined : { scale: 0.96 }}
               className={cn(
-                'flex min-h-[7.5rem] flex-col items-center justify-center gap-1.5 rounded-2xl px-3 py-4 text-center shadow-sm transition-shadow',
+                'flex min-h-[8rem] flex-col items-center justify-center gap-2 rounded-2xl px-3 py-4 text-center transition-shadow',
                 made
-                  ? cn('border border-border', style.soft)
+                  ? cn('ring-1 ring-inset ring-black/5', style.soft)
                   : blocked
-                    ? 'border border-dashed border-border bg-muted/50 text-muted-foreground'
-                    : cn(style.solid, 'shadow-md hover:shadow-lg'),
+                    ? 'bg-slate-50 text-slate-500 ring-1 ring-inset ring-slate-200'
+                    : cn(style.solid, 'shadow-md shadow-slate-900/10 hover:shadow-lg'),
               )}
             >
-              <style.Icon className="h-7 w-7" />
-              <span className="text-base font-semibold leading-tight">{style.label}</span>
+              <span
+                className={cn(
+                  'flex h-11 w-11 items-center justify-center rounded-xl',
+                  made ? 'bg-white/70' : blocked ? cn('bg-white ring-1 ring-slate-200', style.text) : 'bg-white/20',
+                )}
+              >
+                {made ? <Check className="h-6 w-6" strokeWidth={3} /> : <style.Icon className="h-6 w-6" />}
+              </span>
+              <span className="text-[15px] font-semibold leading-tight">{style.label}</span>
               <span className="text-xs font-medium tabular-nums opacity-90">
                 {made ? formatTime12(made.time) : notNow ? 'No disponible' : blocked ? 'Revisa tu ubicación' : 'Tocar para registrar'}
               </span>
@@ -503,8 +524,8 @@ function PunchPanel({
         })}
       </section>
 
-      <p className="flex items-start gap-2 rounded-xl border border-border bg-card px-3.5 py-3 text-xs leading-relaxed text-muted-foreground">
-        {enrolled ? <ScanFace className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> : <Camera className="mt-0.5 h-4 w-4 shrink-0 text-primary" />}
+      <p className="flex items-start gap-3 rounded-2xl bg-slate-50 px-4 py-3.5 text-xs leading-relaxed text-slate-600 ring-1 ring-slate-200">
+        {enrolled ? <ScanFace className="mt-0.5 h-4 w-4 shrink-0 text-slate-700" /> : <Camera className="mt-0.5 h-4 w-4 shrink-0 text-slate-700" />}
         {enrolled
           ? 'Antes de registrar, la cámara compara tu rostro con el que tienes registrado y guarda la foto.'
           : 'Antes de registrar se toma una foto tuya. Se guarda con el movimiento y la revisa tu empresa.'}
@@ -518,14 +539,14 @@ function PunchPanel({
 function ZoneChip({ zone, anywhere, denied }: { zone: PortalZoneCheck; anywhere: boolean; denied: boolean }) {
   const look =
     zone.kind === 'inside'
-      ? { Icon: MapPinCheck, tone: 'bg-success/12 text-success' }
+      ? { Icon: MapPinCheck, tone: 'bg-emerald-50 text-emerald-700' }
       : zone.kind === 'outside'
         ? zone.blocked
           ? { Icon: MapPinX, tone: 'bg-rose-500/12 text-rose-700 dark:text-rose-300' }
           : { Icon: MapPinX, tone: 'bg-amber-400/20 text-amber-800 dark:text-amber-200' }
         : zone.kind === 'imprecise' || denied
           ? { Icon: MapPinOff, tone: 'bg-amber-400/20 text-amber-800 dark:text-amber-200' }
-          : { Icon: MapPin, tone: 'bg-muted text-muted-foreground' }
+          : { Icon: MapPin, tone: 'bg-slate-100 text-slate-600' }
   const text =
     zone.kind === 'no_location'
       ? denied
@@ -541,7 +562,7 @@ function ZoneChip({ zone, anywhere, denied }: { zone: PortalZoneCheck; anywhere:
               ? `En tu zona · a ${formatDistance(zone.distance)} de tu sucursal`
               : 'Ubicación lista'
   return (
-    <span className={cn('inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium', look.tone)}>
+    <span className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold', look.tone)}>
       {zone.kind === 'no_location' && !denied ? <Loader2 className="h-3 w-3 animate-spin" /> : <look.Icon className="h-3 w-3" />}
       {text}
     </span>
@@ -571,7 +592,7 @@ function HistoryPanel({ state }: { state: PortalState }) {
       </div>
 
       {records.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
+        <p className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
           Todavía no tienes registros.
         </p>
       ) : (
@@ -582,7 +603,7 @@ function HistoryPanel({ state }: { state: PortalState }) {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: Math.min(index, 8) * 0.03, duration: 0.2 }}
-              className="rounded-xl border border-border bg-card p-3.5"
+              className="rounded-2xl bg-white p-3.5 shadow-sm ring-1 ring-slate-200"
             >
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-semibold">
@@ -594,7 +615,7 @@ function HistoryPanel({ state }: { state: PortalState }) {
                 {PUNCH_ORDER.map((type) => {
                   const punch = r.punches.find((p) => p.type === type)
                   return (
-                    <div key={type} className="flex items-center justify-between gap-2 rounded-lg bg-secondary/40 px-2 py-1.5 sm:flex-col sm:items-start">
+                    <div key={type} className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-2 py-1.5 sm:flex-col sm:items-start">
                       <span className="text-[11px] text-muted-foreground">{PUNCH_TYPE_LABEL[type]}</span>
                       <PunchPill type={type} time={punch?.time} edited={punch?.edited} className="min-w-[4.75rem]" />
                     </div>
@@ -617,8 +638,8 @@ function HistoryPanel({ state }: { state: PortalState }) {
 
 function Mini({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
-    <div className="rounded-xl border border-border bg-card px-3 py-2.5 text-center">
-      <p className={cn('text-xl font-semibold tabular-nums', tone)}>{value}</p>
+    <div className="rounded-2xl bg-white px-3 py-3 text-center shadow-sm ring-1 ring-slate-200">
+      <p className={cn('font-display text-2xl font-semibold tabular-nums tracking-tight', tone)}>{value}</p>
       <p className="text-[11px] text-muted-foreground">{label}</p>
     </div>
   )
@@ -721,7 +742,7 @@ function VacationPanel({
         )}
       </section>
 
-      <section className="space-y-3 rounded-2xl border border-border bg-card p-4">
+      <section className="space-y-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
         <h2 className="text-sm font-semibold">Pedir vacaciones</h2>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
@@ -785,7 +806,7 @@ function VacationPanel({
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, x: -20 }}
-                  className="rounded-xl border border-border bg-card p-3.5"
+                  className="rounded-2xl bg-white p-3.5 shadow-sm ring-1 ring-slate-200"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-semibold">
