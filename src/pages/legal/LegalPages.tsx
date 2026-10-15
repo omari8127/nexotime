@@ -1,9 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
-import { NexotimeLogo } from '@/components/shared/Logo'
-import { LegalLinks } from '@/components/shared/LegalLinks'
-import { COPYRIGHT_HOLDER, LEGAL_ENTITY, LEGAL_PATHS, LEGAL_UPDATED, copyrightLine } from '@/data/legal'
+import { ColorStrip, PublicPage } from '@/components/shared/PublicChrome'
+import { COPYRIGHT_HOLDER, LEGAL_ENTITY, LEGAL_PATHS, LEGAL_UPDATED } from '@/data/legal'
 
 /* -------------------------------------------------------------------------- */
 /*  Layout                                                                     */
@@ -11,50 +9,29 @@ import { COPYRIGHT_HOLDER, LEGAL_ENTITY, LEGAL_PATHS, LEGAL_UPDATED, copyrightLi
 
 function LegalLayout({ title, intro, children }: { title: string; intro: string; children: ReactNode }) {
   return (
-    <div className="min-h-dvh bg-background text-foreground">
-      <header className="border-b border-border">
-        <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-4">
-          <Link to="/bienvenida" aria-label="Nexotime, ir al inicio">
-            <NexotimeLogo tone="dark" />
-          </Link>
-          <Link
-            to="/bienvenida"
-            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Volver
-          </Link>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-3xl px-6 py-10 sm:py-14">
-        <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
-        <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">{intro}</p>
-        <p className="mt-2 text-sm text-muted-foreground">Última actualización: {LEGAL_UPDATED}</p>
+    <PublicPage>
+      <ColorStrip className="h-1" />
+      <div className="mx-auto max-w-3xl px-5 py-10 sm:px-8 sm:py-14">
+        <h1 className="font-display text-[2rem] font-semibold leading-tight tracking-[-0.03em] text-slate-900">{title}</h1>
+        <p className="mt-3 text-[15px] leading-relaxed text-slate-600">{intro}</p>
+        <p className="mt-2 text-sm text-slate-500">Última actualización: {LEGAL_UPDATED}</p>
         <div className="mt-10 space-y-9">{children}</div>
-      </main>
-
-      <footer className="border-t border-border">
-        <div className="mx-auto flex max-w-3xl flex-col gap-3 px-6 py-6 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-          <LegalLinks className="text-muted-foreground hover:text-foreground" />
-          <p>{copyrightLine()}</p>
-        </div>
-      </footer>
-    </div>
+      </div>
+    </PublicPage>
   )
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="space-y-3 text-[15px] leading-relaxed text-foreground/90">
-      <h2 className="text-lg font-semibold tracking-tight text-foreground">{title}</h2>
+    <section className="space-y-3 text-[15px] leading-relaxed text-slate-700">
+      <h2 className="font-display text-lg font-semibold tracking-[-0.01em] text-slate-900">{title}</h2>
       {children}
     </section>
   )
 }
 
 const List = ({ children }: { children: ReactNode }) => (
-  <ul className="list-disc space-y-1.5 pl-5 marker:text-muted-foreground">{children}</ul>
+  <ul className="list-disc space-y-1.5 pl-5 marker:text-slate-400">{children}</ul>
 )
 
 /** A required fact that has not been filled in yet is shown as such, never invented. */

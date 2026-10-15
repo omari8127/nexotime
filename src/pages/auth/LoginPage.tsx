@@ -57,12 +57,12 @@ export function LoginPage() {
       footer={
         <>
           ¿Tu empresa no tiene cuenta todavía?{' '}
-          <Link to="/signup" className="font-medium text-sky-300 hover:underline">
+          <Link to="/signup" className="font-semibold text-sky-700 hover:underline">
             Crear cuenta
           </Link>
           <span className="mt-1.5 block">
             ¿Eres empleado?{' '}
-            <Link to="/activar?modo=empleado" className="font-medium text-sky-300 hover:underline">
+            <Link to="/activar?modo=empleado" className="font-semibold text-sky-700 hover:underline">
               Entra con tu número y PIN
             </Link>
           </span>

@@ -39,17 +39,21 @@ export function CookieNotice() {
     <div
       role="region"
       aria-label="Aviso de cookies"
-      className="fixed inset-x-3 bottom-3 z-50 mx-auto flex max-w-2xl flex-col gap-3 rounded-xl border border-border bg-card p-4 text-card-foreground shadow-2xl sm:flex-row sm:items-center"
+      className="fixed inset-x-3 bottom-3 z-50 mx-auto flex max-w-2xl flex-col gap-3 rounded-2xl bg-white p-4 text-slate-900 shadow-2xl shadow-slate-900/15 ring-1 ring-slate-200 sm:flex-row sm:items-center"
     >
-      <Cookie className="hidden h-5 w-5 shrink-0 text-muted-foreground sm:block" aria-hidden />
-      <p className="flex-1 text-sm leading-relaxed text-muted-foreground">
+      <Cookie className="hidden h-5 w-5 shrink-0 text-slate-400 sm:block" aria-hidden />
+      <p className="flex-1 text-sm leading-relaxed text-slate-600">
         Usamos solo almacenamiento técnico del navegador (sesión, tema y funcionamiento sin conexión). No usamos cookies
         de publicidad ni de seguimiento.{' '}
-        <Link to={LEGAL_PATHS.cookies} className="font-medium text-primary hover:underline">
+        <Link to={LEGAL_PATHS.cookies} className="font-semibold text-slate-900 underline decoration-slate-300 underline-offset-4 hover:decoration-slate-900">
           Más información
         </Link>
       </p>
-      <Button size="sm" onClick={accept} className="shrink-0">
+      <Button
+        size="sm"
+        onClick={accept}
+        className="shrink-0 rounded-xl bg-slate-900 font-semibold text-white hover:bg-slate-800"
+      >
         Entendido
       </Button>
     </div>

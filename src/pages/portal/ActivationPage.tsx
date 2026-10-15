@@ -75,7 +75,7 @@ export function ActivationPage() {
       footer={
         <>
           ¿Administras la empresa?{' '}
-          <Link to="/login" className="font-medium text-sky-300 hover:underline">
+          <Link to="/login" className="font-semibold text-sky-700 hover:underline">
             Entra al portal de administración
           </Link>
         </>
@@ -97,24 +97,24 @@ export function ActivationPage() {
               className={cn(
                 'relative rounded-xl border p-3.5 text-left transition-all',
                 active
-                  ? 'border-primary bg-primary/15 shadow-lg shadow-primary/10'
-                  : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.07]',
+                  ? 'border-slate-900 bg-slate-50 shadow-sm ring-1 ring-slate-900'
+                  : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50',
               )}
             >
               <span
                 className={cn(
                   'flex h-9 w-9 items-center justify-center rounded-lg transition-colors',
-                  active ? 'bg-primary text-white' : 'bg-white/10 text-sidebar-foreground',
+                  active ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700',
                 )}
               >
                 <m.icon className="h-[18px] w-[18px]" />
               </span>
-              <span className="mt-2.5 block text-sm font-semibold text-white">{m.title}</span>
-              <span className="mt-0.5 block text-xs leading-relaxed text-sidebar-foreground/75">{m.text}</span>
+              <span className="mt-2.5 block text-sm font-semibold text-slate-900">{m.title}</span>
+              <span className="mt-0.5 block text-xs leading-relaxed text-slate-600">{m.text}</span>
               {active ? (
                 <motion.span
                   layoutId="activation-check"
-                  className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-white"
+                  className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-white"
                 >
                   <Check className="h-3 w-3" strokeWidth={3} />
                 </motion.span>
@@ -192,7 +192,7 @@ export function ActivationPage() {
               Entrar
             </Button>
 
-            <p className="text-xs leading-relaxed text-sidebar-foreground/70">
+            <p className="text-xs leading-relaxed text-slate-500">
               Es el mismo PIN del reloj checador. Al registrar cada movimiento se toma una foto que revisa tu
               empresa. Si no tienes PIN, pídelo en Recursos Humanos.
             </p>
@@ -204,9 +204,9 @@ export function ActivationPage() {
                   setNumber(sample.number)
                   setPin(sample.pin)
                 }}
-                className="w-full rounded-lg border border-dashed border-white/15 px-3 py-2 text-left text-xs text-sidebar-foreground/80 hover:bg-white/[0.05]"
+                className="w-full rounded-lg border border-dashed border-slate-300 px-3 py-2 text-left text-xs text-slate-600 hover:bg-slate-50"
               >
-                <b className="text-white">Demostración:</b> toca aquí para llenar los datos de un empleado de ejemplo.
+                <b className="text-slate-900">Demostración:</b> toca aquí para llenar los datos de un empleado de ejemplo.
               </button>
             ) : null}
           </motion.form>
@@ -219,7 +219,7 @@ export function ActivationPage() {
             transition={{ duration: 0.18 }}
             className="mt-5 space-y-4"
           >
-            <ul className="space-y-2 text-sm text-sidebar-foreground/85">
+            <ul className="space-y-2 text-sm text-slate-700">
               {[
                 'Se activa con la cuenta de administración de tu empresa.',
                 'Los empleados checan con rostro, QR, código de barras o número + PIN.',
@@ -240,9 +240,9 @@ export function ActivationPage() {
               <ArrowRight className="h-4 w-4" />
             </Button>
             {!signedIn && isSupabaseConfigured ? (
-              <p className="text-center text-xs text-sidebar-foreground/70">
+              <p className="text-center text-xs text-slate-500">
                 ¿Solo quieres verlo?{' '}
-                <Link to="/clock" className="font-medium text-sky-300 hover:underline">
+                <Link to="/clock" className="font-semibold text-sky-700 hover:underline">
                   Abrir el reloj de demostración
                 </Link>
               </p>

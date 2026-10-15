@@ -5,7 +5,7 @@ import { ArrowLeft, ArrowRight, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input, Label } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
-import { NexotimeLogo } from '@/components/shared/Logo'
+import { PublicPage } from '@/components/shared/PublicChrome'
 import { WeeklyHoursPicker } from '@/components/shared/WeeklyHoursPicker'
 import { MX_TIMEZONES } from '@/data/timezones'
 import { useDataStore } from '@/store/dataStore'
@@ -38,10 +38,8 @@ export function OnboardingPage() {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col items-center bg-background px-6 py-10">
-      <NexotimeLogo tone="dark" />
-
-      <div className="mt-8 w-full max-w-lg">
+    <PublicPage back="/bienvenida" backLabel="Salir" mainClassName="flex flex-col items-center px-5 py-10">
+      <div className="w-full max-w-lg">
         <div className="mb-8 flex items-center gap-2">
           {STEPS.map((label, i) => (
             <div key={label} className="flex flex-1 items-center gap-2">
@@ -68,7 +66,7 @@ export function OnboardingPage() {
           initial={{ x: 16 }}
           animate={{ x: 0 }}
           transition={{ duration: 0.22 }}
-          className="rounded-xl border border-border bg-card p-6"
+          className="overflow-hidden rounded-2xl bg-white p-6 shadow-xl shadow-slate-900/[0.06] ring-1 ring-slate-200"
         >
           {step === 0 && (
             <div className="space-y-4">
@@ -191,6 +189,6 @@ export function OnboardingPage() {
           Omitir configuración
         </button>
       </div>
-    </div>
+    </PublicPage>
   )
 }

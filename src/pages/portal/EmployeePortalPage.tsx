@@ -199,20 +199,20 @@ export function EmployeePortalPage() {
   }
 
   return (
-    <div className="min-h-dvh bg-background pb-24">
-      <header className="bg-sidebar text-sidebar-foreground">
+    <div className="min-h-dvh bg-white pb-24 font-sans text-slate-900">
+      <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/90 backdrop-blur-md">
         <div className="mx-auto flex max-w-xl items-center gap-3 px-4 py-3.5">
           <NexotimeMark className="h-9 w-9 shrink-0" />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-white">{employee.fullName}</p>
-            <p className="truncate text-xs text-sidebar-foreground/75">
+            <p className="truncate text-sm font-semibold text-slate-900">{employee.fullName}</p>
+            <p className="truncate text-xs text-slate-500">
               {employee.employeeNumber} · {company.name}
             </p>
           </div>
           <Button
             variant="ghost"
             size="sm"
-            className="text-sidebar-foreground hover:bg-white/10 hover:text-white"
+            className="text-slate-700 hover:bg-slate-100 hover:text-slate-900"
             onClick={() => {
               void portalApi.logout(token)
               leave()
@@ -687,7 +687,7 @@ function VacationPanel({
 
   return (
     <div className="space-y-4">
-      <section className="overflow-hidden rounded-2xl bg-gradient-to-br from-sky-600 to-indigo-600 p-5 text-white shadow-md">
+      <section className="overflow-hidden rounded-2xl bg-slate-900 p-5 text-white shadow-md">
         <p className="flex items-center gap-2 text-sm font-medium text-white/85">
           <Plane className="h-4 w-4" />
           Días de vacaciones

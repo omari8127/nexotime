@@ -66,7 +66,7 @@ export function SignupPage() {
       footer={
         <>
           ¿Ya tienes cuenta?{' '}
-          <Link to="/login" className="font-medium text-sky-300 hover:underline">
+          <Link to="/login" className="font-semibold text-sky-700 hover:underline">
             Iniciar sesión
           </Link>
         </>
@@ -111,20 +111,20 @@ export function SignupPage() {
               placeholder="Mínimo 8 caracteres"
             />
           </div>
-          <label className="flex cursor-pointer items-start gap-2.5 text-[13px] leading-relaxed text-sidebar-foreground/85">
+          <label className="flex cursor-pointer items-start gap-2.5 text-[13px] leading-relaxed text-slate-700">
             <input
               type="checkbox"
               checked={accepted}
               onChange={(e) => setAccepted(e.target.checked)}
-              className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-white/30 accent-primary"
+              className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-slate-300 accent-primary"
             />
             <span>
               He leído y acepto los{' '}
-              <Link to={LEGAL_PATHS.terminos} target="_blank" className="font-medium text-sky-300 hover:underline">
+              <Link to={LEGAL_PATHS.terminos} target="_blank" className="font-semibold text-sky-700 hover:underline">
                 Términos y condiciones
               </Link>{' '}
               y el{' '}
-              <Link to={LEGAL_PATHS.privacidad} target="_blank" className="font-medium text-sky-300 hover:underline">
+              <Link to={LEGAL_PATHS.privacidad} target="_blank" className="font-semibold text-sky-700 hover:underline">
                 Aviso de privacidad
               </Link>
               .
@@ -135,7 +135,7 @@ export function SignupPage() {
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Crear cuenta
           </Button>
-          <p className="text-xs leading-relaxed text-sidebar-foreground/75">
+          <p className="text-xs leading-relaxed text-slate-500">
             Empezarás con una empresa vacía — el asistente de configuración te ayuda a definir tu
             jornada, agregar tu primera sucursal y tus empleados.
           </p>
