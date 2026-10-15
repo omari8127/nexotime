@@ -17,6 +17,7 @@ export function EmployeePortalPanel() {
   const company = useDataStore((s) => s.company)
   const employees = useDataStore((s) => s.employees)
   const updateCompany = useDataStore((s) => s.updateCompany)
+  const updateSettings = useDataStore((s) => s.updateSettings)
   const currentUser = useDataStore((s) => s.currentUser)
   const { can } = usePermissions()
   const canManage = can('settings.manage')
@@ -99,6 +100,25 @@ export function EmployeePortalPanel() {
             onCheckedChange={(value) => {
               updateCompany({ portalEnabled: value }, currentUser)
               toast.success(value ? 'Portal de empleados activado' : 'Portal de empleados apagado')
+            }}
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2.5">
+          <div>
+            <p className="text-sm font-medium">Registrar su rostro desde el celular</p>
+            <p className="text-xs text-muted-foreground">
+              Quien todavía no tiene rostro registrado puede registrarlo él mismo, una sola vez. Para cambiar o borrar
+              uno existente sigue haciendo falta un administrador. Si el rostro se parece al de otro empleado, no se
+              guarda.
+            </p>
+          </div>
+          <Switch
+            checked={company.attendanceSettings.portalFaceEnroll !== false}
+            disabled={!canManage}
+            onCheckedChange={(value) => {
+              updateSettings({ portalFaceEnroll: value }, currentUser)
+              toast.success(value ? 'Los empleados pueden registrar su rostro' : 'Solo el administrador registra rostros')
             }}
           />
         </div>

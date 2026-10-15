@@ -1,4 +1,4 @@
-import { Building2, CalendarClock, Camera, Fingerprint, Hash, MapPin, MapPinOff, Tag, UserRound } from 'lucide-react'
+import { Building2, CalendarClock, Camera, Fingerprint, MapPin, MapPinOff, Tag, UserRound } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Avatar } from '@/components/ui/misc'
 import {
@@ -57,7 +57,7 @@ function LocationNote({ location, branch }: { location: PunchLocation; branch?: 
   )
 }
 
-function Head({ icon: Icon, children, className }: { icon: typeof Hash; children: string; className?: string }) {
+function Head({ icon: Icon, children, className }: { icon: typeof MapPin; children: string; className?: string }) {
   return (
     <TableHead className={className}>
       <span className="inline-flex items-center gap-1.5">
@@ -86,32 +86,32 @@ export function PunchLogTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <Head icon={Hash}>ID</Head>
             <Head icon={UserRound}>Empleado</Head>
             <Head icon={CalendarClock}>Fecha y hora</Head>
             <Head icon={Camera}>Foto</Head>
             <Head icon={Tag}>Tipo</Head>
             <Head icon={MapPin}>Ubicación</Head>
-            <Head icon={Fingerprint} className="hidden lg:table-cell">Medio</Head>
-            <Head icon={Building2} className="hidden xl:table-cell">Sucursal</Head>
+            <Head icon={Fingerprint} className="hidden xl:table-cell">Medio</Head>
+            <Head icon={Building2} className="hidden 2xl:table-cell">Sucursal</Head>
           </TableRow>
         </TableHeader>
         <TableBody>
           {rows.map(({ key, record, employee, punch }) => (
             <TableRow key={key}>
-              <TableCell className="whitespace-nowrap text-sm font-semibold tabular-nums">
-                {employee.employeeNumber}
-              </TableCell>
               <TableCell>
-                <div className="flex min-w-[170px] items-center gap-3">
+                {/* The employee number goes under the name: one column less to fit the screen. */}
+                <div className="flex min-w-0 items-center gap-3">
                   <Avatar name={employee.fullName} size="sm" />
-                  <p className="truncate text-sm font-medium">{employee.fullName}</p>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium leading-tight">{employee.fullName}</p>
+                    <p className="text-xs font-semibold tabular-nums text-muted-foreground">{employee.employeeNumber}</p>
+                  </div>
                 </div>
               </TableCell>
               <TableCell className="whitespace-nowrap text-sm tabular-nums">
-                <span className="font-semibold">{formatTime12(punch.time)}</span>
-                <span className="text-muted-foreground"> · {formatShortDate(record.date)}</span>
-                {punch.edited ? <span className="ml-1.5 text-xs text-warning">ajuste manual</span> : null}
+                <span className="block font-semibold">{formatTime12(punch.time)}</span>
+                <span className="block text-xs text-muted-foreground">{formatShortDate(record.date)}</span>
+                {punch.edited ? <span className="block text-xs text-warning">ajuste manual</span> : null}
               </TableCell>
               <TableCell>
                 <PunchPhoto record={record} punch={punch} employee={employee} reloadKey={reloadKey} />
@@ -119,21 +119,24 @@ export function PunchLogTable({
               <TableCell>
                 <PunchTypeTag type={punch.type} solid />
               </TableCell>
-              <TableCell className="whitespace-nowrap">
+              <TableCell>
                 {punch.location ? (
                   <a
                     href={googleMapsUrl(punch.location)}
                     target="_blank"
                     rel="noreferrer"
-                    title="Abrir en Google Maps"
-                    className="group inline-flex items-center gap-2 text-xs tabular-nums text-muted-foreground hover:text-foreground"
+                    title={`Abrir en Google Maps (${punch.location.lat.toFixed(5)}, ${punch.location.lng.toFixed(5)})`}
+                    className="group inline-flex max-w-[15rem] items-center gap-2 text-left text-xs tabular-nums text-muted-foreground hover:text-foreground"
                   >
-                    <span className="inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1 font-semibold text-primary-foreground transition-transform group-hover:scale-105">
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary px-2.5 py-1 font-semibold text-primary-foreground transition-transform group-hover:scale-105">
                       <MapPin className="h-3.5 w-3.5" />
                       Mapa
                     </span>
-                    <span className="hidden leading-tight sm:inline">
-                      {punch.location.lat.toFixed(5)}, {punch.location.lng.toFixed(5)}
+                    <span className="min-w-0 leading-tight">
+                      {/* The raw coordinates only where there is room; they are also in the link's tooltip. */}
+                      <span className="hidden 2xl:block">
+                        {punch.location.lat.toFixed(5)}, {punch.location.lng.toFixed(5)}
+                      </span>
                       <LocationNote location={punch.location} branch={branchPoint(record.branchId)} />
                     </span>
                   </a>
@@ -144,7 +147,7 @@ export function PunchLogTable({
                   </span>
                 )}
               </TableCell>
-              <TableCell className="hidden whitespace-nowrap lg:table-cell">
+              <TableCell className="hidden whitespace-nowrap xl:table-cell">
                 {(() => {
                   const method = punch.edited ? 'manual' : punch.method
                   const meta = METHOD_META[method]
@@ -156,7 +159,7 @@ export function PunchLogTable({
                   )
                 })()}
               </TableCell>
-              <TableCell className="hidden text-sm text-muted-foreground xl:table-cell">
+              <TableCell className="hidden text-sm text-muted-foreground 2xl:table-cell">
                 {branchName(record.branchId)}
               </TableCell>
             </TableRow>

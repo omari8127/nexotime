@@ -276,11 +276,11 @@ export function EmployeesPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Empleado</TableHead>
-                <TableHead>Número</TableHead>
+                <TableHead className="hidden 2xl:table-cell">Número</TableHead>
                 <TableHead>Puesto</TableHead>
-                <TableHead className="hidden md:table-cell">Departamento</TableHead>
-                <TableHead className="hidden lg:table-cell">Sucursal</TableHead>
-                <TableHead className="hidden lg:table-cell">Horario</TableHead>
+                <TableHead className="hidden 2xl:table-cell">Departamento</TableHead>
+                <TableHead className="hidden xl:table-cell">Sucursal</TableHead>
+                <TableHead className="hidden 2xl:table-cell">Horario</TableHead>
                 <TableHead className="hidden sm:table-cell">Rostro</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead className="w-20" />
@@ -300,20 +300,27 @@ export function EmployeesPage() {
                       <div className="flex items-center gap-3">
                         <Avatar name={e.fullName} size="sm" />
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">{e.fullName}</p>
-                          <p className="truncate text-xs text-muted-foreground">{e.email}</p>
+                          <p className="text-sm font-medium leading-tight">{e.fullName}</p>
+                          {/* Number under the name until it has its own column (and its own line on a phone card). */}
+                          <p className="hidden text-xs font-semibold tabular-nums text-muted-foreground md:block 2xl:hidden">
+                            {e.employeeNumber}
+                          </p>
+                          <p className="hidden max-w-[200px] truncate text-xs text-muted-foreground 2xl:block">{e.email}</p>
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm tabular-nums text-muted-foreground">
+                    <TableCell className="hidden text-sm tabular-nums text-muted-foreground 2xl:table-cell">
                       {e.employeeNumber}
                     </TableCell>
-                    <TableCell className="text-sm">{e.position}</TableCell>
-                    <TableCell className="hidden text-sm md:table-cell">{e.department}</TableCell>
-                    <TableCell className="hidden text-sm lg:table-cell">
+                    <TableCell className="text-sm">
+                      {e.position}
+                      <span className="hidden text-xs text-muted-foreground md:block 2xl:hidden">{e.department}</span>
+                    </TableCell>
+                    <TableCell className="hidden text-sm 2xl:table-cell">{e.department}</TableCell>
+                    <TableCell className="hidden text-sm xl:table-cell">
                       {branchById.get(e.branchId)?.name}
                     </TableCell>
-                    <TableCell className="hidden text-sm text-muted-foreground lg:table-cell">
+                    <TableCell className="hidden max-w-[120px] text-sm text-muted-foreground 2xl:table-cell">
                       {workday
                         ? `${formatTime12(workday.entry)} - ${formatTime12(workday.exit)}`
                         : '—'}
@@ -324,6 +331,11 @@ export function EmployeesPage() {
                         outdated={faceNeedsReenroll(e)}
                         onClick={canEnrollFaces && e.status === 'active' ? () => setFaceId(e.id) : undefined}
                       />
+                      {e.identifications.some((i) => i.method === 'face' && i.selfEnrolled && i.descriptors?.length) ? (
+                        <span className="mt-1 block text-[11px] text-muted-foreground" title="Lo registró el empleado desde su celular">
+                          Desde su celular
+                        </span>
+                      ) : null}
                     </TableCell>
                     <TableCell>
                       <EmployeeStatusBadge status={e.status} />

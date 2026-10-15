@@ -13,10 +13,12 @@ import { toast } from '@/components/ui/toast'
 export function LoginPage() {
   const navigate = useNavigate()
   // Where to go after signing in (e.g. "/clock" when this equipment is being set up as the reloj
-  // checador). Only paths inside the app are honoured.
+  // checador). Only paths inside the app are honoured. Without one, back to the welcome page: it shows
+  // "Sesión iniciada" with the company's name and the person chooses the panel, the clock or the portal
+  // (it used to jump straight into the panel, or the clock on a kiosk tablet).
   const [params] = useSearchParams()
   const requested = params.get('next') ?? ''
-  const next = /^\/[a-z-]*$/.test(requested) ? requested : '/'
+  const next = /^\/[a-z-]*$/.test(requested) && requested !== '/' ? requested : '/bienvenida'
   const hydrateLive = useDataStore((s) => s.hydrateLive)
   const setAuthStatus = useAuthStore((s) => s.setStatus)
 

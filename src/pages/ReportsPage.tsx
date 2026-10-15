@@ -5,14 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input, Label } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { toast } from '@/components/ui/toast'
 import { useScopedData } from '@/hooks/useScopedData'
 import { REPORT_TYPES, buildFullAttendanceReport, buildReport } from '@/services/reportService'
@@ -29,6 +21,9 @@ import { useToday } from '@/hooks/useToday'
 import { useDataStore } from '@/store/dataStore'
 import { usePermissions } from '@/hooks/useScopedData'
 import type { ReportType } from '@/types'
+
+/** Rows shown on screen; the exported file always has all of them. */
+const PREVIEW_ROWS = 100
 
 export function ReportsPage() {
   const { employees, attendance, schedules, allBranches, incidencias } = useScopedData()
@@ -284,35 +279,42 @@ export function ReportsPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="max-h-[540px] overflow-auto rounded-lg border border-border">
-              <Table>
-                <TableHeader className="sticky top-0 bg-card">
-                  <TableRow>
-                    {result.columns.map((c) => (
-                      <TableHead key={c.key}>{c.header}</TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {result.rows.slice(0, 200).map((row, i) => (
-                    <TableRow key={i}>
-                      {result.columns.map((c) => (
-                        <TableCell key={c.key} className="whitespace-nowrap text-sm tabular-nums">
-                          {String(row[c.key] ?? '—')}
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))}
-                  {result.rows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={result.columns.length} className="text-center text-sm text-muted-foreground">
-                        Sin datos para el periodo seleccionado.
-                      </TableCell>
-                    </TableRow>
-                  ) : null}
-                </TableBody>
-              </Table>
-            </div>
+            {/* The preview of the spreadsheet as one card per row: a report has too many columns to fit a
+                screen as a table, and nobody should have to slide sideways to read it. The file has them all. */}
+            {result.rows.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+                Sin datos para el periodo seleccionado.
+              </p>
+            ) : (
+              <div className="max-h-[640px] space-y-2.5 overflow-y-auto pr-1">
+                {result.rows.slice(0, PREVIEW_ROWS).map((row, i) => {
+                  const [first, ...rest] = result.columns
+                  return (
+                    <div key={i} className="rounded-xl border border-border bg-card px-4 py-3">
+                      <p className="text-sm font-semibold">
+                        {first ? String(row[first.key] ?? '—') : ''}
+                        {first ? <span className="ml-2 text-xs font-normal text-muted-foreground">{first.header}</span> : null}
+                      </p>
+                      <dl className="mt-2 grid grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] gap-x-4 gap-y-2">
+                        {rest.map((c) => (
+                          <div key={c.key} className="min-w-0">
+                            <dt className="truncate text-[11px] font-medium text-muted-foreground" title={c.header}>
+                              {c.header}
+                            </dt>
+                            <dd className="break-words text-sm tabular-nums">{String(row[c.key] ?? '—')}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </div>
+                  )
+                })}
+                {result.rows.length > PREVIEW_ROWS ? (
+                  <p className="py-2 text-center text-xs text-muted-foreground">
+                    Vista previa de las primeras {PREVIEW_ROWS} filas de {result.rows.length}. El archivo de Excel o CSV trae todas.
+                  </p>
+                ) : null}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

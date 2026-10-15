@@ -5,6 +5,8 @@ import { NexotimeMark } from '@/components/shared/Logo'
 import { LegalLinks } from '@/components/shared/LegalLinks'
 import { copyrightLine } from '@/data/legal'
 import { useLightTheme } from '@/hooks/useLightTheme'
+import { AccountMenu } from '@/components/shared/AccountMenu'
+import { useSignedIn } from '@/hooks/useSignedIn'
 import { cn } from '@/lib/utils'
 
 /**
@@ -55,6 +57,7 @@ export function PublicPage({
   actions?: ReactNode
 }) {
   useLightTheme()
+  const signedIn = useSignedIn()
   return (
     <div
       className="flex min-h-dvh flex-col bg-white font-sans text-slate-900 antialiased"
@@ -71,6 +74,7 @@ export function PublicPage({
           </Link>
           <div className="flex items-center gap-2">
             {actions}
+            {signedIn ? <AccountMenu className="hidden sm:block" /> : null}
             <Link
               to={back}
               className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 text-[13px] font-semibold text-slate-800 transition-colors hover:border-slate-400 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-slate-200 sm:text-sm"

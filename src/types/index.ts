@@ -81,6 +81,8 @@ export interface AttendanceSettings {
   kiosk?: KioskSettings
   /** Portal del empleado: how close to the branch a phone must be to check in (migration 013). */
   portalZone?: PortalZoneSettings
+  /** Portal del empleado: someone without a face registered can register it from their phone (migration 014). On unless false. */
+  portalFaceEnroll?: boolean
 }
 
 export interface PortalZoneSettings {
@@ -215,6 +217,8 @@ export interface EmployeeIdentification {
   /** Face method: numeric descriptors of the enrolled samples (1024 numbers each; never photos). */
   descriptors?: number[][]
   enrolledAt?: ISODateTime
+  /** The employee registered it themselves from the portal (migration 014); an administrator re-registering it clears it. */
+  selfEnrolled?: boolean
 }
 
 export interface Employee {

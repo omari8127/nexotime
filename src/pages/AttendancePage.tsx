@@ -540,10 +540,10 @@ export function AttendancePage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead><HeadLabel icon={UserRound}>Empleado</HeadLabel></TableHead>
-                        <TableHead><HeadLabel icon={CalendarDays}>Fecha</HeadLabel></TableHead>
+                        <TableHead className="hidden 2xl:table-cell"><HeadLabel icon={CalendarDays}>Fecha</HeadLabel></TableHead>
                         <TableHead className="text-center"><HeadLabel icon={PUNCH_STYLE.entry.Icon} tone={PUNCH_STYLE.entry.text}>Entrada</HeadLabel></TableHead>
-                        <TableHead className="hidden text-center md:table-cell"><HeadLabel icon={PUNCH_STYLE.lunch_out.Icon} tone={PUNCH_STYLE.lunch_out.text}>Salida a comer</HeadLabel></TableHead>
-                        <TableHead className="hidden text-center md:table-cell"><HeadLabel icon={PUNCH_STYLE.lunch_in.Icon} tone={PUNCH_STYLE.lunch_in.text}>Regreso</HeadLabel></TableHead>
+                        <TableHead className="hidden text-center xl:table-cell"><HeadLabel icon={PUNCH_STYLE.lunch_out.Icon} tone={PUNCH_STYLE.lunch_out.text}>A comer</HeadLabel></TableHead>
+                        <TableHead className="hidden text-center xl:table-cell"><HeadLabel icon={PUNCH_STYLE.lunch_in.Icon} tone={PUNCH_STYLE.lunch_in.text}>Regreso</HeadLabel></TableHead>
                         <TableHead className="text-center"><HeadLabel icon={PUNCH_STYLE.exit.Icon} tone={PUNCH_STYLE.exit.text}>Salida</HeadLabel></TableHead>
                         <TableHead className="text-center"><HeadLabel icon={Clock3} tone="text-blue-600 dark:text-blue-400">Horas</HeadLabel></TableHead>
                         <TableHead className="hidden text-center 2xl:table-cell">Comida</TableHead>
@@ -566,12 +566,19 @@ export function AttendancePage() {
                               <div className="flex min-w-[150px] items-center gap-3">
                                 <Avatar name={emp.fullName} size="sm" />
                                 <div className="min-w-0">
-                                  <p className="truncate text-sm font-medium">{emp.fullName}</p>
-                                  <p className="text-xs text-muted-foreground">{emp.employeeNumber}</p>
+                                  <p className="text-sm font-medium leading-tight">{emp.fullName}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {emp.employeeNumber}
+                                    {/* The date goes here until there is room for its own column. */}
+                                    <span className="hidden tabular-nums md:inline 2xl:hidden">
+                                      {' · '}
+                                      {WEEKDAY_LABEL[weekdayFromISO(r.date)].slice(0, 3)} {formatShortDate(r.date)}
+                                    </span>
+                                  </p>
                                 </div>
                               </div>
                             </TableCell>
-                            <TableCell className="whitespace-nowrap text-sm">
+                            <TableCell className="hidden whitespace-nowrap text-sm 2xl:table-cell">
                               <span className="tabular-nums">{formatShortDate(r.date)}</span>
                               <span className="block text-xs italic text-muted-foreground">
                                 {WEEKDAY_LABEL[weekdayFromISO(r.date)]}
@@ -580,10 +587,10 @@ export function AttendancePage() {
                             <TableCell className="px-1.5 text-center">
                               <PunchPill type="entry" time={time(r, 'entry')?.time} edited={time(r, 'entry')?.edited} />
                             </TableCell>
-                            <TableCell className="hidden px-1.5 text-center md:table-cell">
+                            <TableCell className="hidden px-1.5 text-center xl:table-cell">
                               <PunchPill type="lunch_out" time={time(r, 'lunch_out')?.time} edited={time(r, 'lunch_out')?.edited} />
                             </TableCell>
-                            <TableCell className="hidden px-1.5 text-center md:table-cell">
+                            <TableCell className="hidden px-1.5 text-center xl:table-cell">
                               <PunchPill type="lunch_in" time={time(r, 'lunch_in')?.time} edited={time(r, 'lunch_in')?.edited} />
                             </TableCell>
                             <TableCell className="px-1.5 text-center">

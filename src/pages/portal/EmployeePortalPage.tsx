@@ -27,6 +27,7 @@ import { AnimatedCheck } from '@/components/shared/SuccessDialog'
 import { AttendanceStatusBadge, IncidenciaStatusBadge } from '@/components/shared/badges'
 import { PunchPill } from '@/components/attendance/PunchPill'
 import { FaceVerifyFlow } from '@/components/clock/FaceVerifyFlow'
+import { FaceEnrollDialog } from '@/components/employees/FaceEnrollDialog'
 import { MiniMap } from '@/components/shared/MiniMap'
 import { ColorStrip, PUBLIC_VARS } from '@/components/shared/PublicChrome'
 import { useGeolocation } from '@/hooks/useGeolocation'
@@ -85,6 +86,22 @@ export function EmployeePortalPage() {
   /** Server clock − phone clock, so the hour shown and stamped is the company's, not the phone's. */
   const offset = useRef(0)
   const { location, denied: locationDenied, refresh: refreshLocation } = useGeolocation()
+  // Registering their own face (only for someone who has none yet; migration 014).
+  const [enrollOpen, setEnrollOpen] = useState(false)
+  /** Said "ahora no": from then on in this visit, tapping a movement goes straight to the photo. */
+  const [enrollSkipped, setEnrollSkipped] = useState(false)
+  /** The movement they were about to register when it was offered: it carries on right after. */
+  const enrollThen = useRef<PunchType | null>(null)
+  const offeredEnroll = useRef(false)
+  const canSelfEnroll =
+    !!state && state.company.attendanceSettings.portalFaceEnroll !== false && faceCandidates([state.employee]).length === 0
+  // Offered once as they come in; the card on the "Checar" tab keeps it at hand afterwards.
+  useEffect(() => {
+    if (canSelfEnroll && !offeredEnroll.current) {
+      offeredEnroll.current = true
+      setEnrollOpen(true)
+    }
+  }, [canSelfEnroll])
 
   const leave = useCallback(
     (message?: string) => {
@@ -253,11 +270,16 @@ export function EmployeePortalPage() {
                 onRefreshLocation={refreshLocation}
                 locationDenied={locationDenied}
                 enrolled={enrolled}
+                onEnrollFace={canSelfEnroll ? () => setEnrollOpen(true) : undefined}
                 onPick={(type) => {
                   // A fresh reading while the photo is taken: the movement carries where they are now.
                   refreshLocation()
                   if (zoneProblem) toast.error('Todavía no puedes checar', zoneProblem)
-                  else setCapture(type)
+                  else if (canSelfEnroll && !enrollSkipped) {
+                    // No face yet: register it first; the movement continues right after (or with a photo only).
+                    enrollThen.current = type
+                    setEnrollOpen(true)
+                  } else setCapture(type)
                 }}
               />
             ) : tab === 'asistencia' ? (
@@ -273,6 +295,28 @@ export function EmployeePortalPage() {
           </motion.div>
         </AnimatePresence>
       </main>
+
+      {canSelfEnroll || enrollOpen ? (
+        <FaceEnrollDialog
+          open={enrollOpen}
+          employee={employee}
+          selfService={{
+            settings: company.attendanceSettings,
+            save: async (descriptors) => {
+              await portalApi.enrollFace(token, descriptors)
+              await load() // their face is now in their state: the next check-in verifies it
+            },
+          }}
+          onOpenChange={(open) => {
+            if (open) return setEnrollOpen(true)
+            setEnrollOpen(false)
+            if (!enrolled) setEnrollSkipped(true)
+            const then = enrollThen.current
+            enrollThen.current = null
+            if (then) setCapture(then)
+          }}
+        />
+      ) : null}
 
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md">
         <div className="mx-auto grid max-w-xl grid-cols-3">
@@ -406,6 +450,7 @@ function PunchPanel({
   onRefreshLocation,
   locationDenied,
   enrolled,
+  onEnrollFace,
   onPick,
 }: {
   state: PortalState
@@ -419,6 +464,8 @@ function PunchPanel({
   onRefreshLocation: () => void
   locationDenied: boolean
   enrolled: boolean
+  /** Present while they have no face registered and the company allows registering it from here. */
+  onEnrollFace?: () => void
   onPick: (type: PunchType) => void
 }) {
   const settings = state.company.attendanceSettings
@@ -441,6 +488,25 @@ function PunchPanel({
           </div>
         </div>
       </section>
+
+      {onEnrollFace ? (
+        <button
+          type="button"
+          onClick={onEnrollFace}
+          className="flex w-full items-center gap-3.5 rounded-2xl border border-indigo-200 bg-indigo-50/80 px-4 py-3.5 text-left transition-colors hover:bg-indigo-50 active:scale-[0.99]"
+        >
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-md shadow-indigo-600/25">
+            <ScanFace className="h-6 w-6" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-semibold text-indigo-950">Registra tu rostro</span>
+            <span className="block text-xs leading-snug text-indigo-900/75">
+              Una sola vez, toma un minuto. Después checas mirando a la cámara, aquí y en el reloj checador.
+            </span>
+          </span>
+          <span className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white">Empezar</span>
+        </button>
+      ) : null}
 
       <AnimatePresence initial={false}>
         {zoneProblem ? (

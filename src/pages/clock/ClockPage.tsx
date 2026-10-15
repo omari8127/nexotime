@@ -59,6 +59,8 @@ import { ROUGH_FIX_METERS, formatDistance, locationSource, pickPunchLocation } f
 import { MiniMap } from '@/components/shared/MiniMap'
 import { useLiveRefresh } from '@/hooks/useLiveRefresh'
 import { faceCandidates, loadFaceApi } from '@/lib/face'
+import { useFaceEngineStatus } from '@/hooks/useFaceEngineStatus'
+import { PreparingScreen } from '@/components/shared/Loaders'
 import {
   calculateWeeklyHours,
   canRegisterPunch,
@@ -154,14 +156,28 @@ export function ClockPage() {
   const isOnline = useOnlineStatus()
   const { location: deviceLocation } = useGeolocation()
 
-  // Load and warm up the face models in the background as soon as the kiosk opens (only when
-  // someone is actually enrolled), so tapping "Reconocimiento facial" doesn't wait on them.
+  // Load and warm up the face models as soon as the kiosk opens (only when someone is actually
+  // enrolled), so tapping "Reconocimiento facial" doesn't wait on them. Preparing them keeps the page
+  // busy for a second or two: it happens behind the "Preparando el reloj checador" screen, not while
+  // someone is trying to tap a button on a page that seems frozen.
   const hasEnrolledFaces = useMemo(() => faceCandidates(allEmployees).length > 0, [allEmployees])
+  const wantsFace = faceAllowed && hasEnrolledFaces
+  const engine = useFaceEngineStatus()
   useEffect(() => {
-    if (!faceAllowed || !hasEnrolledFaces) return
-    const id = window.setTimeout(() => void loadFaceApi().catch(() => undefined), 800)
+    if (!wantsFace) return
+    // After the first paint, so the loading screen is already up.
+    const id = requestAnimationFrame(() => void loadFaceApi().catch(() => undefined))
+    return () => cancelAnimationFrame(id)
+  }, [wantsFace])
+  const [bootSkipped, setBootSkipped] = useState(false)
+  const [bootSlow, setBootSlow] = useState(false)
+  const engineLoading = engine === 'idle' || engine === 'downloading' || engine === 'preparing'
+  useEffect(() => {
+    if (!wantsFace || !engineLoading) return
+    // A first download on a slow connection: let them use the other methods meanwhile.
+    const id = window.setTimeout(() => setBootSlow(true), 12_000)
     return () => clearTimeout(id)
-  }, [faceAllowed, hasEnrolledFaces])
+  }, [wantsFace, engineLoading])
 
   // Which branch this kiosk is for: what was picked on this screen, else the branch being worked on in
   // the panel, else the one this device used last time, else the first. It used to be "the first one"
@@ -465,8 +481,36 @@ export function ClockPage() {
     setPhase('success')
   }
 
+  // Only while the kiosk sits on its start screen: never in the middle of someone's check-in.
+  const booting = wantsFace && engineLoading && !bootSkipped && phase === 'idle'
+
   return (
     <div className="grid min-h-dvh bg-slate-100 text-slate-900 lg:grid-cols-[minmax(340px,40%)_minmax(0,1fr)]">
+      <PreparingScreen
+        show={booting}
+        title="Preparando el reloj checador"
+        detail={
+          engine === 'preparing'
+            ? 'Un momento: el reconocimiento facial se está preparando en este equipo.'
+            : 'La primera vez tarda un poco más: se descarga el reconocimiento facial.'
+        }
+        steps={[
+          { label: 'Datos de la empresa', state: 'done' },
+          { label: 'Descargar el reconocimiento facial', state: engine === 'preparing' ? 'done' : 'working' },
+          { label: 'Preparar el reconocimiento facial', state: engine === 'preparing' ? 'working' : 'waiting' },
+        ]}
+        action={
+          bootSlow ? (
+            <button
+              type="button"
+              onClick={() => setBootSkipped(true)}
+              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Continuar sin esperar (QR, código o número)
+            </button>
+          ) : null
+        }
+      />
       {/* ------------------------------------------------------------- side panel */}
       <aside className="relative flex flex-col justify-between gap-6 overflow-hidden bg-sidebar px-8 py-6 text-white lg:min-h-dvh lg:gap-8 lg:py-10">
         <button

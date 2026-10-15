@@ -17,6 +17,7 @@ Ejecuta en el **SQL Editor** de tu proyecto de Supabase, en este orden y una sol
 11. `migrations/011_cuenta_reloj_checador.sql` — rol «Reloj checador (tablet)» para la cuenta dedicada de la tablet.
 12. `migrations/012_borrar_rostros_motor_anterior.sql` — **una sola vez, al cambiar a Human**: borra las muestras de rostro del motor anterior (ya no se pueden comparar). Esos empleados quedan como «No registrado» y registran su rostro de nuevo. No toca los rostros ya registrados con Human.
 13. `migrations/013_portal_zona_gps.sql` — portal del empleado: solo se checa desde el celular con el GPS real del teléfono (precisión de 100 m o mejor) y cerca de la sucursal (150 m por defecto; se ajusta en **Configuración → Portal de empleados**). Agrega «Puede checar desde cualquier lugar» por empleado (home office, ventas, choferes). Antes, pon el punto exacto de cada sucursal en **Sucursales**.
+14. `migrations/014_portal_registro_rostro.sql` — portal del empleado: quien **no** tiene rostro registrado puede registrarlo él mismo desde su celular, una sola vez (cambiarlo o borrarlo sigue siendo del administrador). Si el rostro se parece al de otro empleado de la empresa, no se guarda. Se apaga en **Configuración → Portal de empleados**.
 
 Las migraciones se pueden volver a correr sin dañar nada.
 

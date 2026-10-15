@@ -3,6 +3,7 @@ import { CameraOff, LoaderCircle } from 'lucide-react'
 import type { CameraState } from '@/hooks/useCameraStream'
 import type { Rotation } from '@/lib/cameraView'
 import { cn } from '@/lib/utils'
+import { useFaceEngineStatus } from '@/hooks/useFaceEngineStatus'
 
 /**
  * Mirrored selfie view with an oval guide; the ring turns green when the face is accepted.
@@ -39,6 +40,7 @@ export function FaceViewport({
   aspect?: number
 }) {
   const ready = cameraState === 'ready'
+  const engine = useFaceEngineStatus()
   const maskId = useId()
   const quarter = rotation === 90 || rotation === 270
   // Before rotation the video's own box is the upright one turned back: sized so that, once rotated,
@@ -115,7 +117,13 @@ export function FaceViewport({
           ) : (
             <>
               <LoaderCircle className="h-6 w-6 animate-spin" />
-              <p className="text-sm">{loadingModels && ready ? 'Cargando reconocimiento facial…' : 'Iniciando cámara…'}</p>
+              <p className="text-sm">
+                {loadingModels && ready
+                  ? engine === 'preparing'
+                    ? 'Preparando el reconocimiento facial…'
+                    : 'Descargando el reconocimiento facial…'
+                  : 'Iniciando cámara…'}
+              </p>
             </>
           )}
         </div>

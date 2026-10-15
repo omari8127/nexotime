@@ -14,6 +14,11 @@ import {
   WifiOff,
 } from 'lucide-react'
 import { NexotimeMark } from '@/components/shared/Logo'
+import { AccountMenu } from '@/components/shared/AccountMenu'
+import { useSignedIn } from '@/hooks/useSignedIn'
+import { useLightTheme } from '@/hooks/useLightTheme'
+import { useDataStore } from '@/store/dataStore'
+import { homePathFor } from '@/data/roles'
 import { LegalLinks } from '@/components/shared/LegalLinks'
 import {
   BrowserFrame,
@@ -206,6 +211,11 @@ function FeatureRow({
  * son los cuatro colores de los movimientos del día, los mismos del producto.
  */
 export function WelcomePage() {
+  useLightTheme()
+  const signedIn = useSignedIn()
+  const role = useDataStore((s) => s.currentUser.role)
+  // Signed in, "Administrador" opens the panel itself instead of the sign-in page.
+  const portalLink = (to: string) => (signedIn && to === '/login' ? homePathFor(role) : to)
   const now = useLiveClock()
   const reduce = useReducedMotion()
   const contact = LEGAL_ENTITY.email ?? LEGAL_ENTITY.phone
@@ -233,7 +243,7 @@ export function WelcomePage() {
             {PORTALS.map((p) => (
               <Link
                 key={p.to}
-                to={p.to}
+                to={portalLink(p.to)}
                 className="flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-1.5 text-[12.5px] font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 sm:px-3 sm:text-[13px]"
               >
                 <p.icon className="h-4 w-4" />
@@ -241,10 +251,14 @@ export function WelcomePage() {
               </Link>
             ))}
           </nav>
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <SecondaryLink to="/login">Iniciar sesión</SecondaryLink>
-            <PrimaryLink to="/signup">Crear cuenta</PrimaryLink>
-          </div>
+          {signedIn ? (
+            <AccountMenu />
+          ) : (
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <SecondaryLink to="/login">Iniciar sesión</SecondaryLink>
+              <PrimaryLink to="/signup">Crear cuenta</PrimaryLink>
+            </div>
+          )}
         </div>
       </header>
 
@@ -271,8 +285,8 @@ export function WelcomePage() {
                 Probar {TRIAL_DAYS} días gratis
                 <ArrowRight className="h-4 w-4" />
               </PrimaryLink>
-              <SecondaryLink to="/login" size="lg">
-                Ya tengo cuenta
+              <SecondaryLink to={signedIn ? homePathFor(role) : '/login'} size="lg">
+                {signedIn ? 'Ir a mi panel' : 'Ya tengo cuenta'}
               </SecondaryLink>
             </motion.div>
             <motion.ul {...enter(0.2, 8)} className="mt-7 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-600">

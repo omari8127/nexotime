@@ -53,6 +53,8 @@ export interface PortalApi {
   requestVacation(token: string, from: string, to: string, reason: string): Promise<Incidencia>
   cancelVacation(token: string, id: string): Promise<void>
   logout(token: string): Promise<void>
+  /** Registers the employee's own face, only when they have none yet (migration 014). */
+  enrollFace(token: string, descriptors: number[][]): Promise<void>
 }
 
 /* ----------------------------------------------------------------------------
@@ -149,6 +151,10 @@ const live: PortalApi = {
 
   async logout(token) {
     await rpc('employee_portal_logout', { p_token: token }).catch(() => undefined)
+  },
+
+  async enrollFace(token, descriptors) {
+    await rpc('employee_portal_enroll_face', { p_token: token, p_descriptors: descriptors })
   },
 }
 
@@ -271,6 +277,27 @@ const demo: PortalApi = {
 
   async logout() {
     /* nothing to forget on a server */
+  },
+
+  async enrollFace(token, descriptors) {
+    // Same rules as the database: only someone with no face yet, and only if the company allows it.
+    const employee = demoEmployee(token)
+    const s = useDataStore.getState()
+    if (s.company.attendanceSettings.portalFaceEnroll === false) {
+      throw new Error('Tu empresa no permite registrar el rostro desde el celular. Pide a tu administrador que lo registre.')
+    }
+    const current = s.employees.find((e) => e.id === employee.id)
+    if (current?.identifications.some((i) => i.method === 'face' && i.descriptors?.some((d) => d.length === 1024))) {
+      throw new Error('Ya tienes un rostro registrado. Para cambiarlo, pide a tu administrador que lo actualice.')
+    }
+    s.enrollFace(employee.id, descriptors, s.currentUser)
+    useDataStore.setState((st) => ({
+      employees: st.employees.map((e) =>
+        e.id === employee.id
+          ? { ...e, identifications: e.identifications.map((i) => (i.method === 'face' ? { ...i, selfEnrolled: true } : i)) }
+          : e,
+      ),
+    }))
   },
 }
 

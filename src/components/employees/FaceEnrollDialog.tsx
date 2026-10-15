@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ChevronLeft, ChevronRight, Glasses, ScanFace, ShieldCheck, Sun, Trash2, TriangleAlert } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CircleCheck, Glasses, ScanFace, ShieldCheck, Sun, Trash2, TriangleAlert } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import {
   Dialog,
   DialogContent,
@@ -29,9 +30,10 @@ import {
   qualityIssues,
   readFace,
 } from '@/lib/face'
+import { useFaceEngineStatus } from '@/hooks/useFaceEngineStatus'
 import { FaceSession } from '@/lib/faceSession'
 import { resolveKiosk } from '@/lib/kiosk'
-import type { Employee } from '@/types'
+import type { AttendanceSettings, Employee } from '@/types'
 
 /** Each sample must show a specific pose, so the set covers small natural variations.
  *  `say` is what the voice reads when the step starts. */
@@ -100,18 +102,30 @@ export function FaceEnrollDialog({
   onOpenChange,
   employee,
   testOnly = false,
+  selfService,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   employee: Employee
   /** Skip enrollment and only check that the saved face is recognised. */
   testOnly?: boolean
+  /**
+   * The employee registers their own face from the portal (only when they have none). The samples are
+   * sent with `save` — the database checks it is really theirs and not someone else's face — instead of
+   * going through the panel's store, and the company's settings come from the portal.
+   */
+  selfService?: { settings: AttendanceSettings; save: (descriptors: number[][]) => Promise<void> }
 }) {
   const currentUser = useDataStore((s) => s.currentUser)
   const allEmployees = useDataStore((s) => s.employees)
   const enroll = useDataStore((s) => s.enrollFace)
   const remove = useDataStore((s) => s.removeFace)
-  const settings = useDataStore((s) => s.company.attendanceSettings)
+  const storeSettings = useDataStore((s) => s.company.attendanceSettings)
+  const settings = selfService?.settings ?? storeSettings
+  const selfRef = useRef(selfService)
+  useEffect(() => {
+    selfRef.current = selfService
+  })
   const { say, beep } = useVoice('enroll')
 
   const hasFace = faceSampleState(employee).usable > 0
@@ -134,9 +148,10 @@ export function FaceEnrollDialog({
   const cameraOn = open && stage !== 'intro'
   const { videoRef, state: cameraState, message, resolution, restart } = useCameraStream(cameraOn, { hd: true, facingMode })
 
+  // From the portal there are no other employees here (the database compares against them instead).
   const others = useMemo(
-    () => faceCandidates(allEmployees.filter((e) => e.id !== employee.id)),
-    [allEmployees, employee.id],
+    () => (selfService ? [] : faceCandidates(allEmployees.filter((e) => e.id !== employee.id))),
+    [allEmployees, employee.id, selfService],
   )
   const othersRef = useRef(others)
   useEffect(() => {
@@ -161,6 +176,8 @@ export function FaceEnrollDialog({
       setLoadingModels(false)
     }
   }, [open, testOnly])
+
+  const engine = useFaceEngineStatus()
 
   /* --------------------------------- voice ------------------------------- */
   const ready = open && cameraState === 'ready' && !loadingModels
@@ -456,6 +473,24 @@ export function FaceEnrollDialog({
                 { employee, descriptors }, ...othersRef.current,
               ], result.reading.descriptor, tuning)
               if (evidence.accepted?.employee.id === employee.id) {
+                const self = selfRef.current
+                if (!testOnly && self) {
+                  // Recognised: now the database decides (only their own, only if they have no face yet).
+                  setHint('Guardando tu rostro…')
+                  self.save(descriptors).then(
+                    () => {
+                      if (!alive) return
+                      setTestResult({ ok: true })
+                      setHint('')
+                    },
+                    (err: unknown) => {
+                      if (!alive) return
+                      setTestResult({ ok: false })
+                      setHint(err instanceof Error ? err.message : 'No se pudo guardar tu rostro. Inténtalo de nuevo.')
+                    },
+                  )
+                  return
+                }
                 if (!testOnly) enroll(employee.id, descriptors, currentUser)
                 setTestResult({ ok: true })
                 setHint('')
@@ -495,7 +530,13 @@ export function FaceEnrollDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {stage === 'intro' ? 'Registro facial' : `Reconocimiento facial de ${employee.firstName}`}
+            {stage === 'intro'
+              ? selfService
+                ? 'Registra tu rostro'
+                : 'Registro facial'
+              : selfService
+                ? 'Tu reconocimiento facial'
+                : `Reconocimiento facial de ${employee.firstName}`}
           </DialogTitle>
           <DialogDescription>
             {stage === 'test'
@@ -504,9 +545,11 @@ export function FaceEnrollDialog({
                 : testResult?.ok ? 'Registro facial guardado y verificado.' : 'Comprobemos tu rostro antes de guardar el registro.'
               : stage === 'capture'
                 ? 'Sigue las indicaciones. No hace falta tocar nada.'
-                : hasFace
-                  ? `${employee.firstName} ya tiene un rostro registrado. Puedes actualizarlo o eliminarlo.`
-                  : `Registra el rostro de ${employee.firstName} para que pueda checar con la cámara del reloj.`}
+                : selfService
+                  ? `${employee.firstName}, registra tu rostro una sola vez y después checas mirando a la cámara, aquí y en el reloj checador. Toma un minuto.`
+                  : hasFace
+                    ? `${employee.firstName} ya tiene un rostro registrado. Puedes actualizarlo o eliminarlo.`
+                    : `Registra el rostro de ${employee.firstName} para que pueda checar con la cámara del reloj.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -533,14 +576,45 @@ export function FaceEnrollDialog({
             <div className="flex gap-3 rounded-xl border border-border bg-secondary/40 p-3.5 text-[13px] leading-5 text-muted-foreground">
               <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
               <p>
-                No se guardan fotografías: solo una representación numérica del rostro, en la base de datos de tu
-                empresa y usada únicamente para registrar asistencia. Es un dato personal sensible; pide el
-                consentimiento del empleado antes de registrarlo.
+                {selfService
+                  ? 'No se guarda ninguna fotografía de tu rostro: solo una representación numérica, en la base de datos de tu empresa y usada únicamente para registrar tu asistencia. Para cambiarlo o borrarlo después, pídelo a tu administrador.'
+                  : 'No se guardan fotografías: solo una representación numérica del rostro, en la base de datos de tu empresa y usada únicamente para registrar asistencia. Es un dato personal sensible; pide el consentimiento del empleado antes de registrarlo.'}
               </p>
             </div>
+            {/* The engine loads while they read: say so, with an animation that keeps moving while it works. */}
+            <p
+              role="status"
+              className={cn(
+                'flex items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-medium',
+                engine === 'ready'
+                  ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                  : engine === 'failed'
+                    ? 'bg-amber-400/15 text-amber-800 dark:text-amber-200'
+                    : 'bg-secondary text-muted-foreground',
+              )}
+            >
+              {engine === 'ready' ? (
+                <CircleCheck className="h-4 w-4 shrink-0" />
+              ) : engine === 'failed' ? (
+                <TriangleAlert className="h-4 w-4 shrink-0" />
+              ) : (
+                <span className="h-4 w-4 shrink-0 rounded-full border-2 border-muted-foreground/25 border-t-primary motion-safe:animate-spin" />
+              )}
+              {engine === 'ready'
+                ? 'Reconocimiento facial listo'
+                : engine === 'failed'
+                  ? 'No se pudo preparar el reconocimiento facial: se intentará de nuevo al comenzar.'
+                  : engine === 'preparing'
+                    ? 'Preparando el reconocimiento facial en este equipo…'
+                    : 'Descargando el reconocimiento facial (la primera vez tarda más)…'}
+            </p>
             <label className="flex items-start gap-2.5 text-sm">
               <Checkbox checked={consent} onCheckedChange={setConsent} className="mt-0.5" />
-              <span>El empleado da su consentimiento para registrar su rostro con fines de control de asistencia.</span>
+              <span>
+                {selfService
+                  ? 'Doy mi consentimiento para que mi empresa registre mi rostro con fines de control de asistencia.'
+                  : 'El empleado da su consentimiento para registrar su rostro con fines de control de asistencia.'}
+              </span>
             </label>
             <div className="flex items-center justify-between gap-3 text-[13px] text-muted-foreground">
               <span>Las indicaciones también se dicen en voz alta.</span>
@@ -668,7 +742,7 @@ export function FaceEnrollDialog({
               {testResult && !testResult.ok ? (
                 <Button variant="secondary" onClick={() => setTestAttempt((n) => n + 1)}>Reintentar prueba</Button>
               ) : null}
-              <Button onClick={() => onOpenChange(false)}>{testResult?.ok || testOnly ? 'Listo' : 'Cerrar sin guardar'}</Button>
+              <Button onClick={() => onOpenChange(false)}>{testResult?.ok || testOnly ? (selfService && testResult?.ok ? 'Listo, a checar' : 'Listo') : 'Cerrar sin guardar'}</Button>
             </>
           ) : null}
           {stage === 'intro' ? (

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ArrowRight, CalendarPlus, Check, FileWarning, Inbox, X } from 'lucide-react'
+import { ArrowRight, CalendarPlus, Check, CheckCheck, FileWarning, Inbox, X } from 'lucide-react'
 import { EmptyState, PageHeader } from '@/components/shared/PageHeader'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -168,9 +168,9 @@ export function IncidenciasPage() {
                     <TableHead>Empleado</TableHead>
                     <TableHead>Tipo</TableHead>
                     <TableHead>Fecha</TableHead>
-                    <TableHead className="hidden lg:table-cell">Descripción</TableHead>
+                    <TableHead className="hidden 2xl:table-cell">Descripción</TableHead>
                     <TableHead>Estado</TableHead>
-                    <TableHead className="hidden xl:table-cell">Creó · Revisó</TableHead>
+                    <TableHead className="hidden 2xl:table-cell">Creó · Revisó</TableHead>
                     <TableHead />
                   </TableRow>
                 </TableHeader>
@@ -180,7 +180,7 @@ export function IncidenciasPage() {
                     return (
                       <TableRow key={i.id}>
                         <TableCell>
-                          <div className="flex min-w-[190px] items-center gap-3">
+                          <div className="flex min-w-[160px] items-center gap-3">
                             <Avatar name={emp?.fullName ?? '?'} size="sm" />
                             <div>
                               <p className="text-sm font-medium">{emp?.fullName ?? 'Empleado'}</p>
@@ -190,19 +190,25 @@ export function IncidenciasPage() {
                         </TableCell>
                         <TableCell>
                           <IncidenciaBadge type={i.type} />
+                          {/* The description under the type until it has its own column. */}
+                          {i.reason ? (
+                            <span className="mt-1 hidden max-w-[150px] truncate text-xs text-muted-foreground md:block 2xl:hidden">
+                              {i.reason}
+                            </span>
+                          ) : null}
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-sm">
                           {i.from === i.to
                             ? formatShortDate(i.from)
                             : `${formatShortDate(i.from)} – ${formatShortDate(i.to)}`}
                         </TableCell>
-                        <TableCell className="hidden max-w-[260px] truncate text-sm text-muted-foreground lg:table-cell">
+                        <TableCell className="hidden max-w-[200px] truncate text-sm text-muted-foreground 2xl:table-cell">
                           {i.reason ?? '—'}
                         </TableCell>
                         <TableCell>
                           <IncidenciaStatusBadge status={i.status} />
                         </TableCell>
-                        <TableCell className="hidden text-xs text-muted-foreground xl:table-cell">
+                        <TableCell className="hidden text-xs text-muted-foreground 2xl:table-cell">
                           <p>
                             {userName(i.requestedById)} · {fmtStamp(i.createdAt)}
                           </p>
@@ -216,26 +222,31 @@ export function IncidenciasPage() {
                         <TableCell className="text-right">
                           {canReviewInc && i.status === 'pending' ? (
                             <div className="flex justify-end gap-1.5">
-                              <Button size="sm" onClick={() => setIncReview({ item: i, status: 'approved' })}>
+                              <Button size="sm" title="Aprobar" aria-label="Aprobar" onClick={() => setIncReview({ item: i, status: 'approved' })}>
                                 <Check className="h-3.5 w-3.5" />
-                                Aprobar
+                                <span className="max-md:inline md:hidden xl:inline">Aprobar</span>
                               </Button>
                               <Button
                                 size="sm"
                                 variant="secondary"
+                                title="Rechazar"
+                                aria-label="Rechazar"
                                 onClick={() => setIncReview({ item: i, status: 'rejected' })}
                               >
                                 <X className="h-3.5 w-3.5" />
-                                Rechazar
+                                <span className="max-md:inline md:hidden xl:inline">Rechazar</span>
                               </Button>
                             </div>
                           ) : canReviewInc && i.status === 'approved' ? (
                             <Button
                               size="sm"
                               variant="ghost"
+                              title="Marcar corregida"
+                              aria-label="Marcar corregida"
                               onClick={() => setIncReview({ item: i, status: 'corrected' })}
                             >
-                              Marcar corregida
+                              <CheckCheck className="h-3.5 w-3.5" />
+                              <span className="max-md:inline md:hidden xl:inline">Marcar corregida</span>
                             </Button>
                           ) : null}
                         </TableCell>
@@ -263,11 +274,11 @@ export function IncidenciasPage() {
                     <TableRow>
                       <TableHead>Empleado</TableHead>
                       <TableHead>Fecha</TableHead>
-                      <TableHead>Movimiento</TableHead>
+                      <TableHead className="hidden 2xl:table-cell">Movimiento</TableHead>
                       <TableHead>Registrado → Solicitado</TableHead>
-                      <TableHead className="hidden lg:table-cell">Motivo</TableHead>
+                      <TableHead className="hidden 2xl:table-cell">Motivo</TableHead>
                       <TableHead>Estado</TableHead>
-                      <TableHead className="hidden xl:table-cell">Resolución</TableHead>
+                      <TableHead className="hidden 2xl:table-cell">Resolución</TableHead>
                       <TableHead />
                     </TableRow>
                   </TableHeader>
@@ -277,18 +288,22 @@ export function IncidenciasPage() {
                       return (
                         <TableRow key={c.id}>
                           <TableCell>
-                            <div className="flex min-w-[210px] items-center gap-3">
+                            <div className="flex min-w-[170px] items-center gap-3">
                               <Avatar name={emp?.fullName ?? '?'} size="sm" />
-                              <div>
+                              <div className="min-w-0">
                                 <p className="text-sm font-medium">{emp?.fullName ?? 'Empleado'}</p>
-                                <p className="text-xs text-muted-foreground">
+                                <p className="max-w-[220px] truncate text-xs text-muted-foreground">
                                   Pidió {c.requestedByName} · {fmtStamp(c.createdAt)}
                                 </p>
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell className="whitespace-nowrap text-sm">{formatShortDate(c.date)}</TableCell>
-                          <TableCell className="text-sm">{PUNCH_TYPE_LABEL[c.punchType]}</TableCell>
+                          <TableCell className="whitespace-nowrap text-sm">
+                            {formatShortDate(c.date)}
+                            {/* The movement under the date until it has its own column. */}
+                            <span className="hidden text-xs text-muted-foreground md:block 2xl:hidden">{PUNCH_TYPE_LABEL[c.punchType]}</span>
+                          </TableCell>
+                          <TableCell className="hidden text-sm 2xl:table-cell">{PUNCH_TYPE_LABEL[c.punchType]}</TableCell>
                           <TableCell className="whitespace-nowrap text-sm tabular-nums">
                             <span className="text-muted-foreground">
                               {c.previousTime ? formatTime12(c.previousTime) : '—'}
@@ -296,13 +311,13 @@ export function IncidenciasPage() {
                             <ArrowRight className="mx-1.5 inline h-3.5 w-3.5 text-muted-foreground" />
                             <span className="font-semibold">{formatTime12(c.requestedTime)}</span>
                           </TableCell>
-                          <TableCell className="hidden max-w-[220px] truncate text-sm text-muted-foreground lg:table-cell">
+                          <TableCell className="hidden max-w-[220px] truncate text-sm text-muted-foreground 2xl:table-cell">
                             {c.reason}
                           </TableCell>
                           <TableCell>
                             <CorrectionStatusBadge status={c.status} />
                           </TableCell>
-                          <TableCell className="hidden text-xs text-muted-foreground xl:table-cell">
+                          <TableCell className="hidden text-xs text-muted-foreground 2xl:table-cell">
                             {c.reviewedByName ? (
                               <>
                                 <p>
@@ -319,17 +334,19 @@ export function IncidenciasPage() {
                             c.status === 'pending' &&
                             !(currentUser.role === 'supervisor' && c.requestedById === currentUser.id) ? (
                               <div className="flex justify-end gap-1.5">
-                                <Button size="sm" onClick={() => setCorReview({ item: c, decision: 'approved' })}>
+                                <Button size="sm" title="Aprobar" aria-label="Aprobar" onClick={() => setCorReview({ item: c, decision: 'approved' })}>
                                   <Check className="h-3.5 w-3.5" />
-                                  Aprobar
+                                  <span className="max-md:inline md:hidden xl:inline">Aprobar</span>
                                 </Button>
                                 <Button
                                   size="sm"
                                   variant="secondary"
+                                  title="Rechazar"
+                                  aria-label="Rechazar"
                                   onClick={() => setCorReview({ item: c, decision: 'rejected' })}
                                 >
                                   <X className="h-3.5 w-3.5" />
-                                  Rechazar
+                                  <span className="max-md:inline md:hidden xl:inline">Rechazar</span>
                                 </Button>
                               </div>
                             ) : null}

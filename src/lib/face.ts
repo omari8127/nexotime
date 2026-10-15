@@ -65,14 +65,42 @@ let apiPromise: Promise<FaceApi> | null = null
 /** Downloading the models on a slow connection plus compiling them on a weak tablet: generous, but finite. */
 const LOAD_TIMEOUT_MS = 90_000
 
+/**
+ * Where the engine is, for the screens that wait for it: downloading the library and models, then
+ * preparing them (compiling the GPU programs — this part keeps the page busy for a second or two, so
+ * the screens cover it with a loading animation instead of looking frozen), then ready.
+ */
+export type FaceEngineStatus = 'idle' | 'downloading' | 'preparing' | 'ready' | 'failed'
+let engineStatus: FaceEngineStatus = 'idle'
+const statusListeners = new Set<() => void>()
+function setEngineStatus(next: FaceEngineStatus) {
+  engineStatus = next
+  statusListeners.forEach((listener) => listener())
+}
+export function faceEngineStatus(): FaceEngineStatus {
+  return engineStatus
+}
+export function subscribeFaceEngine(listener: () => void): () => void {
+  statusListeners.add(listener)
+  return () => statusListeners.delete(listener)
+}
+
+/** Lets the browser paint (the loading animation, the latest text) before a heavy synchronous step. */
+const nextPaint = () =>
+  new Promise<void>((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)))
+
 /** Lazy-loads the library and the three models (≈9 MB) once, and compiles their GPU programs. */
 export function loadFaceApi(): Promise<FaceApi> {
   if (!apiPromise) {
+    setEngineStatus('downloading')
     apiPromise = (async () => {
       const { Human } = await import('@vladmandic/human')
       const start = async (backend: 'webgl' | 'cpu') => {
         const human = new Human({ ...CONFIG, backend } as Partial<Config>)
+        await nextPaint()
         await human.load()
+        setEngineStatus('preparing')
+        await nextPaint()
         // The first inference of each network compiles its GPU programs (seconds on a tablet). Pay it here,
         // on the "Preparando…" screen, not on the first real camera frames.
         await human.warmup({ warmup: 'face' } as Partial<Config>)
@@ -93,10 +121,17 @@ export function loadFaceApi(): Promise<FaceApi> {
         // Some tablets have no usable WebGL (or fail compiling): slower, but it works.
         return inTime(start('cpu'))
       }
-    })().catch((err) => {
-      apiPromise = null // let the next attempt retry
-      throw err
-    })
+    })().then(
+      (api) => {
+        setEngineStatus('ready')
+        return api
+      },
+      (err) => {
+        apiPromise = null // let the next attempt retry
+        setEngineStatus('failed')
+        throw err
+      },
+    )
   }
   return apiPromise
 }

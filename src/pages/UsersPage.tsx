@@ -97,8 +97,8 @@ export function UsersPage() {
               <TableRow>
                 <TableHead>Usuario</TableHead>
                 <TableHead>Rol</TableHead>
-                <TableHead className="hidden md:table-cell">Alcance</TableHead>
-                <TableHead className="hidden lg:table-cell">Último acceso</TableHead>
+                <TableHead className="hidden xl:table-cell">Alcance</TableHead>
+                <TableHead className="hidden 2xl:table-cell">Último acceso</TableHead>
                 <TableHead />
               </TableRow>
             </TableHeader>
@@ -106,11 +106,11 @@ export function UsersPage() {
               {users.map((u) => (
                 <TableRow key={u.id}>
                   <TableCell>
-                    <div className="flex items-center gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
                       <Avatar name={u.name} size="sm" />
-                      <div>
+                      <div className="min-w-0">
                         <p className="text-sm font-medium">{u.name}</p>
-                        <p className="text-xs text-muted-foreground">{u.email}</p>
+                        <p className="max-w-[240px] truncate text-xs text-muted-foreground">{u.email}</p>
                       </div>
                     </div>
                   </TableCell>
@@ -119,7 +119,7 @@ export function UsersPage() {
                       {ROLES[u.role].label}
                     </Badge>
                   </TableCell>
-                  <TableCell className="hidden text-sm text-muted-foreground md:table-cell">
+                  <TableCell className="hidden max-w-[260px] text-sm text-muted-foreground xl:table-cell">
                     {u.role === 'employee'
                       ? 'Solo su propia asistencia'
                       : `${
@@ -130,7 +130,7 @@ export function UsersPage() {
                                 .join(', ')
                         }${u.departments && u.departments.length ? ` · ${u.departments.join(', ')}` : ''}`}
                   </TableCell>
-                  <TableCell className="hidden text-sm text-muted-foreground lg:table-cell">
+                  <TableCell className="hidden whitespace-nowrap text-sm text-muted-foreground 2xl:table-cell">
                     {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString('es-MX') : '—'}
                   </TableCell>
                   <TableCell className="text-right">
@@ -192,7 +192,7 @@ export function UsersPage() {
               <TableRow>
                 <TableHead>Permiso</TableHead>
                 {ROLE_LIST.map((r) => (
-                  <TableHead key={r.key} className="text-center">
+                  <TableHead key={r.key} className="min-w-[4rem] whitespace-normal px-1.5 py-2 text-center text-[10px] leading-tight tracking-normal">
                     {r.label}
                   </TableHead>
                 ))}
@@ -210,7 +210,7 @@ export function UsersPage() {
                     <TableRow key={p.key}>
                       <TableCell className="text-sm">{p.label}</TableCell>
                       {ROLE_LIST.map((r) => (
-                        <TableCell key={r.key} className="text-center">
+                        <TableCell key={r.key} className="px-1.5 text-center">
                           {r.permissions.includes(p.key) ? (
                             <Check className="mx-auto h-4 w-4 text-success" />
                           ) : (
