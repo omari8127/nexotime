@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react'
 import { NexotimeMark } from '@/components/shared/Logo'
 import { LegalLinks } from '@/components/shared/LegalLinks'
 import { copyrightLine } from '@/data/legal'
+import { useLightTheme } from '@/hooks/useLightTheme'
 import { cn } from '@/lib/utils'
 
 /**
@@ -53,6 +54,7 @@ export function PublicPage({
   mainClassName?: string
   actions?: ReactNode
 }) {
+  useLightTheme()
   return (
     <div
       className="flex min-h-dvh flex-col bg-white font-sans text-slate-900 antialiased"

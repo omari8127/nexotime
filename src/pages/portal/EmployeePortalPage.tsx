@@ -28,6 +28,7 @@ import { PunchPill } from '@/components/attendance/PunchPill'
 import { FaceVerifyFlow } from '@/components/clock/FaceVerifyFlow'
 import { MiniMap } from '@/components/shared/MiniMap'
 import { useGeolocation } from '@/hooks/useGeolocation'
+import { useLightTheme } from '@/hooks/useLightTheme'
 import { PUNCH_TYPE_LABEL, WEEKDAY_LABEL, canRegisterPunch, presenceOf, weekdayFromISO } from '@/lib/attendance'
 import { PUNCH_ORDER } from '@/lib/dayEdit'
 import { faceCandidates } from '@/lib/face'
@@ -70,6 +71,7 @@ export function EmployeePortalLink() {
  * taken at that moment), see the recent days and ask for vacations.
  */
 export function EmployeePortalPage() {
+  useLightTheme()
   const navigate = useNavigate()
   const [token] = useState(readPortalToken)
   const [state, setState] = useState<PortalState | null>(null)
