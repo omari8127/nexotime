@@ -18,6 +18,9 @@ import type {
   Employee,
   Incidencia,
   Payment,
+  PayrollEmployeeRow,
+  PayrollPeriod,
+  PayrollTotals,
   RoleKey,
   Schedule,
   User,
@@ -41,6 +44,7 @@ import {
   incidenciaFromRow,
   incidenciaToRow,
   paymentFromRow,
+  payrollPeriodFromRow,
   profileFromRow,
   profileToPatch,
   scheduleFromRow,
@@ -74,6 +78,8 @@ export interface LiveBundle {
   incidencias: Incidencia[]
   corrections: CorrectionRequest[]
   payments: Payment[]
+  /** Cierres de periodo (migración 016). Ausente en copias guardadas antes de existir. */
+  payrollPeriods?: PayrollPeriod[]
   currentUser: User
 }
 
@@ -169,6 +175,7 @@ async function fetchLiveBundle(companyId: string): Promise<LiveBundle> {
     incidenciasRes,
     correctionsRes,
     paymentsRes,
+    payrollRes,
   ] = await Promise.all([
     db.from('companies').select('*').eq('id', companyId).single(),
     db.from('branches').select('*').eq('company_id', companyId).order('name'),
@@ -182,6 +189,7 @@ async function fetchLiveBundle(companyId: string): Promise<LiveBundle> {
     // Tablas nuevas: si la migración aún no se corrió, la lista simplemente llega vacía.
     db.from('correction_requests').select('*').eq('company_id', companyId).order('created_at', { ascending: false }),
     db.from('payments').select('*').eq('company_id', companyId).order('created_at', { ascending: false }),
+    db.from('payroll_periods').select('*').eq('company_id', companyId).order('from_date', { ascending: false }),
   ])
 
   if (companyRes.error) throw new Error(companyRes.error.message)
@@ -202,6 +210,7 @@ async function fetchLiveBundle(companyId: string): Promise<LiveBundle> {
     incidencias: (incidenciasRes.data ?? []).map(incidenciaFromRow),
     corrections: (correctionsRes.data ?? []).map(correctionFromRow),
     payments: (paymentsRes.data ?? []).map(paymentFromRow),
+    payrollPeriods: (payrollRes.data ?? []).map(payrollPeriodFromRow),
     currentUser,
   }
 }
@@ -363,6 +372,32 @@ export async function liveUpsertCorrection(request: CorrectionRequest) {
     .from('correction_requests')
     .upsert(correctionToRow(request), { onConflict: 'id' })
   if (error) throw new Error(error.message)
+}
+
+/** Closes a period on the server (one transaction; the server re-checks every rule). Online only:
+ *  a close that is merely "queued" would not stop anyone from editing in the meantime. */
+export async function liveClosePayrollPeriod(input: {
+  from: string
+  to: string
+  note?: string
+  summary: PayrollEmployeeRow[]
+  totals: PayrollTotals
+}): Promise<PayrollPeriod> {
+  const { data, error } = await client().rpc('close_payroll_period', {
+    p_from: input.from,
+    p_to: input.to,
+    p_note: input.note ?? null,
+    p_summary: input.summary,
+    p_totals: input.totals,
+  })
+  if (error) throw new Error(error.message)
+  return payrollPeriodFromRow(data as Record<string, unknown>)
+}
+
+export async function liveReopenPayrollPeriod(id: string, reason: string): Promise<PayrollPeriod> {
+  const { data, error } = await client().rpc('reopen_payroll_period', { p_id: id, p_reason: reason })
+  if (error) throw new Error(error.message)
+  return payrollPeriodFromRow(data as Record<string, unknown>)
 }
 
 export async function liveDeleteIncidencia(id: string) {

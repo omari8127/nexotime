@@ -10,7 +10,7 @@ describe('cuenta dedicada del reloj checador', () => {
       'attendance.view', 'attendance.edit', 'attendance.request_correction', 'schedules.view', 'schedules.manage',
       'branches.view', 'branches.manage', 'reports.view', 'reports.export', 'devices.view', 'devices.manage',
       'users.view', 'users.manage', 'audit.view', 'settings.view', 'settings.manage', 'incidencias.view',
-      'incidencias.review', 'corrections.view', 'corrections.review', 'biometrics.manage', 'self.view',
+      'incidencias.review', 'corrections.view', 'corrections.review', 'biometrics.manage', 'payroll.manage', 'self.view',
     ]
     for (const permission of panel) expect(can('kiosk', permission), permission).toBe(false)
     expect(can('kiosk', 'clock.use')).toBe(true)

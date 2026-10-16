@@ -177,6 +177,8 @@ export type Permission =
   | 'incidencias.review'
   | 'corrections.view'
   | 'corrections.review'
+  /** Cierre de periodo de nómina: ver, cerrar y exportar (reabrir solo propietario / administrador). */
+  | 'payroll.manage'
   /** Portal del empleado ("Mi asistencia"): solo sus propios datos. */
   | 'self.view'
   /** Cuenta dedicada de la tablet: solo el reloj checador, ninguna pantalla del panel. */
@@ -412,6 +414,69 @@ export interface CorrectionRequest {
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Cierre de periodo de nómina                                                */
+/* -------------------------------------------------------------------------- */
+
+/** One employee's numbers for a period (minutes and counts — never formatted text). */
+export interface PayrollEmployeeRow {
+  employeeId: ID
+  number: string
+  name: string
+  department: string
+  branch: string
+  daysWorked: number
+  /** Scheduled working days with no punches and no approved justification. */
+  absences: number
+  lates: number
+  earlyLeaves: number
+  /** Days with an entry but no exit (past days only). */
+  incompleteDays: number
+  workedMinutes: number
+  scheduledMinutes: number
+  ordinaryMinutes: number
+  overtimeMinutes: number
+  /** First 9 h of overtime per week (Art. 68 LFT). */
+  overtimeDoubleMinutes: number
+  overtimeTripleMinutes: number
+  lunchMinutes: number
+  /** Justified scheduled days, by type of incidencia. */
+  vacationDays: number
+  sickDays: number
+  paidLeaveDays: number
+  unpaidLeaveDays: number
+}
+
+export interface PayrollTotals {
+  employees: number
+  daysWorked: number
+  absences: number
+  lates: number
+  workedMinutes: number
+  overtimeMinutes: number
+  overtimeDoubleMinutes: number
+  overtimeTripleMinutes: number
+}
+
+/** A closed period: a frozen copy of the numbers plus who closed it and when. Reopening keeps the row. */
+export interface PayrollPeriod {
+  id: ID
+  companyId: ID
+  from: ISODate
+  to: ISODate
+  note?: string
+  summary: PayrollEmployeeRow[]
+  totals: PayrollTotals
+  closedAt: ISODateTime
+  closedById?: ID
+  closedByName: string
+  /** Set when someone reopened it: from then on the period is editable again (and may be closed anew). */
+  reopenedAt?: ISODateTime
+  reopenedById?: ID
+  reopenedByName?: string
+  reopenReason?: string
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Devices                                                                    */
 /* -------------------------------------------------------------------------- */
 
@@ -460,6 +525,8 @@ export type AuditAction =
   | 'integration.disconnect'
   | 'user.role_change'
   | 'face.rejected'
+  | 'payroll.close'
+  | 'payroll.reopen'
 
 export interface AuditChange {
   field: string

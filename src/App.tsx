@@ -52,6 +52,7 @@ const SchedulesPage = page(() => import('@/pages/SchedulesPage'), 'SchedulesPage
 const BranchesPage = page(() => import('@/pages/BranchesPage'), 'BranchesPage')
 const BranchDetailPage = page(() => import('@/pages/BranchDetailPage'), 'BranchDetailPage')
 const ReportsPage = page(() => import('@/pages/ReportsPage'), 'ReportsPage')
+const PayrollPeriodPage = page(() => import('@/pages/PayrollPeriodPage'), 'PayrollPeriodPage')
 const DevicesPage = page(() => import('@/pages/DevicesPage'), 'DevicesPage')
 const UsersPage = page(() => import('@/pages/UsersPage'), 'UsersPage')
 const AuditPage = page(() => import('@/pages/AuditPage'), 'AuditPage')
@@ -130,6 +131,7 @@ export function App() {
             <Route path="/sucursales" element={guard('branches.view', <BranchesPage />)} />
             <Route path="/sucursales/:id" element={guard('branches.view', <BranchDetailPage />)} />
             <Route path="/reportes" element={guard('reports.view', <FeatureGuard feature="reports"><ReportsPage /></FeatureGuard>)} />
+            <Route path="/cierre" element={guard('payroll.manage', <FeatureGuard feature="reports"><PayrollPeriodPage /></FeatureGuard>)} />
             <Route
               path="/dispositivos"
               element={

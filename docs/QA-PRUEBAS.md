@@ -63,6 +63,17 @@ Marca cada punto; si alguno falla, no se entrega.
 - [ ] Después de correr la migración 009: en el SQL Editor, `select jobname, schedule, active from cron.job;` muestra `nexotime-borrar-fotos-90-dias` activo.
 - [ ] Prueba a mano con un plazo corto sobre datos de prueba: `select public.purge_old_attendance_photos(30);` devuelve cuántas borró; esas checadas siguen en Asistencia y su foto dice "eliminada".
 
+### 3.6 Cierre de periodo
+- [ ] Después de correr la migración 016: Cierre de periodo abre con la última quincena terminada y muestra a cada empleado con sus números.
+- [ ] Con una vacación o corrección pendiente dentro del periodo, el botón "Cerrar periodo" está bloqueado y dice por qué; al resolverla se habilita.
+- [ ] Un día con entrada y sin salida sale como aviso ("Sin salida") sin bloquear; corregirlo con "Editar día completo" lo quita.
+- [ ] El Excel trae cuatro hojas (Cierre, Resumen, Detalle diario, Incidencias) y las horas son números que se pueden sumar.
+- [ ] Cerrar el periodo: aparece "Cerrado", con quién y cuándo. En Asistencia, editar un día de ese periodo dice que el periodo está cerrado; un día fuera del periodo sí se edita.
+- [ ] En el SQL Editor, con un usuario administrador, intentar actualizar una checada de esas fechas falla con "El periodo del … ya está cerrado".
+- [ ] Una checada de hoy en el reloj sigue funcionando con periodos cerrados (no se ve afectada).
+- [ ] RH no ve el botón "Reabrir"; el administrador sí, y exige motivo. Al reabrir se puede editar y volver a cerrar; el historial conserva ambos cierres.
+- [ ] Sin Internet, "Cerrar periodo" dice que hace falta conexión.
+
 ## 4. Sin conexión
 - [ ] Apagar el Wi‑Fi: checar a 3 personas. Debe decir que quedó guardado y mostrar "Sin conexión".
 - [ ] Prender el Wi‑Fi: la cola se envía sola ("Sincronizado") y las checadas aparecen en el panel.

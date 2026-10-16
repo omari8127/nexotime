@@ -31,6 +31,7 @@ import type {
   IncidenciaStatus,
   IncidenciaType,
   Payment,
+  PayrollPeriod,
   Permission,
   Punch,
   PunchLocation,
@@ -64,6 +65,8 @@ import {
   liveInsertDevice,
   liveInsertEmployee,
   liveDeleteIncidencia,
+  liveClosePayrollPeriod,
+  liveReopenPayrollPeriod,
   liveUpdateCompany,
   liveUpdateEmployee,
   liveUpdateProfile,
@@ -74,6 +77,15 @@ import {
   liveUpsertIncidencia,
 } from '@/services/live/liveApi'
 import { applyPendingWrites, enqueue, flushQueue, isNetworkError, type NewQueueItem } from '@/services/live/syncQueue'
+import { useSyncStore } from '@/store/syncStore'
+import {
+  checkReadiness,
+  closedPeriodMessage,
+  closedPeriodOn,
+  formatPeriod,
+  summarizePeriod,
+  type PeriodRange,
+} from '@/lib/payrollPeriod'
 
 export type BackendMode = 'demo' | 'live'
 
@@ -183,6 +195,8 @@ interface DataState {
   audit: AuditLog[]
   incidencias: Incidencia[]
   corrections: CorrectionRequest[]
+  /** Closed payroll periods (and reopened ones, kept as history). */
+  payrollPeriods: PayrollPeriod[]
   /** Read-only: only a service-role process ever inserts a row (see 004_suscripciones.sql). */
   payments: Payment[]
 
@@ -238,6 +252,12 @@ interface DataState {
     actor: User,
   ) => void
   cancelIncidencia: (id: string, actor: User) => void
+
+  /** Freezes the numbers of a finished period and locks its attendance. Live mode needs the internet:
+   *  the server re-checks every rule. Rejects with a readable message when it cannot close. */
+  closePayrollPeriod: (range: PeriodRange, note: string, actor: User) => Promise<PayrollPeriod>
+  /** Owner / administrator only, with a reason; the period stays in the history. */
+  reopenPayrollPeriod: (id: string, reason: string, actor: User) => Promise<PayrollPeriod>
 
   addUser: (input: NewUserInput, actor: User) => Promise<User>
   updateUserAccess: (
@@ -368,6 +388,8 @@ export const useDataStore = create<DataState>((set, get) => {
     const state = get()
     const employee = state.employees.find((e) => e.id === employeeId)
     if (!employee) return { error: 'Empleado no encontrado.' }
+    const closed = closedPeriodOn(state.payrollPeriods, date)
+    if (closed) return { error: closedPeriodMessage(closed) }
     const schedule = scheduleOf(state.schedules, employee.scheduleId)
     const existing = state.attendance.find((r) => r.employeeId === employeeId && r.date === date)
     const previous = existing?.punches.find((p) => p.type === type)?.time ?? null
@@ -439,6 +461,7 @@ export const useDataStore = create<DataState>((set, get) => {
   return {
     mode: 'demo',
     ...seed,
+    payrollPeriods: [],
     currentUser: initialUser,
 
     setCurrentUser: (userId) =>
@@ -465,13 +488,14 @@ export const useDataStore = create<DataState>((set, get) => {
         incidencias: bundle.incidencias,
         corrections: bundle.corrections,
         payments: bundle.payments,
+        payrollPeriods: bundle.payrollPeriods ?? [],
         currentUser: bundle.currentUser,
       })
     },
 
     switchToDemo: () => {
       const fresh = buildMockDatabase()
-      set({ mode: 'demo', ...fresh, currentUser: fresh.users[0] })
+      set({ mode: 'demo', ...fresh, payrollPeriods: [], currentUser: fresh.users[0] })
     },
 
     logAudit: writeAudit,
@@ -897,6 +921,8 @@ export const useDataStore = create<DataState>((set, get) => {
       if (!employee) return { error: 'Empleado no encontrado.' }
       if (!reason.trim()) return { error: 'Escribe el motivo del cambio: queda en la auditoría.' }
       if (date > getToday(state.mode)) return { error: 'No puedes registrar asistencia de un día futuro.' }
+      const closed = closedPeriodOn(state.payrollPeriods, date)
+      if (closed) return { error: closedPeriodMessage(closed) }
 
       const existing = state.attendance.find((r) => r.employeeId === employeeId && r.date === date)
       const result = applyDayEdit(existing?.punches ?? [], times)
@@ -994,6 +1020,8 @@ export const useDataStore = create<DataState>((set, get) => {
       }
       if (!input.reason.trim()) return 'Escribe el motivo de la corrección.'
       if (input.date > getToday(state.mode)) return 'No puedes corregir un día futuro.'
+      const closed = closedPeriodOn(state.payrollPeriods, input.date)
+      if (closed) return closedPeriodMessage(closed)
 
       const existing = state.attendance.find(
         (r) => r.employeeId === employee.id && r.date === input.date,
@@ -1233,6 +1261,102 @@ export const useDataStore = create<DataState>((set, get) => {
       )
     },
 
+    closePayrollPeriod: async (range, note, actor) => {
+      requirePermission('payroll.manage')
+      const state = get()
+      // Someone limited to some branches only sees part of the staff: closing would freeze half the numbers.
+      if (state.currentUser.branchIds.length > 0) {
+        throw new Error('Para cerrar un periodo tu usuario debe ver todas las sucursales de la empresa.')
+      }
+      const today = getToday(state.mode)
+      const live = state.mode === 'live'
+      const { rows, totals } = summarizePeriod({
+        range,
+        employees: state.employees,
+        records: state.attendance,
+        schedules: state.schedules,
+        incidencias: state.incidencias,
+        settings: state.company.attendanceSettings,
+        branches: state.branches,
+        todayISO: today,
+      })
+      const { blockers } = checkReadiness({
+        range,
+        todayISO: today,
+        rows,
+        incidencias: state.incidencias,
+        corrections: state.corrections,
+        employees: state.employees,
+        periods: state.payrollPeriods,
+        pendingSync: live ? useSyncStore.getState().pending : 0,
+        online: !live || typeof navigator === 'undefined' || navigator.onLine,
+      })
+      if (blockers.length > 0) throw new Error(blockers[0])
+
+      const cleanNote = note.trim()
+      const period: PayrollPeriod = live
+        ? await liveClosePayrollPeriod({ ...range, note: cleanNote || undefined, summary: rows, totals })
+        : {
+            id: nextId(),
+            companyId: state.company.id,
+            from: range.from,
+            to: range.to,
+            note: cleanNote || undefined,
+            summary: rows,
+            totals,
+            closedAt: nowISO(),
+            closedById: actor.id,
+            closedByName: actor.name,
+          }
+      set((s) => ({ payrollPeriods: [period, ...s.payrollPeriods.filter((p) => p.id !== period.id)] }))
+      writeAudit(
+        {
+          action: 'payroll.close',
+          entityType: 'PayrollPeriod',
+          entityId: period.id,
+          entityLabel: `Periodo del ${formatPeriod(range)}`,
+          reason: cleanNote || undefined,
+          changes: [
+            { field: 'Periodo', before: 'Abierto', after: 'Cerrado' },
+            { field: 'Empleados', before: null, after: String(totals.employees) },
+          ],
+        },
+        actor,
+      )
+      return period
+    },
+
+    reopenPayrollPeriod: async (id, reason, actor) => {
+      const state = get()
+      if (state.currentUser.role !== 'owner' && state.currentUser.role !== 'admin') {
+        throw new PermissionError('Solo el propietario o un administrador pueden reabrir un periodo.')
+      }
+      const found = state.payrollPeriods.find((p) => p.id === id)
+      if (!found || found.reopenedAt) throw new Error('Ese periodo ya no está cerrado.')
+      const why = reason.trim()
+      if (why.length < 5) throw new Error('Escribe el motivo de la reapertura.')
+      const live = state.mode === 'live'
+      if (live && typeof navigator !== 'undefined' && !navigator.onLine) {
+        throw new Error('Sin internet. Conéctate para reabrir el periodo.')
+      }
+      const updated: PayrollPeriod = live
+        ? await liveReopenPayrollPeriod(id, why)
+        : { ...found, reopenedAt: nowISO(), reopenedById: actor.id, reopenedByName: actor.name, reopenReason: why }
+      set((s) => ({ payrollPeriods: s.payrollPeriods.map((p) => (p.id === id ? updated : p)) }))
+      writeAudit(
+        {
+          action: 'payroll.reopen',
+          entityType: 'PayrollPeriod',
+          entityId: id,
+          entityLabel: `Periodo del ${formatPeriod(found)}`,
+          reason: why,
+          changes: [{ field: 'Periodo', before: 'Cerrado', after: 'Reabierto' }],
+        },
+        actor,
+      )
+      return updated
+    },
+
     addUser: async (input, actor) => {
       requirePermission('users.manage')
       if (input.role === 'owner' && get().currentUser.role !== 'owner') {
@@ -1435,7 +1559,7 @@ export const useDataStore = create<DataState>((set, get) => {
       if (get().mode === 'live') return // nunca borres los datos reales de un cliente
       const fresh = buildMockDatabase()
       saveCurrentUserId(fresh.users[0].id)
-      set({ mode: 'demo', ...fresh, currentUser: fresh.users[0] })
+      set({ mode: 'demo', ...fresh, payrollPeriods: [], currentUser: fresh.users[0] })
     },
   }
 })

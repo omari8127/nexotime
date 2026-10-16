@@ -87,7 +87,7 @@ function addDays(iso: string, delta: number): string {
  * has no punches and no approved justifying incidencia: those are faltas.
  * Computed from the schedule, so days with no record at all count too.
  */
-function missingDays(
+export function missingDays(
   emp: Employee,
   schedule: Schedule | undefined,
   records: AttendanceRecord[],

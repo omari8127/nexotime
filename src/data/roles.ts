@@ -26,6 +26,7 @@ const ALL: Permission[] = [
   'incidencias.review',
   'corrections.view',
   'corrections.review',
+  'payroll.manage',
   'biometrics.manage',
 ]
 
@@ -66,6 +67,7 @@ export const ROLES: Record<RoleKey, Role> = {
       'incidencias.review',
       'corrections.view',
       'corrections.review',
+      'payroll.manage',
     ],
   },
   supervisor: {

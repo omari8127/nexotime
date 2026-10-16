@@ -38,6 +38,8 @@ const ACTION_LABEL: Record<AuditAction, string> = {
   'integration.disconnect': 'Desconectó una integración',
   'user.role_change': 'Cambió permisos de usuario',
   'face.rejected': 'Identificación facial rechazada',
+  'payroll.close': 'Cerró un periodo de nómina',
+  'payroll.reopen': 'Reabrió un periodo de nómina',
 }
 
 export function AuditPage() {

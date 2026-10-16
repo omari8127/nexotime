@@ -15,6 +15,7 @@ import type {
   EmployeeIdentification,
   Incidencia,
   Payment,
+  PayrollPeriod,
   Punch,
   Schedule,
   ScheduleDay,
@@ -337,6 +338,26 @@ export function incidenciaFromRow(row: Record<string, unknown>): Incidencia {
     reviewedById: (row.reviewed_by_id as string | null) ?? undefined,
     reviewedByName: (row.reviewed_by_name as string | null) ?? undefined,
     reviewNote: (row.review_note as string | null) ?? undefined,
+  }
+}
+
+export function payrollPeriodFromRow(row: Record<string, unknown>): PayrollPeriod {
+  const orUndef = <T>(v: unknown) => (v as T | null) ?? undefined
+  return {
+    id: row.id as string,
+    companyId: row.company_id as string,
+    from: row.from_date as string,
+    to: row.to_date as string,
+    note: orUndef<string>(row.note),
+    summary: Array.isArray(row.summary) ? (row.summary as PayrollPeriod['summary']) : [],
+    totals: (row.totals as PayrollPeriod['totals']) ?? ({} as PayrollPeriod['totals']),
+    closedAt: row.closed_at as string,
+    closedById: orUndef<string>(row.closed_by),
+    closedByName: (row.closed_by_name as string) ?? '',
+    reopenedAt: orUndef<string>(row.reopened_at),
+    reopenedById: orUndef<string>(row.reopened_by),
+    reopenedByName: orUndef<string>(row.reopened_by_name),
+    reopenReason: orUndef<string>(row.reopen_reason),
   }
 }
 

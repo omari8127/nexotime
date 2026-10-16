@@ -1,5 +1,6 @@
 import {
   Building2,
+  CalendarCheck,
   CalendarClock,
   CalendarDays,
   ClipboardList,
@@ -34,6 +35,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/horarios', label: 'Horarios', icon: CalendarClock, permission: 'schedules.view' },
   { to: '/sucursales', label: 'Sucursales', icon: Building2, permission: 'branches.view' },
   { to: '/reportes', label: 'Reportes', icon: ScrollText, permission: 'reports.view', feature: 'reports' },
+  { to: '/cierre', label: 'Cierre de periodo', icon: CalendarCheck, permission: 'payroll.manage', feature: 'reports' },
   { to: '/dispositivos', label: 'Dispositivos', icon: MonitorSmartphone, permission: 'devices.view' },
   { to: '/usuarios', label: 'Usuarios', icon: UsersRound, permission: 'users.view' },
   { to: '/auditoria', label: 'Auditoría', icon: ShieldCheck, permission: 'audit.view', feature: 'audit' },

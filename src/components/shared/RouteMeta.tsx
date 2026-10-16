@@ -64,6 +64,7 @@ const PRIVATE_TITLES: [prefix: string, title: string][] = [
   ['/horarios', 'Horarios'],
   ['/sucursales', 'Sucursales'],
   ['/reportes', 'Reportes'],
+  ['/cierre', 'Cierre de periodo'],
   ['/dispositivos', 'Dispositivos'],
   ['/usuarios', 'Usuarios'],
   ['/auditoria', 'Auditoría'],
