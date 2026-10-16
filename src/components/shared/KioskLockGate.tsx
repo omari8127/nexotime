@@ -12,7 +12,7 @@ import {
 /**
  * Keeps a device that works as the reloj checador out of the panel. Opening the app there (the home
  * icon, the address, the back button) goes to the clock; the panel opens only after the exit code
- * (hold the logo for 3 s) and closes again after 15 minutes without touching it.
+ * ("Salir" on the clock, or a tap on its logo) and closes again after 15 minutes without touching it.
  *
  * Demo mode and ordinary computers (no "kiosk" mark) are untouched.
  */

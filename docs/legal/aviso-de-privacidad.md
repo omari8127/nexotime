@@ -8,9 +8,9 @@
 
 - **Identificación y laborales:** nombre, número de empleado, puesto, área, sucursal, horario, fecha de ingreso, correo y teléfono.
 - **Asistencia:** fecha, hora y método de cada entrada, salida y comida; retardos, faltas, incidencias y correcciones.
-- **Ubicación:** coordenadas geográficas del dispositivo (reloj checador) al momento de cada registro, obtenidas con el permiso de ubicación del navegador.
-- **Datos personales sensibles — biométricos:** representación numérica de su rostro (un conjunto de valores calculados a partir de imágenes de su cara), únicamente si usted autoriza el registro facial. Esa representación es lo único que se conserva.
-- **Foto de evidencia de entrada:** al registrar una entrada por número de empleado o PIN se toma y conserva una fotografía, vinculada al empleado, fecha y hora. Se mantiene en el dispositivo mientras se sincroniza y en el servidor de la empresa para consulta bajo los permisos de asistencia. La imagen permite revisar quién checó; no confirma automáticamente la identidad. Las vistas previas de otros métodos son temporales.
+- **Ubicación:** al checar en el reloj checador de la sucursal, el punto fijo de esa sucursal. Al checar desde su celular (portal del empleado), las coordenadas del GPS del teléfono, su precisión y la distancia a su sucursal, obtenidas con el permiso de ubicación del navegador y solo mientras la pantalla para checar está abierta. [Si la Empresa activó la zona permitida: fuera de ella el movimiento no se registra / queda marcado para revisión.]
+- **Datos personales sensibles — biométricos:** representación numérica de su rostro (un conjunto de valores calculados a partir de imágenes de su cara), únicamente si usted autoriza el registro facial. Esa representación es lo único que se conserva para el reconocimiento. Puede registrarla un administrador con su consentimiento por escrito o, si la Empresa lo permite, usted mismo desde su celular (entrando con su número y PIN y aceptando la casilla de consentimiento), solo si todavía no tiene un rostro registrado.
+- **Foto de cada movimiento:** al registrar cualquier movimiento (entrada, comida o salida), en el reloj checador o desde su celular y con cualquier método, se toma y conserva una fotografía vinculada a usted, la fecha y la hora. Se mantiene en el dispositivo mientras se sincroniza y en el servidor de la Empresa para consulta bajo los permisos de asistencia, y se elimina automáticamente a los [90] días. La imagen permite revisar quién checó; no confirma automáticamente la identidad.
 
 ## Finalidades
 
@@ -36,7 +36,11 @@ Conservamos los datos de asistencia durante [plazo, p. ej. la relación laboral 
 
 ## Derechos ARCO
 
-Usted puede **acceder, rectificar, cancelar u oponerse** al tratamiento de sus datos y **revocar su consentimiento** enviando su solicitud a [nombre del área o persona responsable], en [correo] o en [domicilio]. Responderemos en un plazo máximo de 20 días hábiles.
+Usted puede **acceder, rectificar, cancelar u oponerse** al tratamiento de sus datos y **revocar su consentimiento** enviando su solicitud a [nombre del área o persona responsable], en [correo] o en [domicilio]. Responderemos en un plazo máximo de 20 días y, si procede, se hará efectivo dentro de los 15 días siguientes (Ley Federal de Protección de Datos Personales en Posesión de los Particulares, DOF 20 de marzo de 2025, art. 31). Si no está conforme con la respuesta, puede acudir a la Secretaría Anticorrupción y Buen Gobierno.
+
+## Cómo limitar el uso de sus datos
+
+Puede negar o quitar el permiso de ubicación y de cámara en su navegador, pedir checar con un método distinto al reconocimiento facial, o pedir que se borre su rostro registrado, escribiendo a [correo].
 
 ## Cambios a este aviso
 

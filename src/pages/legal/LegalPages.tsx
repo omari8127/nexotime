@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { ColorStrip, PublicPage } from '@/components/shared/PublicChrome'
-import { COPYRIGHT_HOLDER, LEGAL_ENTITY, LEGAL_PATHS, LEGAL_UPDATED } from '@/data/legal'
+import { BRAND, LEGAL_ENTITY, LEGAL_PATHS, LEGAL_UPDATED } from '@/data/legal'
 
 /* -------------------------------------------------------------------------- */
 /*  Layout                                                                     */
@@ -47,6 +47,21 @@ function Fact({ value }: { value: string | null }) {
 
 const email = () => LEGAL_ENTITY.email
 
+const PrivacyLink = ({ children = 'Aviso de privacidad' }: { children?: ReactNode }) => (
+  <Link to={LEGAL_PATHS.privacidad} className="font-medium text-primary hover:underline">
+    {children}
+  </Link>
+)
+const CookiesLink = () => (
+  <Link to={LEGAL_PATHS.cookies} className="font-medium text-primary hover:underline">
+    Aviso de cookies
+  </Link>
+)
+
+/** Where disputes go: the courts of the provider's city, without taking away what consumer law grants. */
+const JURISDICTION =
+  'Se rige por las leyes de los Estados Unidos Mexicanos. Para cualquier controversia, las partes se someten a los tribunales competentes de Tijuana, Baja California, salvo lo que la Ley Federal de Protección al Consumidor disponga en favor del consumidor.'
+
 /* -------------------------------------------------------------------------- */
 /*  Aviso legal                                                                */
 /* -------------------------------------------------------------------------- */
@@ -55,12 +70,12 @@ export function AvisoLegalPage() {
   return (
     <LegalLayout
       title="Aviso legal"
-      intro="Información sobre quién es el titular de este sitio y de la plataforma NEXOTIME, y las condiciones generales de uso del sitio."
+      intro={`Quién está detrás de este sitio y de la plataforma ${BRAND}, y las condiciones generales de uso del sitio.`}
     >
       <Section title="Titular del sitio">
         <List>
           <li>
-            <strong>Titular:</strong> {LEGAL_ENTITY.holder}
+            <strong>Titular:</strong> {LEGAL_ENTITY.holder}, quien opera la marca {BRAND}
           </li>
           <li>
             <strong>RFC:</strong> <Fact value={LEGAL_ENTITY.rfc} />
@@ -81,17 +96,17 @@ export function AvisoLegalPage() {
 
       <Section title="Objeto">
         <p>
-          NEXOTIME es una plataforma web de control de asistencia y reloj checador para empresas. Este sitio
-          permite conocer el servicio, crear la cuenta de una empresa e iniciar sesión.
+          {BRAND} es una plataforma web de control de asistencia y reloj checador para empresas. Este sitio permite
+          conocer el servicio, crear la cuenta de una empresa e iniciar sesión.
         </p>
       </Section>
 
       <Section title="Propiedad intelectual">
         <p>
-          El software, el diseño, los textos, la marca «NEXOTIME» y su logotipo son propiedad de {COPYRIGHT_HOLDER}.
-          Queda prohibida su reproducción, distribución o modificación sin autorización por escrito, salvo lo que la ley
-          permita expresamente. Los datos que cada empresa carga en su cuenta (empleados, asistencia, reportes) siguen
-          siendo de esa empresa.
+          El software, el diseño, los textos, la marca «{BRAND}» y su logotipo pertenecen a su titular. Queda prohibida
+          su reproducción, distribución o modificación sin autorización por escrito, salvo lo que la ley permita
+          expresamente. Los datos que cada empresa carga en su cuenta (empleados, asistencia, reportes) siguen siendo de
+          esa empresa.
         </p>
       </Section>
 
@@ -117,23 +132,13 @@ export function AvisoLegalPage() {
 
       <Section title="Datos personales y cookies">
         <p>
-          El tratamiento de datos personales se describe en el{' '}
-          <Link to={LEGAL_PATHS.privacidad} className="font-medium text-primary hover:underline">
-            Aviso de privacidad
-          </Link>{' '}
-          y el uso del almacenamiento del navegador en el{' '}
-          <Link to={LEGAL_PATHS.cookies} className="font-medium text-primary hover:underline">
-            Aviso de cookies
-          </Link>
-          .
+          El tratamiento de datos personales se describe en el <PrivacyLink /> y el uso del almacenamiento del navegador
+          en el <CookiesLink />.
         </p>
       </Section>
 
       <Section title="Legislación aplicable">
-        <p>
-          Este aviso se rige por las leyes de los Estados Unidos Mexicanos. Para cualquier controversia serán competentes
-          los tribunales que correspondan conforme a la ley.
-        </p>
+        <p>{JURISDICTION}</p>
       </Section>
     </LegalLayout>
   )
@@ -147,27 +152,28 @@ export function PrivacidadPage() {
   return (
     <LegalLayout
       title="Aviso de privacidad"
-      intro="Cómo se tratan los datos personales de quien crea una cuenta o usa NEXOTIME, conforme a la Ley Federal de Protección de Datos Personales en Posesión de los Particulares."
+      intro={`Cómo se tratan los datos personales de quien crea una cuenta o usa ${BRAND}, conforme a la Ley Federal de Protección de Datos Personales en Posesión de los Particulares (publicada en el Diario Oficial de la Federación el 20 de marzo de 2025).`}
     >
       <Section title="Responsable">
         <p>
-          <strong>{LEGAL_ENTITY.holder}</strong>, con domicilio en <Fact value={LEGAL_ENTITY.address} />, es el
-          responsable del tratamiento de los datos personales descritos en este aviso. Contacto para privacidad:{' '}
-          <Fact value={email()} />.
+          <strong>{LEGAL_ENTITY.holder}</strong>, quien opera la marca {BRAND}, con domicilio en{' '}
+          <Fact value={LEGAL_ENTITY.address} />, es el responsable del tratamiento de los datos personales descritos en
+          este aviso. Contacto para privacidad: <Fact value={email()} />.
         </p>
       </Section>
 
       <Section title="Dos papeles distintos">
         <List>
           <li>
-            <strong>Datos de quien abre la cuenta</strong> (la persona que administra la empresa): aquí somos
-            responsables.
+            <strong>Datos de quien abre la cuenta y de los usuarios del panel</strong> (quien administra la empresa):
+            aquí somos responsables.
           </li>
           <li>
-            <strong>Datos del personal de cada empresa</strong> (empleados, asistencia, rostro, ubicación): la empresa
-            cliente es la responsable y NEXOTIME actúa solo como encargado que presta la plataforma, siguiendo sus
-            instrucciones. Cada empresa debe dar a su personal su propio aviso de privacidad y, para el rostro, pedir su
-            consentimiento expreso.
+            <strong>Datos del personal de cada empresa</strong> (empleados, asistencia, fotos, rostro, ubicación): la
+            empresa cliente es la responsable y {BRAND} actúa solo como encargado que presta la plataforma, siguiendo
+            sus instrucciones. Cada empresa debe dar a su personal su propio aviso de privacidad y, para el rostro,
+            contar con su consentimiento expreso y por escrito. Si eres empleado, la empresa donde trabajas es quien
+            responde por tus datos.
           </li>
         </List>
       </Section>
@@ -179,35 +185,41 @@ export function PrivacidadPage() {
             guarda cifrada por el proveedor de autenticación; nosotros no podemos verla.
           </li>
           <li>
-            <strong>Técnicos:</strong> registros de errores de la aplicación y un identificador del dispositivo donde se
-            usa el reloj checador.
+            <strong>Técnicos:</strong> registros de errores de la aplicación (sin correos ni números largos, que se
+            ocultan antes de enviarse) y un identificador del dispositivo donde se usa el reloj checador.
           </li>
           <li>
-            <strong>Datos que la empresa carga en su cuenta</strong> (como encargados): datos laborales del personal,
-            fechas y horas de asistencia, ubicación al registrar y, si el reconocimiento facial está activado, una
-            representación numérica del rostro.
+            <strong>Datos que la empresa carga o genera en su cuenta</strong> (como encargados): datos laborales del
+            personal, fechas y horas de cada movimiento, la foto tomada al checar, la ubicación al checar y, si el
+            reconocimiento facial está activado, una representación numérica del rostro, que es un{' '}
+            <strong>dato personal sensible</strong>.
           </li>
         </List>
       </Section>
 
-      <Section title="Rostro, foto de verificación y ubicación">
+      <Section title="Rostro, fotos y ubicación">
         <List>
           <li>
-            El reconocimiento facial se procesa <strong>en el propio dispositivo</strong>. Solo se conserva una
-            representación numérica (un conjunto de 1024 valores) para identificar el rostro; la evidencia de entrada descrita abajo se guarda por separado.
+            <strong>Rostro (dato sensible).</strong> El reconocimiento se procesa en el propio dispositivo. Solo se
+            conserva una representación numérica (1024 valores por muestra), nunca una fotografía para este fin. Requiere
+            el consentimiento expreso y por escrito de la persona: lo registra un administrador que cuenta con ese
+            consentimiento, o la propia persona desde su celular, después de entrar con su número de empleado y su PIN
+            y de aceptar la casilla de consentimiento (solo si todavía no tenía un rostro registrado). Siempre hay
+            otros métodos para checar: credencial QR, código de barras o número y PIN.
           </li>
           <li>
-            Al registrar cualquier movimiento (entrada, comida o salida) en el reloj checador, con rostro, credencial
-            QR, código de barras o número de empleado y PIN, se toma y conserva una fotografía de evidencia
-            vinculada al empleado, fecha y hora. Se guarda en el dispositivo mientras se sincroniza y en el servidor
-            de la empresa para consulta con los permisos de asistencia. La foto permite revisar quién checó;
-            no demuestra por sí sola la identidad. Las fotografías se conservan <strong>90 días</strong> contados
-            desde la fecha del movimiento y después se eliminan automáticamente; el registro de asistencia
-            permanece.
+            <strong>Foto de cada movimiento.</strong> Al registrar una entrada, comida o salida, en el reloj checador o
+            desde el celular, se toma una fotografía vinculada a la persona, la fecha y la hora, para que la empresa
+            pueda revisar quién checó. Se conserva <strong>90 días</strong> desde la fecha del movimiento (o el plazo que
+            la empresa configure, entre 30 días y 10 años) y después se elimina automáticamente; el registro de
+            asistencia permanece.
           </li>
           <li>
-            La ubicación se toma con el permiso del navegador, solo al registrar la asistencia, para validar la
-            sucursal.
+            <strong>Ubicación.</strong> Solo con el permiso del navegador y solo para el registro de asistencia. En el
+            reloj checador de la empresa se guarda el punto fijo de su sucursal. Desde el celular se usa el GPS del
+            teléfono mientras la pantalla para checar está abierta, y con cada movimiento se guardan las coordenadas, su
+            precisión y la distancia a la sucursal; según lo que configure la empresa, fuera de la zona permitida el
+            movimiento no se registra o queda marcado. No se sigue la ubicación fuera de esos momentos.
           </li>
         </List>
       </Section>
@@ -215,52 +227,86 @@ export function PrivacidadPage() {
       <Section title="Finalidades">
         <List>
           <li>Crear y administrar la cuenta, y prestar el servicio de control de asistencia.</li>
-          <li>Verificar la identidad de quien registra su asistencia.</li>
+          <li>Verificar la identidad de quien registra su asistencia y el lugar donde lo hace.</li>
           <li>Seguridad, prevención de fraude y atención de errores o soporte.</li>
           <li>Cumplir obligaciones legales.</li>
         </List>
-        <p>No vendemos datos personales ni los usamos para publicidad.</p>
+        <p>
+          Todas son necesarias para prestar el servicio. No tratamos datos para finalidades secundarias: no vendemos
+          datos personales ni los usamos para publicidad.
+        </p>
       </Section>
 
-      <Section title="Con quién se comparten">
-        <p>Solo con proveedores que hacen posible el servicio, por cuenta nuestra:</p>
+      <Section title="Correos electrónicos">
+        <p>
+          Solo enviamos los correos necesarios para la cuenta: confirmar el registro, recuperar la contraseña y avisos
+          importantes del servicio. No enviamos publicidad. Si algún día lo hiciéramos, sería con una forma sencilla de
+          dejar de recibirla, sin escribir a quien nos haya pedido no hacerlo y respetando el Registro Público para
+          Evitar Publicidad de la PROFECO.
+        </p>
+      </Section>
+
+      <Section title="Proveedores que nos ayudan a prestar el servicio">
+        <p>Tratan los datos solo por cuenta nuestra y para lo que se indica:</p>
         <List>
-          <li>Supabase (base de datos y autenticación) y Vercel (alojamiento del sitio).</li>
+          <li>Supabase (base de datos, autenticación y envío de los correos de la cuenta) y Vercel (alojamiento del sitio).</li>
           <li>
             Google Fonts: al abrir el sitio, tu navegador descarga las tipografías desde los servidores de Google, que
             reciben tu dirección IP como en cualquier descarga web.
           </li>
           <li>
+            OpenStreetMap: las imágenes del mapa pequeño que acompaña a cada checada y la búsqueda de direcciones al dar
+            de alta una sucursal. Sus servidores reciben tu dirección IP y, al buscar, la dirección escrita.
+          </li>
+          <li>
             Google, únicamente si la empresa decide conectar Google Drive para guardar sus reportes: se almacena la
             autorización para subir archivos a su Drive, que puede revocar cuando quiera.
           </li>
-          <li>Autoridades, cuando la ley lo exija.</li>
+        </List>
+        <p>
+          Algunos de estos proveedores pueden almacenar o procesar la información fuera de México. Solo compartimos
+          datos con autoridades cuando la ley lo exija.
+        </p>
+      </Section>
+
+      <Section title="Cómo limitar el uso de tus datos">
+        <List>
+          <li>Puedes negar o quitar el permiso de ubicación y de cámara desde la configuración de tu navegador.</li>
+          <li>
+            Si eres empleado, puedes pedir a tu empresa no usar el reconocimiento facial y checar con otro método, o que
+            borre tu rostro registrado.
+          </li>
+          <li>
+            Para cualquier otra limitación, escríbenos a <Fact value={email()} />.
+          </li>
         </List>
       </Section>
 
-      <Section title="Derechos ARCO y revocación">
+      <Section title="Derechos ARCO y revocación del consentimiento">
         <p>
           Puedes <strong>acceder, rectificar, cancelar u oponerte</strong> al tratamiento de tus datos, y revocar tu
-          consentimiento, escribiendo a <Fact value={email()} /> con tu nombre, el medio para responderte y la
-          descripción de lo que solicitas. Responderemos en un máximo de 20 días hábiles. Si eres empleado de una
-          empresa que usa NEXOTIME, dirige tu solicitud primero a esa empresa, que es la responsable de tus datos.
+          consentimiento, escribiendo a <Fact value={email()} /> con tu nombre, un medio para responderte, un documento
+          que acredite tu identidad y la descripción de lo que solicitas. Te responderemos en un máximo de 20 días y, si
+          procede, se hará efectivo dentro de los 15 días siguientes. Si eres empleado de una empresa que usa {BRAND},
+          dirige tu solicitud a esa empresa, que es la responsable de tus datos; nosotros la apoyaremos. Si no estás
+          conforme con la respuesta, puedes acudir a la Secretaría Anticorrupción y Buen Gobierno, autoridad en materia de
+          protección de datos personales.
         </p>
       </Section>
 
       <Section title="Conservación y seguridad">
         <p>
-          Conservamos los datos mientras la cuenta esté activa y el tiempo que exija la ley. Aplicamos medidas como
-          cifrado en tránsito, aislamiento de los datos de cada empresa, acceso por roles y registro de auditoría.
+          Conservamos los datos de la cuenta mientras esté activa y el tiempo que exija la ley; las fotos de cada
+          movimiento, el plazo indicado arriba. Aplicamos medidas como cifrado en tránsito, aislamiento de los datos de
+          cada empresa, acceso por roles, registro de auditoría de los cambios y el procesamiento del rostro en el propio
+          dispositivo.
         </p>
       </Section>
 
       <Section title="Cambios a este aviso">
         <p>
-          Publicaremos aquí cualquier cambio, con su fecha. Consulta también el{' '}
-          <Link to={LEGAL_PATHS.cookies} className="font-medium text-primary hover:underline">
-            Aviso de cookies
-          </Link>
-          .
+          Publicaremos aquí cualquier cambio, con su fecha. Si el cambio es importante, también lo avisaremos al iniciar
+          sesión o por correo. Consulta también el <CookiesLink />.
         </p>
       </Section>
     </LegalLayout>
@@ -275,18 +321,18 @@ export function TerminosPage() {
   return (
     <LegalLayout
       title="Términos y condiciones"
-      intro="Condiciones para usar el servicio NEXOTIME. Al crear una cuenta confirmas que las has leído y aceptas."
+      intro={`Condiciones para usar el servicio ${BRAND}. Al crear una cuenta confirmas que las has leído y aceptas.`}
     >
       <Section title="1. Quién presta el servicio">
         <p>
-          El servicio lo presta {LEGAL_ENTITY.holder} («el Proveedor») a la empresa que crea la cuenta («el Cliente»).
-          Quien crea la cuenta declara tener facultades para obligar a su empresa.
+          El servicio lo presta {LEGAL_ENTITY.holder}, quien opera la marca {BRAND} («el Proveedor»), a la empresa que
+          crea la cuenta («el Cliente»). Quien crea la cuenta declara tener facultades para obligar a su empresa.
         </p>
       </Section>
 
       <Section title="2. Licencia de uso">
         <p>
-          El Proveedor concede al Cliente una licencia no exclusiva, intransferible y revocable para usar NEXOTIME según
+          El Proveedor concede al Cliente una licencia no exclusiva, intransferible y revocable para usar {BRAND} según
           el plan contratado. No se puede copiar, descompilar, revender, sublicenciar ni eludir los mecanismos de
           licencia. El código, el diseño y la marca son del Proveedor.
         </p>
@@ -294,8 +340,8 @@ export function TerminosPage() {
 
       <Section title="3. Cuenta y seguridad">
         <p>
-          El Cliente es responsable de la confidencialidad de sus credenciales, de los usuarios que dé de alta y de lo
-          que se haga con su cuenta. Debe avisar de inmediato ante un uso no autorizado.
+          El Cliente es responsable de la confidencialidad de sus credenciales, de los usuarios que dé de alta, de los
+          PIN de su personal y de lo que se haga con su cuenta. Debe avisar de inmediato ante un uso no autorizado.
         </p>
       </Section>
 
@@ -303,21 +349,30 @@ export function TerminosPage() {
         <List>
           <li>Los datos que el Cliente carga le pertenecen. El Proveedor los trata solo para prestar el servicio.</li>
           <li>
-            El Cliente es el responsable del tratamiento de los datos de su personal: debe contar con su propio aviso de
-            privacidad y con el consentimiento expreso de cada empleado antes de registrar su rostro, y ofrecer
-            métodos alternos de registro.
+            El Cliente es el responsable del tratamiento de los datos de su personal: debe darle su propio aviso de
+            privacidad, contar con el consentimiento expreso y por escrito de cada persona antes de registrar su rostro
+            (o activar que cada quien lo registre desde su celular) y ofrecer métodos alternos de registro.
           </li>
           <li>
-            Más detalle en el{' '}
-            <Link to={LEGAL_PATHS.privacidad} className="font-medium text-primary hover:underline">
-              Aviso de privacidad
-            </Link>
-            .
+            El Cliente usará la ubicación solo para verificar dónde se registró la asistencia y respetará la privacidad de
+            quien trabaja a distancia, conforme a la Ley Federal del Trabajo.
+          </li>
+          <li>
+            Más detalle en el <PrivacyLink />.
           </li>
         </List>
       </Section>
 
-      <Section title="5. Precio, vigencia y suspensión">
+      <Section title="5. Registro de la jornada">
+        <p>
+          {BRAND} registra la hora de entrada, comida y salida de cada persona y permite exportarla. La Ley Federal del
+          Trabajo obliga a los patrones a llevar un registro electrónico de la jornada conforme a las disposiciones que
+          emita la Secretaría del Trabajo y Previsión Social. {BRAND} es una herramienta para llevarlo; corresponde al
+          Cliente verificar que su configuración y su uso cumplan esas disposiciones.
+        </p>
+      </Section>
+
+      <Section title="6. Precio, vigencia y suspensión">
         <p>
           Las condiciones comerciales (precio, periodicidad, facturación y vigencia) se acuerdan con cada Cliente por
           escrito. El Proveedor puede suspender o cancelar el servicio por falta de pago, uso no autorizado o
@@ -325,33 +380,33 @@ export function TerminosPage() {
         </p>
       </Section>
 
-      <Section title="6. Disponibilidad y alcance">
+      <Section title="7. Disponibilidad y alcance">
         <p>
           El Proveedor procura la continuidad del servicio, pero no garantiza disponibilidad ininterrumpida ni ausencia
-          de errores. El reconocimiento facial es una ayuda de identificación y no es infalible; el Cliente debe
-          mantener métodos alternos. NEXOTIME es una herramienta de apoyo: el cálculo de nómina, el cumplimiento de la
-          Ley Federal del Trabajo y las decisiones laborales son responsabilidad del Cliente.
+          de errores. El reconocimiento facial y la ubicación son ayudas de verificación y no son infalibles; el Cliente
+          debe mantener métodos alternos. El cálculo de nómina, el cumplimiento de la Ley Federal del Trabajo y las
+          decisiones laborales son responsabilidad del Cliente.
         </p>
       </Section>
 
-      <Section title="7. Responsabilidad">
+      <Section title="8. Responsabilidad">
         <p>
           En la medida que la ley lo permita, la responsabilidad total del Proveedor se limita al monto pagado por el
           Cliente en los 12 meses previos al hecho que la origine. No se limita lo que la ley no permita limitar.
         </p>
       </Section>
 
-      <Section title="8. Terminación">
+      <Section title="9. Terminación">
         <p>
           Cualquiera de las partes puede terminar el servicio avisando por escrito. Al terminar, el Cliente puede
           exportar sus datos durante un plazo razonable; después podrán eliminarse.
         </p>
       </Section>
 
-      <Section title="9. Cambios y ley aplicable">
+      <Section title="10. Cambios y ley aplicable">
         <p>
-          Podemos actualizar estos términos; la versión vigente y su fecha estarán siempre en esta página. Se rigen por
-          las leyes de los Estados Unidos Mexicanos. Contacto: <Fact value={email()} />.
+          Podemos actualizar estos términos; la versión vigente y su fecha estarán siempre en esta página. {JURISDICTION}{' '}
+          Contacto: <Fact value={email()} />.
         </p>
       </Section>
     </LegalLayout>
@@ -363,19 +418,25 @@ export function TerminosPage() {
 /* -------------------------------------------------------------------------- */
 
 const STORAGE_ITEMS: { name: string; purpose: string; duration: string }[] = [
-  { name: 'Sesión (sb-…-auth-token)', purpose: 'Mantiene tu sesión iniciada.', duration: 'Hasta cerrar sesión' },
-  { name: 'nexotime.ui', purpose: 'Recuerda tu tema (claro u oscuro).', duration: 'Persistente' },
-  { name: 'nexotime.device / nexotime.license', purpose: 'Identifica el dispositivo del reloj checador y su licencia.', duration: 'Persistente' },
-  { name: 'nexotime.liveSnapshot / nexotime.syncQueue', purpose: 'Copia local de tus datos y cola de registros para que el reloj funcione sin Internet.', duration: 'Hasta sincronizar' },
+  { name: 'Sesión (sb-…-auth-token)', purpose: 'Mantiene tu sesión iniciada en el panel.', duration: 'Hasta cerrar sesión' },
+  { name: 'nexotime.portal.session / .device', purpose: 'Mantiene la sesión del portal del empleado en su celular.', duration: '12 horas / persistente' },
+  { name: 'nexotime.ui / nexotime.voice.*', purpose: 'Recuerda tu tema (claro u oscuro), el menú y si las indicaciones habladas están activas.', duration: 'Persistente' },
+  { name: 'nexotime.device / .license / .deviceUse', purpose: 'Identifica el equipo del reloj checador, su licencia y si este equipo es reloj o panel.', duration: 'Persistente' },
+  { name: 'nexotime.clockBranch / .kiosk.light / .cameraRotation', purpose: 'Sucursal, luz de pantalla y orientación de la cámara de este reloj checador.', duration: 'Persistente' },
+  { name: 'nexotime.panelUnlockedAt', purpose: 'Abre el panel 15 minutos después de escribir el código de salida del reloj.', duration: 'Hasta cerrar el navegador' },
+  { name: 'nexotime.liveSnapshot / .currentUser', purpose: 'Copia local de los datos de tu empresa para que el reloj funcione sin Internet.', duration: 'Hasta cerrar sesión' },
+  { name: 'nexotime.syncQueue / .syncRejected', purpose: 'Checadas hechas sin Internet que esperan enviarse, y las que el servidor rechazó.', duration: 'Hasta sincronizar' },
+  { name: 'nexotime.attendancePhotos (base local)', purpose: 'Fotos de las checadas hechas en este equipo mientras se envían al servidor.', duration: 'Hasta sincronizar' },
+  { name: 'nexotime.errorQueue / .lastError', purpose: 'Errores de la aplicación pendientes de reportar (sin datos personales).', duration: 'Hasta enviarse' },
   { name: 'nexotime.cookies', purpose: 'Recuerda que viste este aviso.', duration: 'Persistente' },
-  { name: 'Caché de la aplicación', purpose: 'Permite abrir el reloj checador sin conexión y cargar más rápido.', duration: 'Hasta la siguiente versión' },
+  { name: 'Caché de la aplicación', purpose: 'Permite abrir el reloj checador sin conexión y cargar más rápido (incluye el reconocimiento facial).', duration: 'Hasta la siguiente versión' },
 ]
 
 export function CookiesPage() {
   return (
     <LegalLayout
       title="Aviso de cookies"
-      intro="NEXOTIME solo usa almacenamiento técnico del navegador, necesario para que la plataforma funcione. No usamos cookies de publicidad ni de seguimiento."
+      intro={`${BRAND} solo usa almacenamiento técnico del navegador, necesario para que la plataforma funcione. No usamos cookies de publicidad, de analítica ni de seguimiento.`}
     >
       <Section title="Qué guardamos en tu navegador">
         <div className="overflow-x-auto rounded-lg border border-border">
@@ -404,21 +465,24 @@ export function CookiesPage() {
         </p>
       </Section>
 
+      <Section title="Servicios externos que carga el sitio">
+        <p>
+          Las tipografías (Google Fonts) y las imágenes del mapa (OpenStreetMap) se descargan de sus servidores, que
+          reciben tu dirección IP como en cualquier descarga web. No colocan cookies de publicidad en este sitio.
+        </p>
+      </Section>
+
       <Section title="Cómo borrarlos">
         <p>
-          Puedes eliminarlos desde la configuración de tu navegador (borrar datos del sitio). Si lo haces, se cerrará
-          tu sesión y el dispositivo del reloj tendrá que volver a activarse.
+          Puedes eliminarlos desde la configuración de tu navegador (borrar datos del sitio). Si lo haces, se cerrará tu
+          sesión, el equipo del reloj tendrá que volver a activarse y se perderán las checadas que no se hayan enviado.
         </p>
       </Section>
 
       <Section title="Si esto cambia">
         <p>
           Si algún día incorporamos analítica u otras cookies no esenciales, pediremos tu consentimiento antes de
-          activarlas y actualizaremos esta página. Más información en el{' '}
-          <Link to={LEGAL_PATHS.privacidad} className="font-medium text-primary hover:underline">
-            Aviso de privacidad
-          </Link>
-          .
+          activarlas y actualizaremos esta página. Más información en el <PrivacyLink />.
         </p>
       </Section>
     </LegalLayout>

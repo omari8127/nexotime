@@ -234,31 +234,13 @@ export function ClockPage() {
   const [blockedMessage, setBlockedMessage] = useState('')
   const pendingSync = useSyncStore((s) => s.pending)
 
-  // No hay botón visible para salir del reloj checador (lo debe usar cualquier
-  // empleado). Mantener presionado el logo 3 segundos pide el código de salida.
-  // Dos formas, porque en una pantalla táctil "mantener presionado" falla con facilidad: el navegador lo toma
-  // por un gesto propio (menú, arrastre) y cancela el toque. Por eso el botón no deja gestos al navegador
-  // (touch-action: none) y, además, 5 toques seguidos al logo también piden el código.
-  const holdTimer = useRef<number | null>(null)
-  const taps = useRef<number[]>([])
-  const openExitGate = () => {
-    taps.current = []
-    setShowExitGate(true)
-  }
-  const startHold = () => {
-    cancelHold()
-    holdTimer.current = window.setTimeout(openExitGate, 3000)
-  }
-  const cancelHold = () => {
-    if (holdTimer.current !== null) {
-      window.clearTimeout(holdTimer.current)
-      holdTimer.current = null
-    }
-  }
-  const tapLogo = () => {
-    const now = Date.now()
-    taps.current = [...taps.current.filter((t) => now - t < 4000), now]
-    if (taps.current.length >= 5) openExitGate()
+  // Salir del reloj checador: el botón "Salir" (arriba a la derecha) o un toque al logo. En una tablet que
+  // es reloj checador, o con la cuenta dedicada, pide el código de salida al momento (antes había que
+  // mantener presionado el logo 3 segundos). En cualquier otro equipo sale directo: no hay nada que proteger.
+  const needsExitCode = deviceUse === 'kiosk' || dedicatedAccount
+  const requestExit = () => {
+    if (needsExitCode) setShowExitGate(true)
+    else window.location.assign('/bienvenida')
   }
 
   // Falls back to the first branch once real data loads — a brand-new live
@@ -515,20 +497,12 @@ export function ClockPage() {
       <aside className="relative flex flex-col justify-between gap-6 overflow-hidden bg-sidebar px-8 py-6 text-white lg:min-h-dvh lg:gap-8 lg:py-10">
         <button
           type="button"
-          onPointerDown={startHold}
-          onPointerUp={() => {
-            cancelHold()
-            tapLogo()
-          }}
-          // Con el dedo, "salirse" del botón o cancelarse el toque no es soltar: solo el mouse cancela al salir.
-          onPointerLeave={(e) => {
-            if (e.pointerType === 'mouse') cancelHold()
-          }}
+          onClick={requestExit}
           onContextMenu={(e) => e.preventDefault()}
           onDragStart={(e) => e.preventDefault()}
-          style={{ touchAction: 'none', WebkitTouchCallout: 'none', WebkitUserSelect: 'none' }}
+          style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none' }}
           className="w-fit select-none"
-          aria-label="Nexotime"
+          aria-label="Salir del reloj checador"
         >
           <NexotimeLogo tone="light" size="lg" />
         </button>
@@ -579,6 +553,15 @@ export function ClockPage() {
       <section className="flex min-h-[70dvh] flex-col">
         <div className="flex items-center justify-end px-6 pt-5">
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={requestExit}
+            title={needsExitCode ? 'Salir del reloj checador (pide el código de salida)' : 'Salir del reloj checador'}
+            className="flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 shadow-xs transition-colors hover:bg-slate-50 hover:text-slate-900"
+          >
+            <LogOut className="h-4 w-4" />
+            Salir
+          </button>
           <button
             type="button"
             onClick={toggleFullscreen}
@@ -1220,16 +1203,17 @@ export function ClockPage() {
         signsOut={dedicatedAccount}
         onClose={() => setShowExitGate(false)}
         // A full load, not a route change: the tablet's page may be days old, and the panel must come from the current build.
-        // The code was typed correctly: the panel opens for the next 15 minutes.
+        // The code was typed correctly: back to the welcome page ("Sesión iniciada" menu: panel, clock, portal),
+        // with the panel open for the next 15 minutes.
         onSuccess={() => {
           if (dedicatedAccount) {
             void signOutLive()
               .catch(() => undefined)
-              .finally(() => window.location.assign('/login'))
+              .finally(() => window.location.assign('/bienvenida'))
             return
           }
           unlockPanel()
-          window.location.assign('/')
+          window.location.assign('/bienvenida')
         }}
       />
     </div>

@@ -8,9 +8,8 @@ import { cn } from '@/lib/utils'
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'clear', '0', 'back']
 
 /**
- * Hidden behind a long-press on the kiosk logo (there is no visible "exit" button —
- * the reloj checador is meant to stay open for employees). Only someone who knows
- * the code set in Configuración → Reloj checador can get back to the admin panel.
+ * Opened by the kiosk's "Salir" button (or a tap on its logo). The reloj checador is meant to stay open
+ * for employees: only someone who knows the code set in Configuración → Reloj checador can leave it.
  */
 export function KioskExitGate({
   open,
@@ -149,7 +148,7 @@ export function KioskExitGate({
             Cancelar
           </Button>
           <Button className="flex-1" disabled={!value} onClick={() => submitRef.current()}>
-            {signsOut ? 'Cerrar sesión' : 'Entrar'}
+            {signsOut ? 'Cerrar sesión' : 'Salir'}
           </Button>
         </div>
       </DialogContent>
