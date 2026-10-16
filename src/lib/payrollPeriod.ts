@@ -20,6 +20,7 @@ import type {
 } from '@/types'
 import { getRecordFlags, scheduleDayFor, splitOvertimeLFT, weekdayFromISO } from '@/lib/attendance'
 import { findIncidencia } from '@/data/incidencias'
+import { holidayOn } from '@/lib/holidays'
 import { missingDays } from '@/services/reportService'
 
 export interface PeriodRange {
@@ -172,6 +173,8 @@ export function summarizePeriod(input: SummaryInput): { rows: PayrollEmployeeRow
       sickDays: 0,
       paidLeaveDays: 0,
       unpaidLeaveDays: 0,
+      holidaysWorked: 0,
+      holidaysOff: 0,
     }
 
     const overtimeByWeek = new Map<string, number>()
@@ -180,7 +183,10 @@ export function summarizePeriod(input: SummaryInput): { rows: PayrollEmployeeRow
       row.scheduledMinutes += r.scheduledMinutes
       row.overtimeMinutes += r.overtimeMinutes
       if (r.status === 'late') row.lates += 1
-      if (r.punches.some((p) => p.type === 'entry')) row.daysWorked += 1
+      if (r.punches.some((p) => p.type === 'entry')) {
+        row.daysWorked += 1
+        if (holidayOn(r.date, settings.holidays)) row.holidaysWorked = (row.holidaysWorked ?? 0) + 1
+      }
       const flags = getRecordFlags(r, schedule, settings, todayISO)
       if (flags.earlyLeaveMinutes > 0) row.earlyLeaves += 1
       if (flags.missingExit) row.incompleteDays += 1
@@ -202,6 +208,10 @@ export function summarizePeriod(input: SummaryInput): { rows: PayrollEmployeeRow
       const withPunches = new Set(recs.filter((r) => r.punches.length > 0).map((r) => r.date))
       for (let d = range.from < e.hireDate ? e.hireDate : range.from; d <= lastDay; d = addDays(d, 1)) {
         if (withPunches.has(d) || !scheduleDayFor(schedule, weekdayFromISO(d))?.enabled) continue
+        if (holidayOn(d, settings.holidays)) {
+          row.holidaysOff = (row.holidaysOff ?? 0) + 1
+          continue
+        }
         const inc = findIncidencia(incidencias, e.id, d)
         if (!inc) continue
         if (inc.type === 'vacaciones') row.vacationDays += 1
@@ -380,6 +390,8 @@ export const SUMMARY_COLUMNS = [
   { key: 'sickDays', header: 'Días de incapacidad', width: 19 },
   { key: 'paidLeaveDays', header: 'Permiso con goce (días)', width: 22 },
   { key: 'unpaidLeaveDays', header: 'Permiso sin goce (días)', width: 22 },
+  { key: 'holidaysWorked', header: 'Festivos trabajados (pago doble)', width: 30 },
+  { key: 'holidaysOff', header: 'Festivos descansados', width: 20 },
   { key: 'workedHours', header: 'Horas trabajadas', width: 16 },
   { key: 'scheduledHours', header: 'Horas programadas', width: 17 },
   { key: 'ordinaryHours', header: 'Horas ordinarias', width: 16 },
@@ -403,6 +415,8 @@ export function summaryRows(rows: PayrollEmployeeRow[]): Array<Record<string, st
     sickDays: r.sickDays,
     paidLeaveDays: r.paidLeaveDays,
     unpaidLeaveDays: r.unpaidLeaveDays,
+    holidaysWorked: r.holidaysWorked ?? 0,
+    holidaysOff: r.holidaysOff ?? 0,
     workedHours: hoursDecimal(r.workedMinutes),
     scheduledHours: hoursDecimal(r.scheduledMinutes),
     ordinaryHours: hoursDecimal(r.ordinaryMinutes),

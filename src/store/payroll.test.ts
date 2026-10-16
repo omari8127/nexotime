@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { scheduleDayFor, weekdayFromISO } from '@/lib/attendance'
 import { PermissionError, useDataStore } from '@/store/dataStore'
 import type { RoleKey, User } from '@/types'
 
@@ -97,6 +98,32 @@ describe('cierre de periodo en el store', () => {
     // Y puede cerrarse de nuevo.
     await useDataStore.getState().closePayrollPeriod(RANGE, '', admin)
     expect(useDataStore.getState().payrollPeriods).toHaveLength(2)
+  })
+
+  it('cambiar la configuración recalcula los días abiertos pero no toca los de un periodo cerrado', async () => {
+    const admin = as('admin')
+    const st = useDataStore.getState()
+    const emp = st.employees[0]
+    const schedule = st.schedules.find((s) => s.id === emp.scheduleId) ?? st.schedules[0]
+    const workdays = ['2026-07-06', '2026-07-07', '2026-07-08', '2026-07-09', '2026-07-10', '2026-07-20', '2026-07-21'].filter(
+      (d) => scheduleDayFor(schedule, weekdayFromISO(d))?.enabled,
+    )
+    const [inClosed, inOpen] = [workdays[0], workdays[workdays.length - 1]]
+    expect(inClosed < '2026-07-16' && inOpen > '2026-07-16').toBe(true)
+
+    // Una entrada muy tarde: con tolerancia enorme no es retardo.
+    st.updateSettings({ entryToleranceMinutes: 600 }, admin)
+    const times = { entry: '17:00', lunch_out: null, lunch_in: null, exit: '18:00' }
+    for (const date of [inClosed, inOpen]) {
+      expect('error' in useDataStore.getState().editAttendanceDay({ employeeId: emp.id, date, times, reason: 'prueba' })).toBe(false)
+    }
+    const status = (date: string) => useDataStore.getState().attendance.find((r) => r.employeeId === emp.id && r.date === date)?.status
+    expect(status(inClosed)).not.toBe('late')
+
+    await useDataStore.getState().closePayrollPeriod(RANGE, '', admin)
+    useDataStore.getState().updateSettings({ entryToleranceMinutes: 0 }, admin)
+    expect(status(inOpen)).toBe('late') // el día abierto sí se recalcula
+    expect(status(inClosed)).not.toBe('late') // el cerrado queda como se cerró
   })
 
   it('quien no tiene el permiso, o ve solo algunas sucursales, no cierra', async () => {

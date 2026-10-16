@@ -531,6 +531,17 @@ function EmployeeCard({ row }: { row: PayrollEmployeeRow }) {
     ['Horas trabajadas', formatDuration(row.workedMinutes)],
     ['Horas extra', row.overtimeMinutes > 0 ? `${formatDuration(row.overtimeDoubleMinutes)} / ${formatDuration(row.overtimeTripleMinutes)}` : '—'],
     [
+      'Festivos',
+      (row.holidaysWorked ?? 0) + (row.holidaysOff ?? 0) === 0
+        ? '—'
+        : [
+            row.holidaysWorked ? `${row.holidaysWorked} trabajado${row.holidaysWorked === 1 ? '' : 's'} (doble)` : '',
+            row.holidaysOff ? `${row.holidaysOff} descansado${row.holidaysOff === 1 ? '' : 's'}` : '',
+          ]
+            .filter(Boolean)
+            .join(', '),
+    ],
+    [
       'Días justificados',
       justified === 0
         ? '—'

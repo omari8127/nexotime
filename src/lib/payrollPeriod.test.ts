@@ -252,6 +252,47 @@ describe('cuentas del periodo', () => {
   })
 })
 
+describe('días festivos en el cierre', () => {
+  const puente = { ...settings, holidays: { custom: [{ date: '2026-10-07', name: 'Puente' }] } }
+
+  it('un festivo laborable sin checadas no es falta y se cuenta como descansado', () => {
+    const { rows } = summarizePeriod(input({ settings: puente }))
+    expect(rows[0]).toMatchObject({ absences: 4, holidaysOff: 1, holidaysWorked: 0 })
+  })
+
+  it('sin festivo configurado, ese mismo día sí es falta', () => {
+    const { rows } = summarizePeriod(input())
+    expect(rows[0]).toMatchObject({ absences: 5, holidaysOff: 0 })
+  })
+
+  it('quien trabaja el festivo lo cuenta aparte (pago doble) y no cuenta como descansado', () => {
+    const { rows } = summarizePeriod(input({ settings: puente, records: [day('1', '2026-10-07', '09:00', '17:00')] }))
+    expect(rows[0]).toMatchObject({ daysWorked: 1, absences: 4, holidaysWorked: 1, holidaysOff: 0 })
+  })
+
+  it('un festivo de la ley (16 de septiembre de 2026, miércoles) entra solo', () => {
+    const { rows } = summarizePeriod(input({ range: { from: '2026-09-14', to: '2026-09-20' } }))
+    expect(rows[0]).toMatchObject({ absences: 4, holidaysOff: 1 })
+  })
+
+  it('una vacación que cae en festivo no cuenta como día de vacaciones', () => {
+    const vac: Incidencia = {
+      id: 'v', companyId: 'c1', employeeId: '1', type: 'vacaciones', from: '2026-10-05', to: '2026-10-09', status: 'approved', requestedById: '', createdAt: '',
+    }
+    const { rows } = summarizePeriod(input({ settings: puente, incidencias: [vac] }))
+    expect(rows[0]).toMatchObject({ vacationDays: 4, holidaysOff: 1, absences: 0 })
+  })
+
+  it('las columnas del Excel traen los festivos (y 0 en cierres anteriores a esto)', () => {
+    const { rows } = summarizePeriod(input({ settings: puente }))
+    expect(summaryRows(rows)[0]).toMatchObject({ holidaysOff: 1, holidaysWorked: 0 })
+    const old = { ...rows[0] }
+    delete old.holidaysOff
+    delete old.holidaysWorked
+    expect(summaryRows([old])[0]).toMatchObject({ holidaysOff: 0, holidaysWorked: 0 })
+  })
+})
+
 describe('¿se puede cerrar?', () => {
   const base = (over: Partial<ReadinessInput> = {}): ReadinessInput => ({
     range: { from: '2026-10-01', to: '2026-10-15' },

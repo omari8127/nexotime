@@ -81,6 +81,13 @@ Marca cada punto; si alguno falla, no se entrega.
 - [ ] Pedir el correo varias veces seguidas muestra «Espera un minuto», no un error en inglés.
 - [ ] Entrar después con la contraseña vieja falla y con la nueva funciona.
 
+### 3.8 Días festivos
+- [ ] Configuración → Días festivos muestra los de la ley del año con el día de la semana correcto (2026: lunes 2 de febrero, lunes 16 de marzo, miércoles 16 de septiembre, lunes 16 de noviembre).
+- [ ] Apagar un festivo oficial ("Se trabaja") y agregar uno propio (por ejemplo Viernes Santo): quedan guardados al recargar la página y salen en Auditoría.
+- [ ] En un festivo, la Asistencia del día muestra «Festivo» y no «Falta» a quien no ha llegado; el Reporte de faltas no lo incluye.
+- [ ] Una persona que checa en un festivo aparece normal, y en Cierre de periodo su tarjeta dice «1 trabajado (doble)»; quien descansó dice «1 descansado».
+- [ ] El Excel del cierre trae las columnas «Festivos trabajados (pago doble)» y «Festivos descansados».
+
 ## 4. Sin conexión
 - [ ] Apagar el Wi‑Fi: checar a 3 personas. Debe decir que quedó guardado y mostrar "Sin conexión".
 - [ ] Prender el Wi‑Fi: la cola se envía sola ("Sincronizado") y las checadas aparecen en el panel.

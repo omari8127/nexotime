@@ -27,6 +27,7 @@ import {
 } from '@/components/shared/badges'
 import { CorrectionRequestDialog } from '@/components/attendance/CorrectionRequestDialog'
 import { useDataStore } from '@/store/dataStore'
+import { holidayOn } from '@/lib/holidays'
 import { useLiveClock, formatClockTime } from '@/hooks/useLiveClock'
 import { useToday } from '@/hooks/useToday'
 import {
@@ -141,6 +142,7 @@ export function MyAttendancePage() {
     if (excused) return 'incidencia'
     if (record && record.punches.length > 0) return record.status === 'rest' ? 'present' : (record.status as DayKind)
     if (!day?.enabled) return 'rest'
+    if (holidayOn(iso, company.attendanceSettings.holidays)) return 'rest'
     if (iso > today) return 'future'
     if (iso === today) return 'pending'
     return 'absent'

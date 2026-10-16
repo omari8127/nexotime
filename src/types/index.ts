@@ -81,8 +81,24 @@ export interface AttendanceSettings {
   kiosk?: KioskSettings
   /** Portal del empleado: how close to the branch a phone must be to check in (migration 013). */
   portalZone?: PortalZoneSettings
+  /** Días festivos de la empresa (lib/holidays). Sin esto: los de la LFT, todos. */
+  holidays?: HolidaySettings
   /** Portal del empleado: someone without a face registered can register it from their phone (migration 014). On unless false. */
   portalFaceEnroll?: boolean
+}
+
+export interface CompanyHoliday {
+  date: ISODate
+  name: string
+}
+
+export interface HolidaySettings {
+  /** Días de descanso obligatorio de la LFT (Art. 74). Activos salvo que sea false. */
+  official?: boolean
+  /** Fechas oficiales que esta empresa no descansa. */
+  skipped?: ISODate[]
+  /** Días que la empresa agrega (Jueves Santo, un puente, la feria local…). */
+  custom?: CompanyHoliday[]
 }
 
 export interface PortalZoneSettings {
@@ -444,6 +460,10 @@ export interface PayrollEmployeeRow {
   sickDays: number
   paidLeaveDays: number
   unpaidLeaveDays: number
+  /** Holidays the person worked (Art. 75 LFT: paid double on top of the day's wage). Absent in periods closed before this existed. */
+  holidaysWorked?: number
+  /** Scheduled holidays the person did not work (paid rest day). Same note. */
+  holidaysOff?: number
 }
 
 export interface PayrollTotals {

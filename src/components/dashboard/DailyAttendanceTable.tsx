@@ -17,10 +17,12 @@ import {
 } from '@/components/ui/table'
 import { findIncidencia, INCIDENCIA_META } from '@/data/incidencias'
 import { presenceOf, scheduleDayFor, weekdayFromISO } from '@/lib/attendance'
+import { holidayOn } from '@/lib/holidays'
+import { useDataStore } from '@/store/dataStore'
 import { formatTime12, toMinutes } from '@/lib/utils'
 import type { AttendanceRecord, Employee, Incidencia, Schedule } from '@/types'
 
-type RowState = 'present' | 'late' | 'absent' | 'lunch' | 'incidencia' | 'pending' | 'rest' | 'incomplete' | 'overtime'
+type RowState = 'present' | 'late' | 'absent' | 'lunch' | 'incidencia' | 'pending' | 'rest' | 'holiday' | 'incomplete' | 'overtime'
 
 const STATE_META: Record<
   RowState,
@@ -33,6 +35,7 @@ const STATE_META: Record<
   incidencia: { label: 'Incidencia', variant: 'default' },
   pending: { label: 'Por llegar', variant: 'muted' },
   rest: { label: 'Descanso', variant: 'muted' },
+  holiday: { label: 'Festivo', variant: 'muted' },
   incomplete: { label: 'Incompleto', variant: 'default' },
   overtime: { label: 'Hora extra', variant: 'success' },
 }
@@ -70,6 +73,7 @@ export function DailyAttendanceTable({
   const [query, setQuery] = useState('')
   const [department, setDepartment] = useState('all')
   const [state, setState] = useState('all')
+  const holidaySettings = useDataStore((s) => s.company.attendanceSettings.holidays)
 
   const departments = useMemo(
     () => [...new Set(employees.map((e) => e.department).filter(Boolean))].sort(),
@@ -79,6 +83,7 @@ export function DailyAttendanceTable({
   const rows = useMemo(() => {
     const scheduleById = new Map(schedules.map((s) => [s.id, s]))
     const recordByEmp = new Map(attendance.filter((r) => r.date === date).map((r) => [r.employeeId, r]))
+    const holiday = holidayOn(date, holidaySettings)
 
     return employees
       .filter((e) => e.status === 'active')
@@ -95,6 +100,7 @@ export function DailyAttendanceTable({
         else if (presence === 'lunch') s = 'lunch'
         else if (record && punches.length > 0) s = record.status === 'rest' ? 'present' : (record.status as RowState)
         else if (!day?.enabled) s = 'rest'
+        else if (holiday) s = 'holiday'
         else if (toMinutes(day.entry) <= nowMinutes) s = 'absent'
         else s = 'pending'
 
@@ -109,7 +115,7 @@ export function DailyAttendanceTable({
           : true,
       )
       .sort((a, b) => (a.entry ?? '99:99').localeCompare(b.entry ?? '99:99') || a.employee.fullName.localeCompare(b.employee.fullName))
-  }, [employees, attendance, schedules, incidencias, date, nowMinutes, department, state, query])
+  }, [employees, attendance, schedules, incidencias, date, nowMinutes, department, state, query, holidaySettings])
 
   return (
     <Card>

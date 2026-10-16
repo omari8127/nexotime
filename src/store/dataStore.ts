@@ -1491,14 +1491,25 @@ export const useDataStore = create<DataState>((set, get) => {
       const merged = { ...before, ...patch }
       set((s) => ({ company: { ...s.company, attendanceSettings: merged } }))
       persist(get().mode, () => liveUpdateCompany(get().company.id, { attendanceSettings: merged }))
-      // recompute everything
-      let recomputed: AttendanceRecord[] = []
-      set((s) => {
-        recomputed = s.attendance.map((r) =>
-          recomputeRecord(r, scheduleOf(s.schedules, r.scheduleId), merged, getToday(s.mode)),
-        )
-        return { attendance: recomputed }
-      })
+      // Recompute the days; only the ones whose numbers really changed are rewritten (a switch like the
+      // portal's must not re-save thousands of rows), and a closed period is never touched.
+      const recomputed: AttendanceRecord[] = []
+      set((s) => ({
+        attendance: s.attendance.map((r) => {
+          if (closedPeriodOn(s.payrollPeriods, r.date)) return r
+          const next = recomputeRecord(r, scheduleOf(s.schedules, r.scheduleId), merged, getToday(s.mode))
+          const same =
+            next.status === r.status &&
+            next.workedMinutes === r.workedMinutes &&
+            next.scheduledMinutes === r.scheduledMinutes &&
+            next.lateMinutes === r.lateMinutes &&
+            next.overtimeMinutes === r.overtimeMinutes &&
+            next.missingMinutes === r.missingMinutes
+          if (same) return r
+          recomputed.push(next)
+          return next
+        }),
+      }))
       if (get().mode === 'live' && recomputed.length) {
         persist('live', () => Promise.all(recomputed.map((r) => liveUpsertAttendance(r))))
       }
@@ -1506,7 +1517,9 @@ export const useDataStore = create<DataState>((set, get) => {
         const out: Record<string, string> = {}
         for (const [k, v] of Object.entries((o ?? {}) as Record<string, unknown>)) {
           if (v && typeof v === 'object') {
-            for (const [k2, v2] of Object.entries(v as Record<string, unknown>)) out[`${k}.${k2}`] = String(v2)
+            for (const [k2, v2] of Object.entries(v as Record<string, unknown>)) {
+              out[`${k}.${k2}`] = v2 && typeof v2 === 'object' ? JSON.stringify(v2) : String(v2)
+            }
           } else out[k] = String(v)
         }
         return out

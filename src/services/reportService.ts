@@ -15,6 +15,7 @@ import {
 } from '@/lib/attendance'
 import { INCIDENCIA_META, INCIDENCIA_STATUS_META, findIncidencia } from '@/data/incidencias'
 import { formatDuration, formatTime12, toMinutes } from '@/lib/utils'
+import { holidayOn } from '@/lib/holidays'
 import { weekDates } from '@/lib/week'
 import type { SheetColumn } from '@/services/exportService'
 
@@ -84,7 +85,7 @@ function addDays(iso: string, delta: number): string {
 
 /**
  * Scheduled working days in [from, to] (up to yesterday) on which the employee
- * has no punches and no approved justifying incidencia: those are faltas.
+ * has no punches, is not a holiday and has no approved justifying incidencia: those are faltas.
  * Computed from the schedule, so days with no record at all count too.
  */
 export function missingDays(
@@ -102,6 +103,7 @@ export function missingDays(
     if (d < emp.hireDate) continue
     if (!scheduleDayFor(schedule, weekdayFromISO(d))?.enabled) continue
     if (withPunches.has(d)) continue
+    if (holidayOn(d, ctx.settings?.holidays)) continue
     if (ctx.incidencias && findIncidencia(ctx.incidencias, emp.id, d)) continue
     out.push(d)
   }

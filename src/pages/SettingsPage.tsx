@@ -15,6 +15,7 @@ import { WeeklyHoursPicker } from '@/components/shared/WeeklyHoursPicker'
 import { MX_TIMEZONES } from '@/data/timezones'
 import { KioskSettingsPanel } from '@/components/settings/KioskSettingsPanel'
 import { EmployeePortalPanel } from '@/components/settings/EmployeePortalPanel'
+import { HolidaysPanel } from '@/components/settings/HolidaysPanel'
 import { GoogleDriveIntegrationPanel } from '@/components/settings/GoogleDriveIntegrationPanel'
 import { useDataStore } from '@/store/dataStore'
 import { usePermissions } from '@/hooks/useScopedData'
@@ -83,6 +84,7 @@ export function SettingsPage() {
           <TabsTrigger value="empresa">Empresa</TabsTrigger>
           <TabsTrigger value="jornada">Jornada laboral</TabsTrigger>
           <TabsTrigger value="asistencia">Asistencia</TabsTrigger>
+          <TabsTrigger value="festivos">Días festivos</TabsTrigger>
           <TabsTrigger value="reloj">Reloj checador</TabsTrigger>
           <TabsTrigger value="portal">Portal de empleados</TabsTrigger>
           <TabsTrigger value="cumplimiento">Cumplimiento LFT</TabsTrigger>
@@ -211,6 +213,10 @@ export function SettingsPage() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="festivos">
+          <HolidaysPanel />
         </TabsContent>
 
         <TabsContent value="reloj">
