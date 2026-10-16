@@ -21,6 +21,7 @@ import { LEGAL_PATHS } from '@/data/legal'
 import { WelcomePage } from '@/pages/WelcomePage'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { SignupPage } from '@/pages/auth/SignupPage'
+import { RecoverPasswordPage, ResetPasswordPage } from '@/pages/auth/RecoverPasswordPage'
 
 /** `lazy` for a module that exports the page under a name instead of as default. If a new
  *  deploy removed the file this open tab still asks for, reload once to pick up the new
@@ -94,6 +95,8 @@ export function App() {
           <Route path="/bienvenida" element={<WelcomePage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
+          <Route path="/recuperar" element={<RecoverPasswordPage />} />
+          <Route path="/nueva-contrasena" element={<ResetPasswordPage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
           <Route path="/activar" element={<ActivationPage />} />
           <Route path="/empleado" element={<EmployeePortalPage />} />

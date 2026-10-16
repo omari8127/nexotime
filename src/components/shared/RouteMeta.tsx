@@ -24,6 +24,8 @@ const PUBLIC: Record<string, Meta> = {
     index: true,
   },
   '/login': { title: `Portal de administración · ${SITE_NAME}` },
+  '/recuperar': { title: `Recuperar contraseña · ${SITE_NAME}` },
+  '/nueva-contrasena': { title: `Nueva contraseña · ${SITE_NAME}` },
   '/activar': {
     title: `Activar este equipo · ${SITE_NAME}`,
     description: 'Activa NEXOTIME en este equipo: como reloj checador para todos los empleados o como portal de un empleado.',

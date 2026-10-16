@@ -74,6 +74,13 @@ Marca cada punto; si alguno falla, no se entrega.
 - [ ] RH no ve el botón "Reabrir"; el administrador sí, y exige motivo. Al reabrir se puede editar y volver a cerrar; el historial conserva ambos cierres.
 - [ ] Sin Internet, "Cerrar periodo" dice que hace falta conexión.
 
+### 3.7 Recuperar contraseña
+- [ ] En el login, «¿Olvidaste tu contraseña?» lleva a la pantalla de recuperar; con el correo de una cuenta de prueba llega el correo (revisa spam) y dice lo mismo con un correo que no existe.
+- [ ] El enlace del correo abre «Elige tu nueva contraseña»; con menos de 8 caracteres o contraseñas distintas lo dice; con una buena entra a la bienvenida con la sesión iniciada.
+- [ ] Usar el mismo enlace otra vez, o uno viejo, muestra «El enlace venció» con el botón para pedir otro.
+- [ ] Pedir el correo varias veces seguidas muestra «Espera un minuto», no un error en inglés.
+- [ ] Entrar después con la contraseña vieja falla y con la nueva funciona.
+
 ## 4. Sin conexión
 - [ ] Apagar el Wi‑Fi: checar a 3 personas. Debe decir que quedó guardado y mostrar "Sin conexión".
 - [ ] Prender el Wi‑Fi: la cola se envía sola ("Sincronizado") y las checadas aparecen en el panel.

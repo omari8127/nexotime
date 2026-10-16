@@ -6,7 +6,7 @@ import { LEGAL_PATHS } from '@/data/legal'
 
 const KEY = 'nexotime.cookies'
 /** Public pages only: never over the reloj checador or the panel. */
-const PUBLIC_PATHS = ['/bienvenida', '/login', '/signup', ...Object.values(LEGAL_PATHS)]
+const PUBLIC_PATHS = ['/bienvenida', '/login', '/signup', '/recuperar', '/nueva-contrasena',...Object.values(LEGAL_PATHS)]
 
 function seen(): boolean {
   try {

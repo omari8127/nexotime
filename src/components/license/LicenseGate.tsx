@@ -203,7 +203,7 @@ export function LicenseGate({ children }: { children: ReactNode }) {
   }, [init])
 
   if (!LICENSE_ENFORCED) return <>{children}</>
-  const demoOnly = mode === 'demo' && onboardingCompleted && !['/login', '/signup', '/onboarding'].includes(pathname)
+  const demoOnly = mode === 'demo' && onboardingCompleted && !['/login', '/signup', '/onboarding', '/recuperar', '/nueva-contrasena'].includes(pathname)
   if (demoOnly || phase === 'ready') {
     return (
       <>

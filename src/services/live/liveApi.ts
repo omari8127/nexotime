@@ -132,6 +132,21 @@ export async function signIn(email: string, password: string): Promise<LiveBundl
   return cacheBundle(await fetchLiveBundle(profileRow.company_id as string))
 }
 
+/** Sends the "choose a new password" email. Supabase answers the same whether or not the address has an
+ *  account, so nobody can use this form to find out who is registered. */
+export async function requestPasswordReset(email: string) {
+  const { error } = await client().auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/nueva-contrasena`,
+  })
+  if (error) throw new Error(error.message)
+}
+
+/** Sets a new password for whoever holds the current session (the one the recovery link opened). */
+export async function updateOwnPassword(password: string) {
+  const { error } = await client().auth.updateUser({ password })
+  if (error) throw new Error(error.message)
+}
+
 /** Returns null only when there is no stored session. A failed profile fetch
  *  (e.g. no internet) throws, so the caller can fall back to the offline cache
  *  instead of treating a tablet with a dropped connection as logged out. */
