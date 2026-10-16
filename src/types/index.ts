@@ -219,6 +219,10 @@ export interface EmployeeIdentification {
   enrolledAt?: ISODateTime
   /** The employee registered it themselves from the portal (migration 014); an administrator re-registering it clears it. */
   selfEnrolled?: boolean
+  /** When the express consent for this face was given (the consent box was ticked). Sensitive data: it must be provable. */
+  consentAt?: ISODateTime
+  /** Who confirmed it: the administrator (with the employee's written consent) or the employee from their phone. */
+  consentBy?: 'admin' | 'employee'
 }
 
 export interface Employee {

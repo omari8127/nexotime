@@ -43,6 +43,8 @@ export interface PortalState {
 export class PortalSessionError extends Error {}
 /** The phone's picture of the day is out of date (or its clock is off): reload and try again. */
 export class PortalStaleError extends Error {}
+/** The database does not have that function (or not with those arguments): a migration is missing. */
+class PortalMissingFunctionError extends Error {}
 
 export interface PortalApi {
   /** True when running on the in-memory demo company. */
@@ -54,7 +56,7 @@ export interface PortalApi {
   cancelVacation(token: string, id: string): Promise<void>
   logout(token: string): Promise<void>
   /** Registers the employee's own face, only when they have none yet (migration 014). */
-  enrollFace(token: string, descriptors: number[][]): Promise<void>
+  enrollFace(token: string, descriptors: number[][], consentAt?: string): Promise<void>
 }
 
 /* ----------------------------------------------------------------------------
@@ -88,7 +90,7 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
   if (error.code === 'NX401') throw new PortalSessionError(error.message)
   if (error.code === 'NX409') throw new PortalStaleError(error.message)
   if (error.code === 'PGRST202' || error.code === '42883') {
-    throw new Error('El portal de empleados todavía no está activado en este sistema. Avisa a tu empresa.')
+    throw new PortalMissingFunctionError('El portal de empleados todavía no está activado en este sistema. Avisa a tu empresa.')
   }
   if (/failed to fetch|networkerror|load failed|fetch failed/i.test(error.message)) {
     throw new Error('Sin conexión. Revisa tu Internet e inténtalo de nuevo.')
@@ -153,8 +155,14 @@ const live: PortalApi = {
     await rpc('employee_portal_logout', { p_token: token }).catch(() => undefined)
   },
 
-  async enrollFace(token, descriptors) {
-    await rpc('employee_portal_enroll_face', { p_token: token, p_descriptors: descriptors })
+  async enrollFace(token, descriptors, consentAt) {
+    try {
+      await rpc('employee_portal_enroll_face', { p_token: token, p_descriptors: descriptors, p_consent_at: consentAt ?? null })
+    } catch (e) {
+      // A database without migration 015 has the function without the date: same registration, server time.
+      if (!(e instanceof PortalMissingFunctionError)) throw e
+      await rpc('employee_portal_enroll_face', { p_token: token, p_descriptors: descriptors })
+    }
   },
 }
 
@@ -279,7 +287,7 @@ const demo: PortalApi = {
     /* nothing to forget on a server */
   },
 
-  async enrollFace(token, descriptors) {
+  async enrollFace(token, descriptors, consentAt) {
     // Same rules as the database: only someone with no face yet, and only if the company allows it.
     const employee = demoEmployee(token)
     const s = useDataStore.getState()
@@ -290,11 +298,16 @@ const demo: PortalApi = {
     if (current?.identifications.some((i) => i.method === 'face' && i.descriptors?.some((d) => d.length === 1024))) {
       throw new Error('Ya tienes un rostro registrado. Para cambiarlo, pide a tu administrador que lo actualice.')
     }
-    s.enrollFace(employee.id, descriptors, s.currentUser)
+    s.enrollFace(employee.id, descriptors, s.currentUser, consentAt)
     useDataStore.setState((st) => ({
       employees: st.employees.map((e) =>
         e.id === employee.id
-          ? { ...e, identifications: e.identifications.map((i) => (i.method === 'face' ? { ...i, selfEnrolled: true } : i)) }
+          ? {
+              ...e,
+              identifications: e.identifications.map((i) =>
+                i.method === 'face' ? { ...i, selfEnrolled: true, consentBy: 'employee' as const } : i,
+              ),
+            }
           : e,
       ),
     }))

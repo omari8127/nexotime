@@ -331,11 +331,21 @@ export function EmployeesPage() {
                         outdated={faceNeedsReenroll(e)}
                         onClick={canEnrollFaces && e.status === 'active' ? () => setFaceId(e.id) : undefined}
                       />
-                      {e.identifications.some((i) => i.method === 'face' && i.selfEnrolled && i.descriptors?.length) ? (
-                        <span className="mt-1 block text-[11px] text-muted-foreground" title="Lo registró el empleado desde su celular">
-                          Desde su celular
-                        </span>
-                      ) : null}
+                      {(() => {
+                        const face = e.identifications.find((i) => i.method === 'face' && i.descriptors?.length)
+                        if (!face?.selfEnrolled) return null
+                        const when = face.consentAt
+                          ? new Date(face.consentAt).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' })
+                          : null
+                        return (
+                          <span
+                            className="mt-1 block text-[11px] text-muted-foreground"
+                            title={`Lo registró el empleado desde su celular${when ? `; aceptó el consentimiento el ${when}` : ''}`}
+                          >
+                            Desde su celular
+                          </span>
+                        )
+                      })()}
                     </TableCell>
                     <TableCell>
                       <EmployeeStatusBadge status={e.status} />

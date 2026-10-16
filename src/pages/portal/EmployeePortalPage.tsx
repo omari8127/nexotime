@@ -302,8 +302,8 @@ export function EmployeePortalPage() {
           employee={employee}
           selfService={{
             settings: company.attendanceSettings,
-            save: async (descriptors) => {
-              await portalApi.enrollFace(token, descriptors)
+            save: async (descriptors, consentAt) => {
+              await portalApi.enrollFace(token, descriptors, consentAt)
               await load() // their face is now in their state: the next check-in verifies it
             },
           }}

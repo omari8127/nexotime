@@ -114,7 +114,7 @@ export function FaceEnrollDialog({
    * sent with `save` — the database checks it is really theirs and not someone else's face — instead of
    * going through the panel's store, and the company's settings come from the portal.
    */
-  selfService?: { settings: AttendanceSettings; save: (descriptors: number[][]) => Promise<void> }
+  selfService?: { settings: AttendanceSettings; save: (descriptors: number[][], consentAt: string) => Promise<void> }
 }) {
   const currentUser = useDataStore((s) => s.currentUser)
   const allEmployees = useDataStore((s) => s.employees)
@@ -132,6 +132,8 @@ export function FaceEnrollDialog({
 
   const [stage, setStage] = useState<Stage>(testOnly ? 'test' : 'intro')
   const [consent, setConsent] = useState(false)
+  /** When the consent box was ticked: saved with the face as proof of the express consent. */
+  const consentAt = useRef<string | null>(null)
   const [count, setCount] = useState(0)
   const [hold, setHold] = useState(0)
   const [flashKey, setFlashKey] = useState(0)
@@ -168,6 +170,7 @@ export function FaceEnrollDialog({
     if (!open) {
       setStage(testOnly ? 'test' : 'intro')
       setConsent(false)
+      consentAt.current = null
       setCount(0)
       setHold(0)
       setHint('')
@@ -477,7 +480,7 @@ export function FaceEnrollDialog({
                 if (!testOnly && self) {
                   // Recognised: now the database decides (only their own, only if they have no face yet).
                   setHint('Guardando tu rostro…')
-                  self.save(descriptors).then(
+                  self.save(descriptors, consentAt.current ?? new Date().toISOString()).then(
                     () => {
                       if (!alive) return
                       setTestResult({ ok: true })
@@ -491,7 +494,7 @@ export function FaceEnrollDialog({
                   )
                   return
                 }
-                if (!testOnly) enroll(employee.id, descriptors, currentUser)
+                if (!testOnly) enroll(employee.id, descriptors, currentUser, consentAt.current ?? undefined)
                 setTestResult({ ok: true })
                 setHint('')
                 return
@@ -609,7 +612,14 @@ export function FaceEnrollDialog({
                     : 'Descargando el reconocimiento facial (la primera vez tarda más)…'}
             </p>
             <label className="flex items-start gap-2.5 text-sm">
-              <Checkbox checked={consent} onCheckedChange={setConsent} className="mt-0.5" />
+              <Checkbox
+                checked={consent}
+                onCheckedChange={(value) => {
+                  setConsent(value)
+                  consentAt.current = value ? new Date().toISOString() : null
+                }}
+                className="mt-0.5"
+              />
               <span>
                 {selfService
                   ? 'Doy mi consentimiento para que mi empresa registre mi rostro con fines de control de asistencia.'

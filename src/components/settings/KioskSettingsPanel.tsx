@@ -67,7 +67,15 @@ const faceState = (e: Employee) => {
   const face = e.identifications.find((i) => i.method === 'face')
   // Only samples of the current engine count; older ones need a new registration.
   const { usable: n, outdated } = faceSampleState(e)
-  return { enrolled: n > 0, enabled: !!face?.enabled && n > 0, samples: n, enrolledAt: n > 0 ? face?.enrolledAt : undefined, outdated }
+  return {
+    enrolled: n > 0,
+    enabled: !!face?.enabled && n > 0,
+    samples: n,
+    enrolledAt: n > 0 ? face?.enrolledAt : undefined,
+    consentAt: n > 0 ? face?.consentAt : undefined,
+    consentBy: face?.consentBy,
+    outdated,
+  }
 }
 
 /** Kiosk behaviour + the roll-out of face enrollment across the team. */
@@ -404,6 +412,13 @@ export function KioskSettingsPanel() {
                         {e.employeeNumber} · {e.department}
                         {st.enrolledAt ? ` · Registrado el ${fmt(st.enrolledAt)}` : ''}
                       </p>
+                      {st.enrolled ? (
+                        <p className="truncate text-xs text-muted-foreground">
+                          {st.consentAt
+                            ? `Consentimiento: ${fmt(st.consentAt)} · ${st.consentBy === 'employee' ? 'lo aceptó el empleado en su celular' : 'confirmado por un administrador'}`
+                            : 'Consentimiento: sin fecha registrada (registro anterior)'}
+                        </p>
+                      ) : null}
                     </div>
                     {st.enrolled ? (
                       <Badge variant={st.enabled ? 'success' : 'muted'}>{st.enabled ? 'Registrado' : 'Desactivado'}</Badge>

@@ -200,7 +200,8 @@ interface DataState {
   /** New QR + barcode values (lost badge). The previous codes stop working immediately. */
   regenerateCredentials: (id: string, actor: User) => void
   /** Saves the face samples captured at enrollment (descriptors only, no photos). */
-  enrollFace: (id: string, descriptors: number[][], actor: User) => void
+  /** `consentAt`: when the consent box was ticked (now when not given). */
+  enrollFace: (id: string, descriptors: number[][], actor: User, consentAt?: string) => void
   removeFace: (id: string, actor: User) => void
 
   addBranch: (branch: Omit<Branch, 'id' | 'companyId'>, actor: User) => Branch
@@ -597,7 +598,7 @@ export const useDataStore = create<DataState>((set, get) => {
       )
     },
 
-    enrollFace: (id, descriptors, actor) => {
+    enrollFace: (id, descriptors, actor, consentAt) => {
       requirePermission('biometrics.manage')
       const emp = get().employees.find((e) => e.id === id)
       if (!emp || descriptors.length === 0) return
@@ -610,6 +611,9 @@ export const useDataStore = create<DataState>((set, get) => {
           // 4 decimals is plenty for matching and keeps each employee row small.
           descriptors: descriptors.map((d) => d.map((v) => Math.round(v * 10000) / 10000)),
           enrolledAt: nowISO(),
+          // Proof of the express consent (sensitive data): when it was confirmed, and by whom.
+          consentAt: consentAt ?? nowISO(),
+          consentBy: 'admin' as const,
         },
       ]
       set((s) => ({ employees: s.employees.map((e) => (e.id === id ? { ...e, identifications } : e)) }))
@@ -626,6 +630,11 @@ export const useDataStore = create<DataState>((set, get) => {
               field: 'Reconocimiento facial',
               before: had ? 'Rostro registrado' : 'Sin rostro',
               after: `Rostro ${had ? 'actualizado' : 'registrado'} (${descriptors.length} muestras)`,
+            },
+            {
+              field: 'Consentimiento del empleado',
+              before: '—',
+              after: `Confirmado por ${actor.name} el ${new Date(consentAt ?? Date.now()).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' })}`,
             },
           ],
         },
