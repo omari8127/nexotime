@@ -6,6 +6,7 @@ import { AuthShell } from '@/pages/auth/AuthShell'
 import { Button } from '@/components/ui/button'
 import { Input, Label } from '@/components/ui/input'
 import { isSupabaseConfigured } from '@/lib/supabaseClient'
+import { setDeviceUse } from '@/lib/deviceUse'
 import { demoPortalAccess, portalApi } from '@/services/portal/portalApi'
 import { readRememberedAccess, rememberAccess, savePortalToken } from '@/services/portal/portalSession'
 import { useAuthStore } from '@/store/authStore'
@@ -221,7 +222,8 @@ export function ActivationPage() {
           >
             <ul className="space-y-2 text-sm text-slate-700">
               {[
-                'Se activa con la cuenta de administración de tu empresa.',
+                'Se activa con la cuenta «Reloj checador (tablet)» de tu empresa: solo puede registrar checadas.',
+                'El panel de administración no se abre desde aquí sin el código de salida.',
                 'Los empleados checan con rostro, QR, código de barras o número + PIN.',
                 'Sigue funcionando si se va el Internet y envía las checadas al volver.',
               ].map((line) => (
@@ -234,9 +236,17 @@ export function ActivationPage() {
             <Button
               size="lg"
               className="w-full"
-              onClick={() => navigate(signedIn || !isSupabaseConfigured ? '/clock' : '/login?next=/clock')}
+              onClick={() => {
+                // Chose "activate this device as the clock": it becomes one, with no further question.
+                if (signedIn && isSupabaseConfigured) setDeviceUse('kiosk')
+                navigate(signedIn || !isSupabaseConfigured ? '/clock' : '/login?next=/clock')
+              }}
             >
-              {signedIn ? 'Abrir el reloj checador' : isSupabaseConfigured ? 'Entrar con la cuenta de la empresa' : 'Abrir el reloj de demostración'}
+              {signedIn
+                ? 'Activar este equipo como reloj'
+                : isSupabaseConfigured
+                  ? 'Entrar con la cuenta del reloj'
+                  : 'Abrir el reloj de demostración'}
               <ArrowRight className="h-4 w-4" />
             </Button>
             {!signedIn && isSupabaseConfigured ? (

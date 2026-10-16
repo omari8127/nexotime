@@ -31,7 +31,7 @@ import { ScanFlow } from '@/components/clock/ScanFlow'
 import { FaceVerifyFlow } from '@/components/clock/FaceVerifyFlow'
 import { LightStage } from '@/components/clock/LightStage'
 import { LiveTime } from '@/components/clock/LiveTime'
-import { KioskSetupPrompt } from '@/components/clock/KioskSetupPrompt'
+import { ExitCodeSetup } from '@/components/clock/ExitCodeSetup'
 import { useDeviceUse } from '@/hooks/useDeviceUse'
 import { lockPanel, unlockPanel } from '@/lib/deviceUse'
 import { signOutLive } from '@/services/live/liveApi'
@@ -220,8 +220,9 @@ export function ClockPage() {
   const [notices, setNotices] = useState<Array<{ title: string; detail: string }>>([])
   const [showExitGate, setShowExitGate] = useState(false)
   // This device may be the company's clock: then the panel is locked behind the exit code (see deviceUse).
-  const [deviceUse, setDeviceUse] = useDeviceUse()
-  const [setupLater, setSetupLater] = useState(false)
+  const [deviceUse] = useDeviceUse()
+  const updateSettings = useDataStore((s) => s.updateSettings)
+  const currentUser = useDataStore((s) => s.currentUser)
   const currentUserRole = useDataStore((s) => s.currentUser.role)
   // The company's dedicated clock account has no panel to unlock: the device is a kiosk by definition and
   // the exit code signs it out, so an administrator can sign in with their own account.
@@ -1187,14 +1188,19 @@ export function ClockPage() {
       <p className="pb-4 text-center text-xs text-slate-400">Nexotime · Control de asistencia · {copyrightLine()}</p>
       </section>
 
-      <KioskSetupPrompt
+      {/* A device turned into the clock (see LoginPage / ActivationPage) must not keep the factory exit code:
+          whoever set it up chooses theirs before the clock opens for the staff. Nobody is asked what the device is. */}
+      <ExitCodeSetup
         open={
-          mode === 'live' && deviceUse === null && !setupLater && !dedicatedAccount && roleCan(currentUserRole, 'settings.manage')
+          mode === 'live' &&
+          deviceUse === 'kiosk' &&
+          !dedicatedAccount &&
+          roleCan(currentUserRole, 'settings.manage') &&
+          kiosk.exitPin === KIOSK_DEFAULTS.exitPin
         }
-        usingDefaultCode={kiosk.exitPin === KIOSK_DEFAULTS.exitPin}
-        onKiosk={() => setDeviceUse('kiosk')}
-        onPanel={() => setDeviceUse('panel')}
-        onLater={() => setSetupLater(true)}
+        onSave={(exitPin) =>
+          updateSettings({ kiosk: { ...(company.attendanceSettings.kiosk ?? {}), exitPin } }, currentUser)
+        }
       />
 
       <KioskExitGate

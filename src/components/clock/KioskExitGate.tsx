@@ -4,6 +4,7 @@ import { Delete, LockKeyhole, TriangleAlert } from 'lucide-react'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { FRESH, afterFailure, loadExitLock, lockRemaining, saveExitLock, waitText } from '@/lib/exitLock'
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'clear', '0', 'back']
 
@@ -28,6 +29,16 @@ export function KioskExitGate({
   const [value, setValue] = useState('')
   const [error, setError] = useState(false)
   const [errorTick, setErrorTick] = useState(0)
+  // Five wrong codes in a row lock the keypad, longer each time (see lib/exitLock).
+  const [lock, setLock] = useState(loadExitLock)
+  const [now, setNow] = useState(() => Date.now())
+  const remaining = lockRemaining(lock, now)
+  useEffect(() => {
+    if (!open) return
+    setLock(loadExitLock())
+    const id = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(id)
+  }, [open])
 
   useEffect(() => {
     if (open) {
@@ -37,6 +48,7 @@ export function KioskExitGate({
   }, [open])
 
   const press = (key: string) => {
+    if (lockRemaining(loadExitLock()) > 0) return
     setError(false)
     if (key === 'clear') return setValue('')
     if (key === 'back') return setValue((v) => v.slice(0, -1))
@@ -45,10 +57,16 @@ export function KioskExitGate({
 
   const submitRef = useRef<() => void>(() => {})
   submitRef.current = () => {
-    if (!value) return
+    if (!value || lockRemaining(loadExitLock()) > 0) return
     if (value === expectedPin) {
+      saveExitLock(FRESH)
+      setLock(FRESH)
       onSuccess()
     } else {
+      const next = afterFailure(loadExitLock())
+      saveExitLock(next)
+      setLock(next)
+      setNow(Date.now())
       setError(true)
       setErrorTick((t) => t + 1)
       setValue('')
@@ -119,7 +137,13 @@ export function KioskExitGate({
           </motion.div>
         ) : null}
 
-        <div className="mx-auto mt-4 grid max-w-[15rem] grid-cols-3 gap-2">
+        {remaining > 0 ? (
+          <p role="alert" className="mx-auto mt-2.5 max-w-[15rem] rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium leading-snug text-amber-900 ring-1 ring-amber-200">
+            Demasiados intentos. Espera {waitText(remaining)} para volver a probar.
+          </p>
+        ) : null}
+
+        <div className={cn('mx-auto mt-4 grid max-w-[15rem] grid-cols-3 gap-2', remaining > 0 && 'pointer-events-none opacity-40')}>
           {KEYS.map((key) => (
             <button
               key={key}
@@ -147,7 +171,7 @@ export function KioskExitGate({
           <Button variant="secondary" className="flex-1" onClick={onClose}>
             Cancelar
           </Button>
-          <Button className="flex-1" disabled={!value} onClick={() => submitRef.current()}>
+          <Button className="flex-1" disabled={!value || remaining > 0} onClick={() => submitRef.current()}>
             {signsOut ? 'Cerrar sesión' : 'Salir'}
           </Button>
         </div>

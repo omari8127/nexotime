@@ -5,6 +5,7 @@ import { AuthShell } from '@/pages/auth/AuthShell'
 import { Button } from '@/components/ui/button'
 import { Input, Label } from '@/components/ui/input'
 import { isSupabaseConfigured } from '@/lib/supabaseClient'
+import { setDeviceUse } from '@/lib/deviceUse'
 import { signIn } from '@/services/live/liveApi'
 import { useDataStore } from '@/store/dataStore'
 import { useAuthStore } from '@/store/authStore'
@@ -40,6 +41,8 @@ export function LoginPage() {
       hydrateLive(bundle)
       setAuthStatus('authenticated')
       toast.success('Bienvenido de nuevo', bundle.company.name)
+      // Came in through the "Reloj checador" door: this device is now the company's clock, no questions.
+      if (next === '/clock') setDeviceUse('kiosk')
       navigate(next)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo iniciar sesión.')
@@ -53,7 +56,7 @@ export function LoginPage() {
       title={next === '/clock' ? 'Activar el reloj checador' : 'Portal de administración'}
       description={
         next === '/clock'
-          ? 'Entra con la cuenta de tu empresa: este equipo quedará como reloj checador para todos los empleados.'
+          ? 'Entra con la cuenta del reloj (o la de administración) de tu empresa. Este equipo quedará como reloj checador: el panel solo se abrirá con el código de salida.'
           : 'Entra al panel de tu empresa en NEXOTIME.'
       }
       footer={

@@ -41,6 +41,13 @@ Marca cada punto; si alguno falla, no se entrega.
 - [ ] En un cuarto con poca luz: pantalla blanca al máximo de brillo, la persona a ~40 cm. Debe leerla; si dice "poca luz", acercarse a la pantalla.
 - [ ] La cámara del reloj (rostro, QR y verificación) no se entrecorta ni se congela cada segundo en la tablet real. Si pasa, anotar el modelo de la tablet.
 
+### 3.5 Entrada al reloj (nadie elige nada)
+- [ ] Welcome → «Reloj checador» → «Entrar con la cuenta del reloj» → entrar con una cuenta de administración: el equipo queda como reloj sin preguntar nada, y **antes de abrir** pide elegir un código de salida propio (rechaza 1234, 0000 y secuencias).
+- [ ] En ese equipo, escribir `/empleados` o `/` en la dirección regresa al reloj. No hay ninguna pantalla que permita "desactivar" el bloqueo sin el código.
+- [ ] 5 códigos de salida equivocados seguidos bloquean el teclado 1 minuto (luego 2, 4… hasta 15). Recargar la página no lo quita.
+- [ ] Con el código correcto el panel abre 15 minutos y se vuelve a cerrar solo; «Reloj checador» del menú lo vuelve a bloquear.
+- [ ] En Configuración → Reloj checador → «Este equipo» solo existe «Quitar el modo reloj» (no hay forma de activarlo desde ahí).
+
 ### 3.4 Cuenta dedicada del reloj
 - [ ] Usuarios → Nuevo usuario con rol «Reloj checador (tablet)» (correo propio, sucursal asignada). Entrar con ella en la tablet: abre directo en el reloj y registra checadas con rostro, QR y número + PIN.
 - [ ] Con esa cuenta, abrir `/`, `/empleados` o `/configuracion` en la tablet regresa al reloj.

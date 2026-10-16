@@ -316,19 +316,26 @@ export function KioskSettingsPanel() {
 
           <div className="flex items-start justify-between gap-4 border-t border-border pt-5">
             <div>
-              <Label>Este equipo es el reloj checador</Label>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Solo afecta a <strong>este</strong> navegador. Al activarlo, al abrir la app aquí siempre se llega
-                al reloj, y el panel solo se abre con el código de salida y se vuelve a cerrar tras{' '}
-                {PANEL_UNLOCK_MS / 60_000} minutos sin tocarlo. Actívalo en la tablet que usa el personal; no en tu
-                computadora.
-              </p>
+              <Label>Este equipo</Label>
+              {deviceUse === 'kiosk' ? (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Está activado como <strong>reloj checador</strong>: al abrir la app aquí se llega al reloj, y el panel
+                  solo se abre con el código de salida y se vuelve a cerrar tras {PANEL_UNLOCK_MS / 60_000} minutos sin
+                  tocarlo.
+                </p>
+              ) : (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Es un equipo normal. Para convertir una tablet en el reloj de la empresa, ábrela en NEXOTIME →
+                  «Reloj checador» → «Activar este equipo» y entra con la cuenta del reloj (Usuarios → rol «Reloj
+                  checador (tablet)»).
+                </p>
+              )}
             </div>
-            <Switch
-              checked={deviceUse === 'kiosk'}
-              onCheckedChange={(on) => setDeviceUse(on ? 'kiosk' : 'panel')}
-              aria-label="Este equipo es el reloj checador"
-            />
+            {deviceUse === 'kiosk' ? (
+              <Button variant="secondary" size="sm" onClick={() => setDeviceUse(null)}>
+                Quitar el modo reloj
+              </Button>
+            ) : null}
           </div>
 
           <div className="border-t border-border pt-5">
