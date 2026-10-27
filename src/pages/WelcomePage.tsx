@@ -32,7 +32,7 @@ import {
 } from '@/components/welcome/ProductIllustrations'
 import { useLiveClock } from '@/hooks/useLiveClock'
 import { LEGAL_ENTITY, copyrightLine } from '@/data/legal'
-import { PAYMENT_STEPS, PLANS, TRIAL_DAYS } from '@/data/pricing'
+import { PAYMENT_STEPS, PLANS } from '@/data/pricing'
 import { PUNCH_STYLE } from '@/lib/punchStyle'
 import { currency, cn } from '@/lib/utils'
 import type { PunchType } from '@/types'
@@ -88,8 +88,8 @@ const MORE = [
   },
   {
     icon: WifiOff,
-    title: 'Sigue funcionando sin Internet',
-    text: 'El reloj checador reconoce y guarda las checadas en el equipo, y las envía cuando vuelve la conexión.',
+    title: 'Operación sin conexión',
+    text: 'Si se va el Internet, el reloj sigue checando: los registros se resguardan en el equipo y se sincronizan solos al restablecerse la conexión.',
   },
   {
     icon: ImageOff,
@@ -115,7 +115,7 @@ const FAQ = [
   },
   {
     q: '¿Qué pasa si se va el Internet?',
-    a: 'El reloj checador sigue funcionando: reconoce rostros y guarda las checadas en el equipo, y las envía solo cuando vuelve la conexión.',
+    a: 'Tu personal puede seguir checando: los registros se resguardan en el equipo y se sincronizan solos cuando se restablece la conexión. No se pierde ninguna checada.',
   },
   {
     q: '¿Mis empleados pueden checar desde su casa?',
@@ -282,7 +282,7 @@ export function WelcomePage() {
             </motion.p>
             <motion.div {...enter(0.14, 12)} className="mt-9 flex flex-col gap-3 sm:flex-row">
               <PrimaryLink to="/signup" size="lg">
-                Probar {TRIAL_DAYS} días gratis
+                Crear cuenta de mi empresa
                 <ArrowRight className="h-4 w-4" />
               </PrimaryLink>
               <SecondaryLink to={signedIn ? homePathFor(role) : '/login'} size="lg">
@@ -290,7 +290,7 @@ export function WelcomePage() {
               </SecondaryLink>
             </motion.div>
             <motion.ul {...enter(0.2, 8)} className="mt-7 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-600">
-              {['Sin instalar nada', 'Sin tarjeta para probar', 'Funciona sin Internet'].map((t) => (
+              {['Sin instalar nada', 'Sigue checando sin Internet', 'Se sincroniza solo'].map((t) => (
                 <li key={t} className="flex items-center gap-1.5">
                   <Check className="h-4 w-4 text-emerald-600" strokeWidth={2.5} />
                   {t}
@@ -378,7 +378,7 @@ export function WelcomePage() {
           points={[
             'Reconoce el rostro en segundos, aunque cambie la luz',
             'Con PIN toma una foto que tú puedes revisar',
-            'Sigue funcionando si se va el Internet',
+            'Si se va el Internet sigue checando y se sincroniza solo',
           ]}
           picture={
             <Scaled width={540} height={340} className="w-full max-w-[540px]">
@@ -472,9 +472,9 @@ export function WelcomePage() {
       <section id="planes" className="scroll-mt-24 border-y border-slate-200 bg-slate-50/70">
         <div className="mx-auto max-w-6xl px-5 py-24 sm:px-8">
           <div className="max-w-2xl">
-            <h2 className="font-display text-[2rem] font-semibold tracking-[-0.03em] text-slate-900">Empieza gratis {TRIAL_DAYS} días</h2>
+            <h2 className="font-display text-[2rem] font-semibold tracking-[-0.03em] text-slate-900">Elige el plan de tu empresa</h2>
             <p className="mt-3 text-[15px] leading-relaxed text-slate-600">
-              Usa el sistema completo durante la prueba. Después eliges el plan que te conviene y lo cambias cuando crezcas.
+              Eliges el plan que te conviene y lo cambias cuando tu empresa crezca.
             </p>
           </div>
           <div className="mt-12 grid gap-5 lg:grid-cols-3">
@@ -514,11 +514,11 @@ export function WelcomePage() {
                 <div className="mt-7 [&>a]:w-full">
                   {plan.highlight ? (
                     <PrimaryLink to="/signup" size="lg">
-                      Empezar la prueba gratis
+                      Crear cuenta
                     </PrimaryLink>
                   ) : (
                     <SecondaryLink to="/signup" size="lg">
-                      Empezar la prueba gratis
+                      Crear cuenta
                     </SecondaryLink>
                   )}
                 </div>
@@ -608,7 +608,7 @@ export function WelcomePage() {
               <h2 className="font-display text-[1.9rem] font-semibold leading-tight tracking-[-0.03em] text-white">
                 Pon en orden la asistencia esta semana
               </h2>
-              <p className="mt-2 text-[15px] text-slate-300">Crea la cuenta de tu empresa y prueba todo {TRIAL_DAYS} días, sin tarjeta.</p>
+              <p className="mt-2 text-[15px] text-slate-300">Crea la cuenta de tu empresa y empieza a registrar la asistencia hoy mismo.</p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row">
               <Link

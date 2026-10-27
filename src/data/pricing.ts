@@ -5,8 +5,6 @@ import type { SubscriptionPlan } from '@/types'
  * (src/lib/license/features.ts). Prices are NOT invented: leave `monthlyPrice` as null and the page
  * shows "Solicita tu cotización"; put a number (MXN, per month, before IVA) and it is shown.
  */
-export const TRIAL_DAYS = 14
-
 export interface PlanInfo {
   key: SubscriptionPlan
   name: string
@@ -60,12 +58,12 @@ export const PLANS: PlanInfo[] = [
 /** How a company starts and pays today (payments are recorded by hand; see docs/ESTADO.md). */
 export const PAYMENT_STEPS: Array<{ title: string; text: string }> = [
   {
-    title: `Prueba ${TRIAL_DAYS} días gratis`,
-    text: 'Crea la cuenta de tu empresa y úsalo completo. No se pide tarjeta.',
+    title: 'Crea la cuenta de tu empresa',
+    text: 'Registra a tu empresa y configura tus sucursales, horarios y empleados.',
   },
   {
     title: 'Elige tu plan',
-    text: 'Antes de que termine la prueba eliges el plan que te conviene, por mes.',
+    text: 'Eliges el plan que te conviene, por mes, y lo cambias cuando tu empresa crezca.',
   },
   {
     title: 'Paga por transferencia o depósito',
